@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import CommonCrypto
+import CryptoSwift
 
 extension LibP2PCrypto {
     public enum AES {
@@ -29,19 +29,19 @@ extension LibP2PCrypto {
         }
         
         public struct AESKey:Encryptable, Decryptable {
-            private let key: Data
-            private let iv: Data
-
+            private let aes:CryptoSwift.AES
+            
             public init(key:Data, iv:Data) throws {
-                guard key.count == kCCKeySizeAES128 || key.count == kCCKeySizeAES256 else {
+                
+                guard key.count == 16 || key.count == 32 else {
                     throw NSError(domain: "Error: Failed to set a key.", code: 0, userInfo: nil)
                 }
                 
-                guard iv.count == kCCBlockSizeAES128 else {
+                guard iv.count == 16 else {
                     throw NSError(domain: "Error: Failed to set an initial vector.", code: 0, userInfo: nil)
                 }
-                self.key = key
-                self.iv = iv
+                
+                self.aes = try CryptoSwift.AES(key: key.bytes, blockMode: CBC(iv: iv.bytes), padding: .pkcs5)
             }
             
             /// Initializes an AES Key with the specified key and Initial Vector
@@ -53,102 +53,27 @@ extension LibP2PCrypto {
                 guard let keyData = key.data(using: .utf8), let ivData = iv.data(using: .utf8) else {
                     throw NSError(domain: "Error: Failed to set a key.", code: 0, userInfo: nil)
                 }
-
-                self.key = keyData
-                self.iv  = ivData
+                
+                try self.init(key: keyData, iv: ivData)
             }
             
             /// Initializes an AES Key with the specified key and a randomly generated Initial Vector
             /// - Parameter key: Either a 16 or 32 byte secret key
             /// - Throws: An error if one is encountered along the way
             public init(key:String) throws {
-                guard key.count == kCCKeySizeAES128 || key.count == kCCKeySizeAES256, let keyData = key.data(using: .utf8) else {
+                guard key.count == 16 || key.count == 32, let keyData = key.data(using: .utf8) else {
                     throw NSError(domain: "Error: Failed to set a key.", code: 0, userInfo: nil)
                 }
+                
                 try self.init(key: keyData, iv: Data(LibP2PCrypto.randomBytes(length: 16)))
             }
-            
-//            public func encrypt(data: Data) throws -> Data {
-//                return try crypt(data: data, operation: CCOperation(kCCEncrypt))
-//            }
-//
-//            public func encrypt(string: String, using encoding:String.Encoding = .utf8) throws -> Data {
-//                guard let d = string.data(using: encoding) else {
-//                    throw NSError(domain: "Error: Failed to encode string using \(encoding).", code: 0, userInfo: nil)
-//                }
-//                return try encrypt(data: d)
-//            }
 
             public func encrypt(_ data:Data) throws -> Data {
-                return try crypt(data: data, operation: CCOperation(kCCEncrypt))
+                return try Data(aes.encrypt(data.bytes))
             }
-            
-//            /// Converts a String to data using .utf8 encoding and then attempts to encrypt it
-//            public func encrypt(_ message:String) throws -> Data {
-//                guard let d = message.data(using: .utf8) else {
-//                    throw NSError(domain: "Error: Failed to encode string using \(String.Encoding.utf8).", code: 0, userInfo: nil)
-//                }
-//                return try encrypt(d)
-//            }
             
             public func decrypt(_ data: Data) throws -> Data {
-                return try crypt(data: data, operation: CCOperation(kCCDecrypt))
-                
-            }
-            
-//            public func decrypt(data: Data, using encoding:String.Encoding = .utf8) throws -> String {
-//                let decryptedData = try decrypt(data: data)
-//                guard let str = String(bytes: decryptedData, encoding: encoding) else {
-//                    throw NSError(domain: "Error: Failed to convert data into string via encoding: \(encoding)", code: 0, userInfo: nil)
-//                }
-//                return str
-//            }
-
-            /// AES Encrypt / Decrypt data
-            /// - Parameters:
-            ///   - data: The data that should be worked on
-            ///   - operation: Either Encryption or Decryption
-            /// - Throws: An error if the data couldn't be processed
-            /// - Returns: The AES Encrypted / Decrypted data
-            private func crypt(data: Data, operation: CCOperation) throws -> Data {
-                if data.isEmpty { return data }
-                
-                let cryptLength = data.count + kCCBlockSizeAES128
-                var cryptData   = Data(count: cryptLength)
-
-                let keyLength = key.count
-                let options   = CCOptions(kCCOptionPKCS7Padding)
-
-                var bytesLength = Int(0)
-
-                let status = cryptData.withUnsafeMutableBytes { cryptBytes in
-                    data.withUnsafeBytes { dataBytes in
-                        iv.withUnsafeBytes { ivBytes in
-                            key.withUnsafeBytes { keyBytes in
-                                CCCrypt(
-                                    operation,                    //CCOperation
-                                    CCAlgorithm(kCCAlgorithmAES), //CCAlgorithm
-                                    options,                      //CCOptions (PKCS7 Padding, etc...)
-                                    keyBytes.baseAddress,         //Key Pointer
-                                    keyLength,                    //Key Length
-                                    ivBytes.baseAddress,          //IV Pointer
-                                    dataBytes.baseAddress,        //Pointer to Data to encrypt
-                                    data.count,                   //Length of Data to encrypt
-                                    cryptBytes.baseAddress,       //Pointer to encrypted data out
-                                    cryptLength,                  //Length of encrypted data out
-                                    &bytesLength                  //The number of bytes written
-                                )
-                            }
-                        }
-                    }
-                }
-
-                guard UInt32(status) == UInt32(kCCSuccess) else {
-                    throw NSError(domain: "Error: Failed to crypt data. Status \(status)", code: 0, userInfo: nil)
-                }
-
-                cryptData.removeSubrange(bytesLength..<cryptData.count)
-                return cryptData
+                return try Data(aes.decrypt(data.bytes))
             }
         }
     }
