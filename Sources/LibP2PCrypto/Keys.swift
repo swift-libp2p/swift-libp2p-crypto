@@ -8,7 +8,7 @@
 import Foundation
 import Multibase
 import Multihash
-import CryptoKit
+//import CryptoKit
 
 import RSAPublicKeyExporter
 import RSAPublicKeyImporter
