@@ -8,12 +8,6 @@
 import Foundation
 import Multibase
 import Multihash
-
-import RSAPublicKeyExporter
-import RSAPublicKeyImporter
-
-import secp256k1
-
 import Crypto
 
 /// A generic wrapper for libp2p supported Public keys
@@ -30,11 +24,11 @@ public struct RawPublicKey {
         // This is the subjectPublicKeyInfo, we need to parse the raw key out...
         switch pub.type {
         case .rsa:
-            self.data = try RSAPublicKeyImporter().fromSubjectPublicKeyInfo(pub.data)
+            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         case .ed25519:
             self.data = pub.data
         case .secp256K1:
-            self.data = pub.data
+            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
         self.type = .init(pub.type)
     }
@@ -44,16 +38,6 @@ public struct RawPublicKey {
         self.data = key.rawRepresentation
     }
     
-    internal init(_ key:Secp256k1PublicKey) {
-        self.type = .secp256k1
-        self.data = Data(key.rawPublicKey)
-    }
-    
-    internal init(_ key:SecKey) throws {
-        self.type = .rsa
-        guard key.isRSAKey, key.isPublicKey else { throw NSError(domain: "Invalid RSA Public Key", code: 0, userInfo: nil) }
-        self.data = try key.rawRepresentation()
-    }
 }
 
 /// A generic wrapper for libp2p supported Private keys
@@ -75,23 +59,12 @@ public struct RawPrivateKey {
         self.type = .ed25519
         self.data = key.rawRepresentation
     }
-    
-    internal init(_ key:Secp256k1PrivateKey) {
-        self.type = .secp256k1
-        self.data = Data(key.rawPrivateKey)
-    }
-    
-    internal init(_ key:SecKey) throws {
-        self.type = .rsa
-        guard key.isRSAKey, key.isPublicKey == false else { throw NSError(domain: "Invalid RSA Private Key", code: 0, userInfo: nil) }
-        self.data = try key.rawRepresentation()
-    }
 }
 
 extension LibP2PCrypto {
     public enum Keys {
-        public typealias PubKey = SecKey
-        public typealias PrivKey = SecKey
+        public typealias PubKey = RawPublicKey //SecKey
+        public typealias PrivKey = RawPrivateKey //SecKey
         
         public enum GenericKeyType {
             case rsa
@@ -146,19 +119,7 @@ extension LibP2PCrypto {
             public func attributes() -> Attributes? {
                 switch self.keyType {
                 case .rsa:
-                    let count = self.publicKey.data.count
-                    if count == 140 {
-                        return Attributes(type: .RSA(bits: .B1024), size: 1024, isPrivate: (self.privateKey != nil))
-                    } else if count == 270 {
-                        return Attributes(type: .RSA(bits: .B2048), size: 2048, isPrivate: (self.privateKey != nil))
-                    } else if count == 398 {
-                        return Attributes(type: .RSA(bits: .B3072), size: 3072, isPrivate: (self.privateKey != nil))
-                    } else if count == 560 || count == 526 {
-                        return Attributes(type: .RSA(bits: .B4096), size: 4096, isPrivate: (self.privateKey != nil))
-                    } else {
-                        print("PubKey Data Count: \(count)");
-                        return nil
-                    }
+                    return nil
                     
                 case .ed25519:
                     //print("ed25519 PubKey Data Count: \(self.publicKey.data.count)")
@@ -168,7 +129,7 @@ extension LibP2PCrypto {
                 case .secp256k1:
                     //print("secp256k1 PubKey Data Count: \(self.publicKey.data.count)")
                     //print("secp256k1 PrivKey Data Count: \(self.privateKey?.data.count ?? 0)")
-                    return Attributes(type: .Secp256k1, size: 64, isPrivate: (self.privateKey != nil))
+                    return nil
                 }
             }
 
@@ -228,32 +189,6 @@ extension LibP2PCrypto {
                 self.keyType = .ed25519
                 self.privateKey = RawPrivateKey(priv)
                 self.publicKey = RawPublicKey(priv.publicKey)
-            }
-            
-            /// Public Secp256k1 Key
-            internal init(_ pub:Secp256k1PublicKey) {
-                self.keyType = .secp256k1
-                self.privateKey = nil
-                self.publicKey = RawPublicKey(pub)
-            }
-            /// Private Secp256k1 Key
-            internal init(_ priv:Secp256k1PrivateKey) {
-                self.keyType = .secp256k1
-                self.privateKey = RawPrivateKey(priv)
-                self.publicKey = RawPublicKey(priv.publicKey)
-            }
-            
-            /// Public RSA SecKey
-            internal init(publicSecKey:SecKey) throws {
-                self.keyType = .rsa
-                self.privateKey = nil
-                self.publicKey = try RawPublicKey(publicSecKey)
-            }
-            /// Private RSA SecKey
-            internal init(privateSecKey:SecKey) throws {
-                self.keyType = .rsa
-                self.privateKey = try RawPrivateKey(privateSecKey)
-                self.publicKey = try RawPublicKey(privateSecKey.extractPubKey())
             }
         }
         
@@ -378,28 +313,28 @@ extension LibP2PCrypto {
             //case RC4(bits:Int)
             //case ThreeDES
             
-            var secKey:CFString {
-                switch self {
-                case .RSA:              return kSecAttrKeyTypeRSA
-                case .EC:               return kSecAttrKeyTypeEC //Deprecated, use ECDSA instead...
-                #if os(macOS)
-                case .ECDSA:            return kSecAttrKeyTypeECDSA
-                #else
-                case .ECDSA:            return "" as CFString
-                #endif
-                case .ECSECPrimeRandom: return kSecAttrKeyTypeECSECPrimeRandom
-                case .Ed25519:          return "" as CFString
-                case .Secp256k1:        return "" as CFString
-                    
-                //case .DSA:              return kSecAttrKeyTypeDSA
-                //case .AES:              return kSecAttrKeyTypeAES
-                //case .DES:              return kSecAttrKeyTypeDES
-                //case .CAST:             return kSecAttrKeyTypeCAST
-                //case .RC2:              return kSecAttrKeyTypeRC2
-                //case .RC4:              return kSecAttrKeyTypeRC4
-                //case .ThreeDES:         return kSecAttrKeyType3DES
-                }
-            }
+//            var secKey:CFString {
+//                switch self {
+//                case .RSA:              return kSecAttrKeyTypeRSA
+//                case .EC:               return kSecAttrKeyTypeEC //Deprecated, use ECDSA instead...
+//                #if os(macOS)
+//                case .ECDSA:            return kSecAttrKeyTypeECDSA
+//                #else
+//                case .ECDSA:            return "" as CFString
+//                #endif
+//                case .ECSECPrimeRandom: return kSecAttrKeyTypeECSECPrimeRandom
+//                case .Ed25519:          return "" as CFString
+//                case .Secp256k1:        return "" as CFString
+//
+//                //case .DSA:              return kSecAttrKeyTypeDSA
+//                //case .AES:              return kSecAttrKeyTypeAES
+//                //case .DES:              return kSecAttrKeyTypeDES
+//                //case .CAST:             return kSecAttrKeyTypeCAST
+//                //case .RC2:              return kSecAttrKeyTypeRC2
+//                //case .RC4:              return kSecAttrKeyTypeRC4
+//                //case .ThreeDES:         return kSecAttrKeyType3DES
+//                }
+//            }
             
             var bits:Int {
                 switch self {
@@ -433,22 +368,24 @@ extension LibP2PCrypto {
                 }
             }
             
-            var params:[CFString: Any]? {
-                guard self.bits > 0 else { return nil }
-                return [
-                    kSecAttrKeyType: self.secKey,
-                    kSecAttrKeySizeInBits: self.bits
-                ]
-            }
+//            var params:[CFString: Any]? {
+//                guard self.bits > 0 else { return nil }
+//                return [
+//                    kSecAttrKeyType: self.secKey,
+//                    kSecAttrKeySizeInBits: self.bits
+//                ]
+//            }
             
             var toProtoType:KeyType {
                 switch self {
-                case .RSA, .EC, .ECDSA, .ECSECPrimeRandom:
+                case .RSA:
                     return .rsa
                 case .Ed25519:
                     return .ed25519
                 case .Secp256k1:
                     return .secp256K1
+                case .EC, .ECDSA, .ECSECPrimeRandom:
+                    return .ed25519
                 }
             }
             
@@ -524,69 +461,24 @@ extension LibP2PCrypto {
             }
         }
         
-        private static func generateSecp256k1KeyPair() throws -> KeyPair {
-            return KeyPair(try Secp256k1PrivateKey())
-        }
-        
-        private static func generateSecKeyPair(_ type:KeyPairType) throws -> KeyPair {
-            guard let parameters = type.params else {
-                throw NSError(domain: "KeyPairGenerationError - Invalid Parameters", code: 0, userInfo: nil)
-            }
-                    
-            var error:Unmanaged<CFError>? = nil
-            
-            guard let privKey = SecKeyCreateRandomKey(parameters as CFDictionary, &error) else {
-                print(error.debugDescription)
-                throw NSError(domain: "Key Generation Error: \(error.debugDescription)", code: 0, userInfo: nil)
-            }
-            
-            return try KeyPair(privateSecKey: privKey)
-            
-//            guard let pubKey = SecKeyCopyPublicKey(privKey) else {
-//                throw NSError(domain: "Public Key Extraction Error", code: 0, userInfo: nil)
-//            }
-//
-//            return KeyPair(keyType: type.toGenericType, publicKey: pubKey, privateKey: privKey)
-        }
-        
         /// This does unescesary work by creating both priv and public key then tossing out the public key... Lets have direct methods for only private key generation...
         public static func generateRawPrivateKey(_ type:KeyPairType) throws -> RawPrivateKey {
             if case .Ed25519 = type { return try self.generateEd25519KeyPair().privateKey! }
             
-            else if case .Secp256k1 = type { return try self.generateSecp256k1KeyPair().privateKey! }
-            
-            return try generateSecKeyPair(type).privateKey!
+            throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
         }
         
         
         public static func generateKeyPair(_ type:KeyPairType) throws -> KeyPair {
             if case .Ed25519 = type { return try self.generateEd25519KeyPair() }
             
-            else if case .Secp256k1 = type { return try self.generateSecp256k1KeyPair() }
-            
-            return try generateSecKeyPair(type)
-            
-//            let rawPubKey:Data
-//            let rawPrivKey:Data
-//
-//            /// SecKeyCopyExternalRepresentation --> DER Encoded Public Key
-//            var pubKeyError:Unmanaged<CFError>?
-//            if let cfdata = SecKeyCopyExternalRepresentation(kp.publicKey, &pubKeyError) {
-//                rawPubKey = cfdata as Data
-//                //rawPubKey = data.asString(base: base, withMultibasePrefix: withPrefix)
-//            } else { throw NSError(domain: "RawKeyError: \(pubKeyError.debugDescription)", code: 0, userInfo: nil) }
-//
-//            var privKeyError:Unmanaged<CFError>?
-//            if let cfdata = SecKeyCopyExternalRepresentation(kp.privateKey, &privKeyError) {
-//                rawPrivKey = cfdata as Data
-//                //rawPrivKey = data.asString(base: base, withMultibasePrefix: withPrefix)
-//            } else { throw NSError(domain: "RawKeyError: \(privKeyError.debugDescription)", code: 0, userInfo: nil) }
-//
-//            return RawKeyPair(keyType: type, publicKey: rawPubKey, privateKey: rawPrivKey)
+            throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
         }
         
+        
         public static func generateEphemeralKeyPair(curve:ElipticCurveType) throws -> KeyPair {
-            return try generateSecKeyPair(.ECDSA(curve: curve))
+            //return try generateSecKeyPair(.ECDSA(curve: curve))
+            throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
         }
         
 //        public static func generateRawEphemeralKeyPair(curve:ElipticCurveType) throws -> RawKeyPair {
@@ -594,21 +486,21 @@ extension LibP2PCrypto {
 //        }
         
         
-        public static func encrypt(_ data:Data, publicKey:SecKey) throws -> Data {
-            var error:Unmanaged<CFError>?
-            guard let encryptedData = SecKeyCreateEncryptedData(publicKey, .rsaEncryptionPKCS1, data as CFData, &error) else {
-                throw NSError(domain: "Error Encrypting Data: \(error.debugDescription)", code: 0, userInfo: nil)
-            }
-            return encryptedData as Data
-        }
-        
-        public static func decrypt(_ data:Data, privateKey:SecKey) throws -> Data {
-            var error:Unmanaged<CFError>?
-            guard let decryptedData = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionPKCS1, data as CFData, &error) else {
-                throw NSError(domain: "Error Decrypting Data: \(error.debugDescription)", code: 0, userInfo: nil)
-            }
-            return decryptedData as Data
-        }
+//        public static func encrypt(_ data:Data, publicKey:SecKey) throws -> Data {
+//            var error:Unmanaged<CFError>?
+//            guard let encryptedData = SecKeyCreateEncryptedData(publicKey, .rsaEncryptionPKCS1, data as CFData, &error) else {
+//                throw NSError(domain: "Error Encrypting Data: \(error.debugDescription)", code: 0, userInfo: nil)
+//            }
+//            return encryptedData as Data
+//        }
+//
+//        public static func decrypt(_ data:Data, privateKey:SecKey) throws -> Data {
+//            var error:Unmanaged<CFError>?
+//            guard let decryptedData = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionPKCS1, data as CFData, &error) else {
+//                throw NSError(domain: "Error Decrypting Data: \(error.debugDescription)", code: 0, userInfo: nil)
+//            }
+//            return decryptedData as Data
+//        }
         
         func keyStretcher(cipherType:String, hashType:String, secret:String) {}
         
@@ -632,18 +524,19 @@ extension LibP2PCrypto {
 //            try self.marshalPublicKey(raw: keyPair.publicKey.rawRepresentation(), keyType: keyPair.keyType)
 //        }
         
-        public static func marshalPublicKey(_ secKey:SecKey, keyType:KeyPairType) throws -> [UInt8] {
-            //let subjectPublicKeyInfoData = try RSAPublicKeyExporter().toSubjectPublicKeyInfo(secKey.rawRepresentation())
-            //print("SubjectPublicKeyInfo:\n\(subjectPublicKeyInfoData.map { "\($0)" }.joined())")
-            return try self.marshalPublicKey(raw: secKey.rawRepresentation(), keyType: keyType)
-        }
+//        public static func marshalPublicKey(_ secKey:SecKey, keyType:KeyPairType) throws -> [UInt8] {
+//            //let subjectPublicKeyInfoData = try RSAPublicKeyExporter().toSubjectPublicKeyInfo(secKey.rawRepresentation())
+//            //print("SubjectPublicKeyInfo:\n\(subjectPublicKeyInfoData.map { "\($0)" }.joined())")
+//            return try self.marshalPublicKey(raw: secKey.rawRepresentation(), keyType: keyType)
+//        }
         
         /// Given raw DER public key data, this method will compute the SubjectPublicKeyInfo for the DER and instantitate a PublicKey Protobuf object, then return the serialized data...
         /// Raw Data should be the DER Public Key ( aka the SecKey.rawRepresentation() )
         public static func marshalPublicKey(raw:Data, keyType:KeyPairType) throws -> [UInt8] {
-            let subjectPublicKeyInfoData = RSAPublicKeyExporter().toSubjectPublicKeyInfo(raw)
+            throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
+//            let subjectPublicKeyInfoData = RSAPublicKeyExporter().toSubjectPublicKeyInfo(raw)
             var pubKeyProto = PublicKey()
-            pubKeyProto.data = subjectPublicKeyInfoData
+            pubKeyProto.data = raw
             pubKeyProto.type = keyType.toProtoType
             return Array(try pubKeyProto.serializedData())
         }
@@ -655,13 +548,11 @@ extension LibP2PCrypto {
             guard !pubKeyProto.data.isEmpty else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
             switch pubKeyProto.type {
             case .rsa:
-                let data = try RSAPublicKeyImporter().fromSubjectPublicKeyInfo( pubKeyProto.data )
-                
-                return data.asString(base: base)
+                throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
             case .ed25519:
                 return pubKeyProto.data.asString(base: base)
             case .secp256K1:
-                return pubKeyProto.data.asString(base: base)
+                throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
             }
             
         }
@@ -686,9 +577,9 @@ extension LibP2PCrypto {
 //            try self.marshalPrivateKey(raw: keyPair.privateKey.rawRepresentation(), keyType: keyPair.keyType)
 //        }
         
-        public static func marshalPrivateKey(_ secKey:SecKey, keyType:KeyPairType) throws -> [UInt8] {
-            try self.marshalPrivateKey(raw: secKey.rawRepresentation(), keyType: keyType)
-        }
+//        public static func marshalPrivateKey(_ secKey:SecKey, keyType:KeyPairType) throws -> [UInt8] {
+//            try self.marshalPrivateKey(raw: secKey.rawRepresentation(), keyType: keyType)
+//        }
         
         public static func marshalPrivateKey(raw:Data, keyType:KeyPairType) throws -> [UInt8] {
             //let subjectPublicKeyInfoData = RSAPrivateKeyExporter().toSubjectPublicKeyInfo(raw)
@@ -709,6 +600,7 @@ extension LibP2PCrypto {
         }
         
         func importKey(encryptedKey:String, password:String) {
+            print("Error: Implement me!")
 //            guard let data2 = Data.init(base64Encoded: b64Key) else {
 //               return
 //            }
@@ -725,35 +617,35 @@ extension LibP2PCrypto {
 //            }
         }
         
-        public static func importMarshaledPublicKey(_ marshaled:[UInt8]) throws -> PubKey {
-            let pubKeyProto = try PublicKey(contiguousBytes: marshaled)
-            guard pubKeyProto.data.isEmpty == false else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
-            
-            print("We Unmarshaled a PublicKey Proto!")
-            print(pubKeyProto.type)
-            print(pubKeyProto.data.asString(base: .base64))
-            
-            switch pubKeyProto.type {
-            case .rsa:
-                //init rsa pub key
-                return try LibP2PCrypto.Keys.secKeyFrom(data: pubKeyProto.data, isPrivateKey: false, keyType: .RSA(bits: .B1024))
-            default:
-                throw NSError(domain: "We dont support exotic public keys yet...", code: 0, userInfo: nil)
-            }
-        }
-        
-        public static func importMarshaledPrivateKey(_ marshaled:[UInt8]) throws -> PrivKey {
-            let pubKeyProto = try PrivateKey(contiguousBytes: marshaled)
-            guard pubKeyProto.data.isEmpty == false else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
-            
-            switch pubKeyProto.type {
-            case .rsa:
-                //init rsa pub key
-                return try LibP2PCrypto.Keys.secKeyFrom(data: pubKeyProto.data, isPrivateKey: true, keyType: .RSA(bits: .B1024))
-            default:
-                throw NSError(domain: "We dont support exotic private keys yet...", code: 0, userInfo: nil)
-            }
-        }
+//        public static func importMarshaledPublicKey(_ marshaled:[UInt8]) throws -> PubKey {
+//            let pubKeyProto = try PublicKey(contiguousBytes: marshaled)
+//            guard pubKeyProto.data.isEmpty == false else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
+//
+//            print("We Unmarshaled a PublicKey Proto!")
+//            print(pubKeyProto.type)
+//            print(pubKeyProto.data.asString(base: .base64))
+//
+//            switch pubKeyProto.type {
+//            case .rsa:
+//                //init rsa pub key
+//                return try LibP2PCrypto.Keys.secKeyFrom(data: pubKeyProto.data, isPrivateKey: false, keyType: .RSA(bits: .B1024))
+//            default:
+//                throw NSError(domain: "We dont support exotic public keys yet...", code: 0, userInfo: nil)
+//            }
+//        }
+//
+//        public static func importMarshaledPrivateKey(_ marshaled:[UInt8]) throws -> PrivKey {
+//            let pubKeyProto = try PrivateKey(contiguousBytes: marshaled)
+//            guard pubKeyProto.data.isEmpty == false else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
+//
+//            switch pubKeyProto.type {
+//            case .rsa:
+//                //init rsa pub key
+//                return try LibP2PCrypto.Keys.secKeyFrom(data: pubKeyProto.data, isPrivateKey: true, keyType: .RSA(bits: .B1024))
+//            default:
+//                throw NSError(domain: "We dont support exotic private keys yet...", code: 0, userInfo: nil)
+//            }
+//        }
         
         /// Converts a public key object into a protobuf serialized public key.
         /// - TODO: PEM Format
@@ -903,35 +795,37 @@ extension LibP2PCrypto {
         /// Based on the key type... scan the bits for the key data
         /// Return a ParsedPem struct that we can use to instantiate any of our supported KeyPairTypes...
         public static func parsePem(_ pem:String) throws -> KeyPair {
+            //throw NSError(domain: "Unsupported", code: 0, userInfo: nil)
             let chunks = pem.split(separator: "\n")
             guard chunks.count >= 3,
                   let f = chunks.first, f.hasPrefix("-----BEGIN"),
                   let l = chunks.last, l.hasSuffix("-----") else {
                 throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
             }
-            
+
             /// If its a DER re route it...
             if f.contains("-----BEGIN RSA PUBLIC") { return try LibP2PCrypto.Keys.importPublicDER(pem) }
             else if f.contains("-----BEGIN RSA PRIVATE") { return try LibP2PCrypto.Keys.importPrivateDER(pem) }
-            
+
             let isPrivate:Bool = f.contains("PRIVATE")
-            
+
             let rawPem = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-            
+
             return try self.parsePem(rawPem.data, isPrivate: isPrivate)
         }
         
         private static func parsePem(_ rawPem:Data, isPrivate:Bool) throws -> KeyPair {
+//            throw NSError(domain: "Unsupported", code: 0, userInfo: nil)
             var type:KeyPairType? = nil
             let asn = try Asn1ParserECPrivate.parse(data: rawPem)
-            
+
             print("ASN1 Nodes")
             print(asn)
             print("----------")
-            
+
             guard case .sequence(let nodes) = asn else { throw NSError(domain: "Failed to parse PEM", code: 0, userInfo: nil) }
             let ids = objIdsInSequence(nodes)
-            
+
             if ids.contains(where: { (id) -> Bool in
                 if case .rsaEncryption = id { return true } else { return false }
             }) {
@@ -952,15 +846,15 @@ extension LibP2PCrypto {
             }) {
                 type = .EC(curve: .P256) //Curve bits dont matter here, we're just broadly classifying it...
             }
-            
+
             guard let keyType = type else { throw NSError(domain: "Failed to classify key", code: 0, userInfo: nil) }
-            
+
             guard case .sequence(let top) = asn else {
                 throw NSError(domain: "Failed to parse Asn1", code: 0, userInfo: nil)
             }
-            
+
             var rawKeyData:Data? = nil
-            
+
             if isPrivate {
                 // First Octet
                 guard let octet = octetsInSequence(top).first else {
@@ -974,7 +868,7 @@ extension LibP2PCrypto {
                 }
                 rawKeyData = bitString
             }
-            
+
             // ED25519 Private Keys are wrapped in an additional octetString node, lets remove it...
             if isPrivate, case .Ed25519 = keyType, rawKeyData?.count == 34 {
                 rawKeyData?.removeFirst(2)
@@ -983,30 +877,20 @@ extension LibP2PCrypto {
             guard let keyData = rawKeyData else {
                 throw NSError(domain: "Failed to extract key data from asn1 nodes", code: 0, userInfo: nil)
             }
-            
+
             //return ParsedPem(isPrivate: isPrivate, type: keyType, rawKey: keyData)
-            
+
             // At this point we know if its a public or private key, the type of key, and the raw bits of the key.
             // We can instantiate the key, ensure it's valid, then create a return a PublicKey or PrivateKey
             switch keyType {
-            case .RSA:
-                if isPrivate {
-                    return try KeyPair(privateSecKey: LibP2PCrypto.Keys.secKeyFrom(data: keyData, isPrivateKey: true, keyType: keyType))
-                } else {
-                    return try KeyPair(publicSecKey: LibP2PCrypto.Keys.secKeyFrom(data: keyData, isPrivateKey: false, keyType: keyType))
-                }
+            
             case .Ed25519:
                 if isPrivate {
                     return try KeyPair(Curve25519.Signing.PrivateKey(rawRepresentation: keyData))
                 } else {
                     return try KeyPair(Curve25519.Signing.PublicKey(rawRepresentation: keyData))
                 }
-            case .Secp256k1:
-                if isPrivate {
-                    return try KeyPair(Secp256k1PrivateKey(keyData.bytes))
-                } else {
-                    return try KeyPair(Secp256k1PublicKey(keyData.bytes))
-                }
+            
             default:
                 /// - TODO: Internal Support For EC Keys (without support for marshaling)
                 throw NSError(domain: "Unsupported Key Type \(keyType.description)", code: 0, userInfo: nil)
@@ -1038,32 +922,33 @@ extension LibP2PCrypto {
         /// ])
         /// ```
         static func parseEncryptedPem(_ pem:String, password:String) throws -> KeyPair {
+//            throw NSError(domain: "Unsupported", code: 0, userInfo: nil)
             let chunks = pem.split(separator: "\n")
             guard chunks.count >= 3,
                   let f = chunks.first, f.hasPrefix("-----BEGIN ENCRYPTED"),
                   let l = chunks.last, l.hasSuffix("-----") else {
                 throw NSError(domain: "Invalid Encrypted PEM Format", code: 0, userInfo: nil)
             }
-            
+
             let isPrivate:Bool = f.contains("PRIVATE")
-            
+
             let rawPem = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-            
+
             let asn = try Asn1ParserECPrivate.parse(data: rawPem.data)
-            
+
             print("ASN1 Nodes")
             print(asn)
             print("----------")
-            
+
             var saltData:Data? = nil
             var ivData:Data? = nil
             var itterationsData:Int? = nil
             var ciphertextData:Data? = nil
-            
+
             guard case .sequence(let nodes) = asn else {
                 throw NSError(domain: "Failed to parse ASN from PEM", code: 0, userInfo: nil)
             }
-            
+
             /// Octets Should Include our Salt, IV and cipherText...
             /// TODO make this better by actually checking objectIDs to make sure we have the correct data (instead of guessing based on length)
             octetsInSequence(nodes).forEach {
@@ -1076,10 +961,10 @@ extension LibP2PCrypto {
                      saltData = $0
                 }
             }
-            
+
             /// There should be only one integer, the itteration count...
             itterationsData = integersInSequence(nodes).first
-            
+
             guard let salt = saltData, let iv = ivData, let itterations = itterationsData, let ciphertext = ciphertextData else {
                 throw NSError(domain: "Failed to parse our pcks#8 key", code: 0, userInfo: nil)
             }
@@ -1100,7 +985,7 @@ extension LibP2PCrypto {
             //let aes = try AES(key: key.bytes, blockMode: GCM(iv: iv.bytes, mode: .detached), padding: .noPadding)
 
             let decryptedKey = try aes.decrypt(ciphertext.bytes)
-            
+
             // At this point we have regular unencrypted PEM data rep of a key, lets parse it...
             return try self.parsePem(decryptedKey, isPrivate: isPrivate)
         }
@@ -1162,55 +1047,55 @@ extension LibP2PCrypto {
         }
         
         
-        public static func secKeyFrom(data:Data, isPrivateKey:Bool, keyType:LibP2PCrypto.Keys.KeyPairType) throws -> SecKey {
-            let attributes: [String:Any] = [
-                kSecAttrKeyType as String: keyType.secKey,
-                kSecAttrKeyClass as String: isPrivateKey ? kSecAttrKeyClassPrivate : kSecAttrKeyClassPublic,
-                kSecAttrKeySizeInBits as String: keyType.bits,
-                kSecAttrIsPermanent as String: false
-            ]
-            
-            var error:Unmanaged<CFError>? = nil
-            guard let secKey = SecKeyCreateWithData(data as CFData, attributes as CFDictionary, &error) else {
-                throw NSError(domain: "Error constructing SecKey from raw key data: \(error.debugDescription)", code: 0, userInfo: nil)
-            }
-            
-            return secKey
-        }
+//        public static func secKeyFrom(data:Data, isPrivateKey:Bool, keyType:LibP2PCrypto.Keys.KeyPairType) throws -> SecKey {
+//            let attributes: [String:Any] = [
+//                kSecAttrKeyType as String: keyType.secKey,
+//                kSecAttrKeyClass as String: isPrivateKey ? kSecAttrKeyClassPrivate : kSecAttrKeyClassPublic,
+//                kSecAttrKeySizeInBits as String: keyType.bits,
+//                kSecAttrIsPermanent as String: false
+//            ]
+//
+//            var error:Unmanaged<CFError>? = nil
+//            guard let secKey = SecKeyCreateWithData(data as CFData, attributes as CFDictionary, &error) else {
+//                throw NSError(domain: "Error constructing SecKey from raw key data: \(error.debugDescription)", code: 0, userInfo: nil)
+//            }
+//
+//            return secKey
+//        }
         
         /// Expects a PEM Public Key with the x509 header information included (object identifier)
         ///
         /// - Note: Handles RSA and EC Public Keys
-        public static func importPublicPem(_ pem:String) throws -> PubKey {
-            let chunks = pem.split(separator: "\n")
-            guard chunks.count > 3,
-                  let f = chunks.first, f.hasPrefix("-----BEGIN"),
-                  let l = chunks.last, l.hasSuffix("-----") else {
-                throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
-            }
-            
-            //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
-            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-            //print(raw.data)
-            
-            //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
-            
-            let ans1 = try LibP2PCrypto.Keys.parseANS1(pemData: raw.data)
-            
-            guard ans1.isPrivateKey == false else {
-                throw NSError(domain: "The provided PEM isn't a Public Key. Try importPrivatePem() instead...", code: 0, userInfo: nil)
-            }
-            
-            if ans1.objectIdentifier == Data([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]) {
-                print("Trying to Init RSA Key")
-                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .RSA(bits: .B1024))
-            } else if ans1.objectIdentifier.prefix(5) == Data([0x2a, 0x86, 0x48, 0xce, 0x3d]) {
-                print("Trying to Init EC Key")
-                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .EC(curve: .P256))
-            }
-            
-            throw NSError(domain: "Failed to parse PEM into known key type \(ans1)", code: 0, userInfo: nil)
-        }
+//        public static func importPublicPem(_ pem:String) throws -> PubKey {
+//            let chunks = pem.split(separator: "\n")
+//            guard chunks.count > 3,
+//                  let f = chunks.first, f.hasPrefix("-----BEGIN"),
+//                  let l = chunks.last, l.hasSuffix("-----") else {
+//                throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
+//            }
+//
+//            //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
+//            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
+//            //print(raw.data)
+//
+//            //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
+//
+//            let ans1 = try LibP2PCrypto.Keys.parseANS1(pemData: raw.data)
+//
+//            guard ans1.isPrivateKey == false else {
+//                throw NSError(domain: "The provided PEM isn't a Public Key. Try importPrivatePem() instead...", code: 0, userInfo: nil)
+//            }
+//
+//            if ans1.objectIdentifier == Data([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]) {
+//                print("Trying to Init RSA Key")
+//                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .RSA(bits: .B1024))
+//            } else if ans1.objectIdentifier.prefix(5) == Data([0x2a, 0x86, 0x48, 0xce, 0x3d]) {
+//                print("Trying to Init EC Key")
+//                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .EC(curve: .P256))
+//            }
+//
+//            throw NSError(domain: "Failed to parse PEM into known key type \(ans1)", code: 0, userInfo: nil)
+//        }
         
         /// - TODO: Make this better...
 //        public static func importRawPublicPem(_ pem:String) throws -> Data {
@@ -1255,70 +1140,72 @@ extension LibP2PCrypto {
         ///
         /// - Note: Handles RSA and EC Public Keys
         public static func importPublicDER(_ der:String) throws -> KeyPair {
-            let chunks = der.split(separator: "\n")
-            guard chunks.count > 3,
-                  let f = chunks.first, f.hasPrefix("-----BEGIN RSA PUBLIC"),
-                  let l = chunks.last, l.hasSuffix("-----") else {
-                throw NSError(domain: "Invalid DER Format", code: 0, userInfo: nil)
-            }
-            
-            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-            
-            print("Trying to Init RSA DER Key")
-            return try KeyPair(publicSecKey: LibP2PCrypto.Keys.secKeyFrom(data: raw.data, isPrivateKey: false, keyType: .RSA(bits: .B1024)))
+            throw NSError(domain: "Unsupported", code: 0, userInfo: nil)
+//            let chunks = der.split(separator: "\n")
+//            guard chunks.count > 3,
+//                  let f = chunks.first, f.hasPrefix("-----BEGIN RSA PUBLIC"),
+//                  let l = chunks.last, l.hasSuffix("-----") else {
+//                throw NSError(domain: "Invalid DER Format", code: 0, userInfo: nil)
+//            }
+//
+//            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
+//
+//            print("Trying to Init RSA DER Key")
+//            return try KeyPair(publicSecKey: LibP2PCrypto.Keys.secKeyFrom(data: raw.data, isPrivateKey: false, keyType: .RSA(bits: .B1024)))
         }
         
         public static func importPrivateDER(_ der:String) throws -> KeyPair {
-            let chunks = der.split(separator: "\n")
-            guard chunks.count > 3,
-                  let f = chunks.first, f.hasPrefix("-----BEGIN RSA PRIVATE"),
-                  let l = chunks.last, l.hasSuffix("-----") else {
-                throw NSError(domain: "Invalid DER Format", code: 0, userInfo: nil)
-            }
-            
-            var raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64).data
-            
-            while raw.count % 4 != 0 {
-                raw.insert(0, at: 0)
-            }
-            
-            print("Trying to Init RSA DER Key")
-            return try KeyPair(publicSecKey: LibP2PCrypto.Keys.secKeyFrom(data: raw, isPrivateKey: true, keyType: .RSA(bits: .B1024)))
+            throw NSError(domain: "Unsupported", code: 0, userInfo: nil)
+//            let chunks = der.split(separator: "\n")
+//            guard chunks.count > 3,
+//                  let f = chunks.first, f.hasPrefix("-----BEGIN RSA PRIVATE"),
+//                  let l = chunks.last, l.hasSuffix("-----") else {
+//                throw NSError(domain: "Invalid DER Format", code: 0, userInfo: nil)
+//            }
+//
+//            var raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64).data
+//
+//            while raw.count % 4 != 0 {
+//                raw.insert(0, at: 0)
+//            }
+//
+//            print("Trying to Init RSA DER Key")
+//            return try KeyPair(publicSecKey: LibP2PCrypto.Keys.secKeyFrom(data: raw, isPrivateKey: true, keyType: .RSA(bits: .B1024)))
         }
         
         /// Expects a PEM Private Key with the x509 header information included (object identifier)
         ///
         /// - Note: Only handles RSA Pirvate Keys at the moment
-        public static func importPrivatePem(_ pem:String) throws -> PrivKey {
-            let chunks = pem.split(separator: "\n")
-            guard chunks.count > 3,
-                  let f = chunks.first, f.hasPrefix("-----BEGIN PRIVATE"),
-                  let l = chunks.last, l.hasSuffix("-----") else {
-                throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
-            }
-            
-            //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
-            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-            //print(raw.data)
-            
-            //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
-            
-            let ans1 = try LibP2PCrypto.Keys.parseANS1(pemData: raw.data)
-            
-            guard ans1.isPrivateKey == true else {
-                throw NSError(domain: "The provided PEM isn't a Private Key. Try importPublicPem() instead...", code: 0, userInfo: nil)
-            }
-            
-            if ans1.objectIdentifier == Data([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]) {
-                print("Trying to Init RSA Key")
-                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .RSA(bits: .B1024))
-            } else if ans1.objectIdentifier.prefix(5) == Data([0x2a, 0x86, 0x48, 0xce, 0x3d]) {
-                print("Trying to Init EC Key")
-                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .EC(curve: .P256))
-            }
-            
-            throw NSError(domain: "Failed to parse PEM into known key type \(ans1)", code: 0, userInfo: nil)
-        }
+//        public static func importPrivatePem(_ pem:String) throws -> PrivKey {
+//            let chunks = pem.split(separator: "\n")
+//            guard chunks.count > 3,
+//                  let f = chunks.first, f.hasPrefix("-----BEGIN PRIVATE"),
+//                  let l = chunks.last, l.hasSuffix("-----") else {
+//                throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
+//            }
+//
+//            //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
+//            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
+//            //print(raw.data)
+//
+//            //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
+//
+//            let ans1 = try LibP2PCrypto.Keys.parseANS1(pemData: raw.data)
+//
+//            guard ans1.isPrivateKey == true else {
+//                throw NSError(domain: "The provided PEM isn't a Private Key. Try importPublicPem() instead...", code: 0, userInfo: nil)
+//            }
+//
+//            if ans1.objectIdentifier == Data([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]) {
+//                print("Trying to Init RSA Key")
+//                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .RSA(bits: .B1024))
+//            } else if ans1.objectIdentifier.prefix(5) == Data([0x2a, 0x86, 0x48, 0xce, 0x3d]) {
+//                print("Trying to Init EC Key")
+//                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .EC(curve: .P256))
+//            }
+//
+//            throw NSError(domain: "Failed to parse PEM into known key type \(ans1)", code: 0, userInfo: nil)
+//        }
         
         /// Expects a PEM Private Key with the x509 header information included (object identifier)
         ///
@@ -1616,28 +1503,6 @@ extension LibP2PCrypto {
     }
 }
 
-public extension SecKey {
-    func asString(base:BaseEncoding) throws -> String {
-        try self.rawRepresentation().asString(base: base)
-    }
-    
-    func extractPubKey() throws -> LibP2PCrypto.Keys.PubKey {
-        guard let pubKey = SecKeyCopyPublicKey(self) else {
-            throw NSError(domain: "Public Key Extraction Error", code: 0, userInfo: nil)
-        }
-        return pubKey
-    }
-    
-    /// Returns the DER Encoded representation of the SecKey ( this does not include ANS.1 Headers for SubjectKeyInfo format)
-    /// - Note: The method returns data in the PKCS #1 format for an RSA key. For an elliptic curve public key, the format follows the ANSI X9.63 standard using a byte string of 04 || X || Y. For an elliptic curve private key, the output is formatted as the public key concatenated with the big endian encoding of the secret scalar, or 04 || X || Y || K. All of these representations use constant size integers, including leading zeros as needed.
-    func rawRepresentation() throws -> Data {
-        var error:Unmanaged<CFError>?
-        if let cfdata = SecKeyCopyExternalRepresentation(self, &error) {
-            return cfdata as Data
-        } else { throw NSError(domain: "RawKeyError: \(error.debugDescription)", code: 0, userInfo: nil) }
-    }
-}
-
 public extension String {
     func split(intoChunksOfLength length: Int) -> [String] {
         return stride(from: 0, to: self.count, by: length).map { index -> String in
@@ -1687,57 +1552,57 @@ public extension String {
 //    }
 //}
 
-public extension SecKey {
-    
-    /// Gets the ID of the key.
-    ///
-    /// The key id is the base58 encoding of the SHA-256 multihash of its public key.
-    /// The public key is a protobuf encoding containing a type and the DER encoding
-    /// of the PKCS SubjectPublicKeyInfo.
-    func id(keyType: LibP2PCrypto.Keys.KeyPairType, withMultibasePrefix:Bool = true) throws -> String {
-
-        guard let pubKey = SecKeyCopyPublicKey(self) else {
-            throw NSError(domain: "Public Key Extraction Error", code: 0, userInfo: nil)
-        }
-
-        /// The key id is the base58 encoding of the SHA-256 multihash of its public key.
-        /// The public key is a protobuf encoding containing a type and the DER encoding
-        /// of the PKCS SubjectPublicKeyInfo.
-        let marshaledPubKey = try LibP2PCrypto.Keys.marshalPublicKey(pubKey, keyType: keyType)
-        let mh = try Multihash(raw: marshaledPubKey, hashedWith: .sha2_256)
-        return withMultibasePrefix ? mh.asMultibase(.base58btc) : mh.asString(base: .base58btc)
-    }
-    
-    var attributes:CFDictionary? {
-        return SecKeyCopyAttributes(self)
-    }
-    
-    /// Doesn't work
-    var isRSAKey:Bool {
-        guard let attributes = SecKeyCopyAttributes(self) as? [CFString: Any],
-            let keyType = attributes[kSecAttrKeyType] as? String else {
-                return false
-        }
-
-        let isRSA = keyType == (kSecAttrKeyTypeRSA as String)
-        return isRSA
-    }
-    
-    /// Doesn't work
-    var isPublicKey:Bool {
-        guard let attributes = SecKeyCopyAttributes(self) as? [CFString: Any],
-            let keyClass = attributes[kSecAttrKeyClass] as? String else {
-                return false
-        }
-
-        let isPublic = keyClass == (kSecAttrKeyClassPublic as String)
-        return isPublic
-    }
-    
-    func subjectKeyInfo() throws -> Data {
-        return try RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.rawRepresentation())
-    }
-}
+//public extension SecKey {
+//    
+//    /// Gets the ID of the key.
+//    ///
+//    /// The key id is the base58 encoding of the SHA-256 multihash of its public key.
+//    /// The public key is a protobuf encoding containing a type and the DER encoding
+//    /// of the PKCS SubjectPublicKeyInfo.
+//    func id(keyType: LibP2PCrypto.Keys.KeyPairType, withMultibasePrefix:Bool = true) throws -> String {
+//
+//        guard let pubKey = SecKeyCopyPublicKey(self) else {
+//            throw NSError(domain: "Public Key Extraction Error", code: 0, userInfo: nil)
+//        }
+//
+//        /// The key id is the base58 encoding of the SHA-256 multihash of its public key.
+//        /// The public key is a protobuf encoding containing a type and the DER encoding
+//        /// of the PKCS SubjectPublicKeyInfo.
+//        let marshaledPubKey = try LibP2PCrypto.Keys.marshalPublicKey(pubKey, keyType: keyType)
+//        let mh = try Multihash(raw: marshaledPubKey, hashedWith: .sha2_256)
+//        return withMultibasePrefix ? mh.asMultibase(.base58btc) : mh.asString(base: .base58btc)
+//    }
+//    
+//    var attributes:CFDictionary? {
+//        return SecKeyCopyAttributes(self)
+//    }
+//    
+//    /// Doesn't work
+//    var isRSAKey:Bool {
+//        guard let attributes = SecKeyCopyAttributes(self) as? [CFString: Any],
+//            let keyType = attributes[kSecAttrKeyType] as? String else {
+//                return false
+//        }
+//
+//        let isRSA = keyType == (kSecAttrKeyTypeRSA as String)
+//        return isRSA
+//    }
+//    
+//    /// Doesn't work
+//    var isPublicKey:Bool {
+//        guard let attributes = SecKeyCopyAttributes(self) as? [CFString: Any],
+//            let keyClass = attributes[kSecAttrKeyClass] as? String else {
+//                return false
+//        }
+//
+//        let isPublic = keyClass == (kSecAttrKeyClassPublic as String)
+//        return isPublic
+//    }
+//    
+//    func subjectKeyInfo() throws -> Data {
+//        return try RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.rawRepresentation())
+//    }
+//}
 
 //extension P256.Signing.PublicKey: CommonPublicKey {
 //    public init(pem:String) throws {
