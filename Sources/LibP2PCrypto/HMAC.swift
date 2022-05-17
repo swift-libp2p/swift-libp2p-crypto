@@ -12,11 +12,18 @@ import Multibase
 extension LibP2PCrypto {
     public enum HMAC {
         public enum CryptoAlgorithm {
-            //case MD5, SHA1, SHA224, SHA256, SHA384, SHA512
-            case SHA256, SHA384, SHA512
+            case MD5, SHA1, SHA256, SHA384, SHA512
 
             internal func encrypt(_ message:Data, key: String) -> Data {
                 switch self {
+                case .MD5:
+                    var hmac = Crypto.HMAC<Insecure.MD5>(key: SymmetricKey(data: key.bytes))
+                    hmac.update(data: message)
+                    return Data(hmac.finalize())
+                case .SHA1:
+                    var hmac = Crypto.HMAC<Insecure.SHA1>(key: SymmetricKey(data: key.bytes))
+                    hmac.update(data: message)
+                    return Data(hmac.finalize())
                 case .SHA256:
                     var hmac = Crypto.HMAC<SHA256>(key: SymmetricKey(data: key.bytes))
                     hmac.update(data: message)
