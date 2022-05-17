@@ -9,7 +9,7 @@
 
 import Foundation
 import Multibase
-import CryptoSwift
+import Crypto
 
 public enum LibP2PCrypto {
     
@@ -146,24 +146,30 @@ public extension Array where Element == UInt8 {
     private func encryptGCM(data:[UInt8], withKey key:Data) throws -> [UInt8] {
         let nonce = try LibP2PCrypto.randomBytes(length: 12)
         
-        // AES - GCM
-        let aesGCM = try AES(key: key.bytes, blockMode: GCM(iv: nonce, mode: .combined), padding: .noPadding)
-    
+        // AES - GCM (CryptoSwift)
+        //let aesGCM = try AES(key: key.bytes, blockMode: GCM(iv: nonce, mode: .combined), padding: .noPadding)
         // Encrypt and prepend nonce.
-        let ciphertext = try aesGCM.encrypt(data)
+        //let ciphertext = try aesGCM.encrypt(data)
+        
+        // AES - GCM (swift-crypto)
+        let aesGCM = try AES.GCM.seal(data, using: SymmetricKey(data: key), nonce: AES.GCM.Nonce(data: nonce))
+        
+        //let ciphertext = aesGCM
 
-        return nonce + ciphertext
+        return aesGCM.combined?.bytes ?? [] //nonce + ciphertext
     }
     
     private func decryptGCM(data:[UInt8], withKey key:Data) throws -> [UInt8] {
         //Strip the nonce off the front of the data
-        let nonce = Array(data.prefix(12))
+        //let nonce = Array(data.prefix(12))
         
-        // AES - GCM
-        let aesGCM = try AES(key: key.bytes, blockMode: GCM(iv: nonce, mode: .combined), padding: .noPadding)
-
+        // AES - GCM (CryptoSwift)
+//        let aesGCM = try AES(key: key.bytes, blockMode: GCM(iv: nonce, mode: .combined), padding: .noPadding)
         // Decrypt the ciphertext
-        return try aesGCM.decrypt(data.dropFirst(12))
+//        return try aesGCM.decrypt(data.dropFirst(12))
+        
+        return try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: SymmetricKey(data: key)).bytes
+        
     }
 }
 
