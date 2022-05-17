@@ -14,10 +14,12 @@ import Crypto
 public enum LibP2PCrypto {
     
     public static func randomBytes(length:Int) throws -> [UInt8] {
-        var data = Array<UInt8>(repeating: 0, count: length)
-        let status = SecRandomCopyBytes(kSecRandomDefault, data.count, &data)
-        if status == errSecSuccess { return data }
-        throw NSError(domain: "Error encountered while generating random bytes: \(status)", code: 0, userInfo: nil)
+        #if (os(macOS) || os(iOS) || os(watchOS) || os(tvOS)) || os(Linux) || os(Android) || os(Windows)
+        var rng = SystemRandomNumberGenerator()
+        return (0..<length).map { _ in rng.next() }
+        #else
+        fatalError("No secure random number generator on this platform.")
+        #endif
     }
     
 }
