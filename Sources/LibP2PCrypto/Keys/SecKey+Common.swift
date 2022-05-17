@@ -9,7 +9,6 @@ import Foundation
 import Crypto
 import Multibase
 import Multihash
-import RSAPublicKeyExporter
 
 protocol PublicKeyDerivation {
     func derivePublicKey() throws -> RawPublicKey
@@ -43,7 +42,8 @@ extension RawPublicKey {
         case .ed25519:
             return try Multihash(raw: self.marshal(), hashedWith: .identity)
         default:
-            return try Multihash(raw: self.marshal(), hashedWith: .sha2_256)
+            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+            //return try Multihash(raw: self.marshal(), hashedWith: .sha2_256)
         }
     }
     
@@ -159,13 +159,6 @@ extension LibP2PCrypto.Keys.KeyPair {
 extension RawPrivateKey: PublicKeyDerivation {
     func derivePublicKey() throws -> RawPublicKey {
         switch self.type {
-        case .rsa:
-            let secKey = try LibP2PCrypto.Keys.secKeyFrom(data: self.data, isPrivateKey: true, keyType: .RSA(bits: .B1024))
-            let pubKey = try secKey.extractPubKey()
-            return try RawPublicKey(
-                type: self.type,
-                data: pubKey.rawRepresentation()
-            )
         case .ed25519:
             if #available(OSX 10.15, *) {
                 let privKey = try Curve25519.Signing.PrivateKey(rawRepresentation: self.data.bytes)
@@ -177,15 +170,9 @@ extension RawPrivateKey: PublicKeyDerivation {
             } else {
                 throw NSError(domain: "Ed25519 Keys are only supported on MacOS 10.15 and greater", code: 0, userInfo: nil)
             }
-        case .secp256k1:
-            let privKey = try Secp256k1PrivateKey(privateKey: self.data.bytes)
-            let pubKey = privKey.publicKey
-            return RawPublicKey(
-                type: self.type,
-                data: Data(pubKey.rawPublicKey)
-            )
-//        default:
-//            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+        
+        default:
+            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
     }
 }
@@ -193,9 +180,6 @@ extension RawPrivateKey: PublicKeyDerivation {
 extension RawPrivateKey: Decryptable, Encryptable {
     public func decrypt(_ message: Data) throws -> Data {
         switch self.type {
-        case .rsa:
-            let privKey = try LibP2PCrypto.Keys.secKeyFrom(data: self.data, isPrivateKey: true, keyType: .RSA(bits: .B1024))
-            return try LibP2PCrypto.Keys.decrypt(message, privateKey: privKey)
         default:
             throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
@@ -203,10 +187,6 @@ extension RawPrivateKey: Decryptable, Encryptable {
     
     public func encrypt(_ message: Data) throws -> Data {
         switch self.type {
-        case .rsa:
-            let privKey = try LibP2PCrypto.Keys.secKeyFrom(data: self.data, isPrivateKey: true, keyType: .RSA(bits: .B1024))
-            let pubKey = try privKey.extractPubKey()
-            return try LibP2PCrypto.Keys.encrypt(message, publicKey: pubKey)
         default:
             throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
@@ -223,22 +203,8 @@ extension RawPrivateKey:Signable {
         case .ed25519:
             let privKey = try Curve25519.Signing.PrivateKey(rawRepresentation: self.data)
             return try privKey.signature(for: message)
-        case .secp256k1:
-            let privKey = try Secp256k1PrivateKey(self.data.bytes)
-            let signature = try privKey.sign(message: message.bytes)
-            return Data([UInt8(signature.v)] + signature.r + signature.s)
-        case .rsa:
-            let privKey = try LibP2PCrypto.Keys.secKeyFrom(data: self.data, isPrivateKey: true, keyType: .RSA(bits: .B2048))
-            var error: Unmanaged<CFError>?
-            guard let signature = SecKeyCreateSignature(privKey,
-                                                        .rsaSignatureMessagePKCS1v15SHA256,
-                                                        message as CFData,
-                                                        &error) as Data? else {
-                                                            throw error!.takeRetainedValue() as Error
-            }
-            return signature
-        //default:
-        //    throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+        default:
+            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
     }
 }
@@ -249,27 +215,8 @@ extension RawPublicKey:Verifiable {
         case .ed25519:
             let pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: self.data)
             return pubKey.isValidSignature(signature, for: expectedData)
-        case .secp256k1:
-            let pubKey = try Secp256k1PublicKey(self.data.bytes)
-            guard signature.count >= 32 + 32 + 1 else { throw NSError(domain: "Invalid Signature Length, expected at least 65 bytes, got \(signature.count)", code: 0, userInfo: nil) }
-            let bytes = signature.bytes
-            let v:[UInt8] = Array<UInt8>(bytes[0..<1]) //First byte
-            let r:[UInt8] = Array<UInt8>(bytes[1...32]) //Next 32 bytes
-            let s:[UInt8] = Array<UInt8>(bytes[33...64]) //Last 32 bytes
-            return try pubKey.verifySignature(message: expectedData.bytes, v: v, r: r, s: s)
-        case .rsa:
-            let pubKey = try LibP2PCrypto.Keys.secKeyFrom(data: self.data, isPrivateKey: false, keyType: .RSA(bits: .B2048))
-            var error:Unmanaged<CFError>?
-            guard SecKeyVerifySignature(pubKey,
-                                        .rsaSignatureMessagePKCS1v15SHA256,
-                                        expectedData as CFData,
-                                        signature as CFData,
-                                        &error) else {
-                throw error!.takeRetainedValue() as Error
-            }
-            return true
-        //default:
-        //    throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+        default:
+            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
     }
 }
@@ -278,9 +225,6 @@ extension RawPublicKey: Encryptable {
     public func encrypt(_ message: Data) throws -> Data {
         
         switch self.type {
-        case .rsa:
-            let pubKey = try LibP2PCrypto.Keys.secKeyFrom(data: self.data, isPrivateKey: false, keyType: .RSA(bits: .B1024))
-            return try LibP2PCrypto.Keys.encrypt(message, publicKey: pubKey)
         default:
             throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
@@ -321,12 +265,7 @@ extension RawPublicKey: Marshalable {
     public func marshal() throws -> Data {
         switch self.type {
         case .rsa:
-            // If RSA, make sure we encoded the DER (aka the SubjectPublicKeyInfo) as our data...
-            let subjectPublicKeyInfoData = RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.data)
-            var pubKeyProto = PublicKey()
-            pubKeyProto.data = subjectPublicKeyInfoData
-            pubKeyProto.type = self.type.toProtoType
-            return try pubKeyProto.serializedData()
+            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         default:
             var pubKeyProto = PublicKey()
             pubKeyProto.data = self.data
@@ -334,23 +273,6 @@ extension RawPublicKey: Marshalable {
             return try pubKeyProto.serializedData()
         }
     }
-    
-//    public func marshalAsProtobuf() throws -> PublicKey {
-//        switch self.type {
-//        case .rsa:
-//            // If RSA, make sure we encoded the DER (aka the SubjectPublicKeyInfo) as our data...
-//            let subjectPublicKeyInfoData = RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.data)
-//            var pubKeyProto = PublicKey()
-//            pubKeyProto.data = subjectPublicKeyInfoData
-//            pubKeyProto.type = self.type.toProtoType
-//            return try pubKeyProto
-//        default:
-//            var pubKeyProto = PublicKey()
-//            pubKeyProto.data = self.data
-//            pubKeyProto.type = self.type.toProtoType
-//            return try pubKeyProto
-//        }
-//    }
 }
 
 
