@@ -28,7 +28,7 @@ public struct RawPublicKey {
         case .ed25519:
             self.data = pub.data
         case .secp256K1:
-            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+            self.data = pub.data
         }
         self.type = .init(pub.type)
     }
@@ -36,6 +36,11 @@ public struct RawPublicKey {
     internal init(_ key:Curve25519.Signing.PublicKey) {
         self.type = .ed25519
         self.data = key.rawRepresentation
+    }
+    
+    internal init(_ key:Secp256k1PublicKey) {
+        self.type = .secp256k1
+        self.data = Data(key.rawPublicKey)
     }
     
 }
@@ -58,6 +63,11 @@ public struct RawPrivateKey {
     internal init(_ key:Curve25519.Signing.PrivateKey) {
         self.type = .ed25519
         self.data = key.rawRepresentation
+    }
+    
+    internal init(_ key:Secp256k1PrivateKey) {
+        self.type = .secp256k1
+        self.data = Data(key.rawPrivateKey)
     }
 }
 
@@ -129,7 +139,7 @@ extension LibP2PCrypto {
                 case .secp256k1:
                     //print("secp256k1 PubKey Data Count: \(self.publicKey.data.count)")
                     //print("secp256k1 PrivKey Data Count: \(self.privateKey?.data.count ?? 0)")
-                    return nil
+                    return Attributes(type: .Secp256k1, size: 64, isPrivate: (self.privateKey != nil))
                 }
             }
 
@@ -187,6 +197,19 @@ extension LibP2PCrypto {
             /// Private Ed25519 Key
             internal init(_ priv:Curve25519.Signing.PrivateKey) {
                 self.keyType = .ed25519
+                self.privateKey = RawPrivateKey(priv)
+                self.publicKey = RawPublicKey(priv.publicKey)
+            }
+            
+            /// Public Secp256k1 Key
+            internal init(_ pub:Secp256k1PublicKey) {
+                self.keyType = .secp256k1
+                self.privateKey = nil
+                self.publicKey = RawPublicKey(pub)
+            }
+            /// Private Secp256k1 Key
+            internal init(_ priv:Secp256k1PrivateKey) {
+                self.keyType = .secp256k1
                 self.privateKey = RawPrivateKey(priv)
                 self.publicKey = RawPublicKey(priv.publicKey)
             }
@@ -461,24 +484,32 @@ extension LibP2PCrypto {
             }
         }
         
+        private static func generateSecp256k1KeyPair() throws -> KeyPair {
+            return KeyPair(try Secp256k1PrivateKey())
+        }
+        
         /// This does unescesary work by creating both priv and public key then tossing out the public key... Lets have direct methods for only private key generation...
         public static func generateRawPrivateKey(_ type:KeyPairType) throws -> RawPrivateKey {
             if case .Ed25519 = type { return try self.generateEd25519KeyPair().privateKey! }
             
-            throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
+            else if case .Secp256k1 = type { return try self.generateSecp256k1KeyPair().privateKey! }
+            
+            throw NSError(domain: "Unsupported key type", code: 0, userInfo: nil)
         }
         
         
         public static func generateKeyPair(_ type:KeyPairType) throws -> KeyPair {
             if case .Ed25519 = type { return try self.generateEd25519KeyPair() }
             
-            throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
+            else if case .Secp256k1 = type { return try self.generateSecp256k1KeyPair() }
+            
+            throw NSError(domain: "Unsupported key type", code: 0, userInfo: nil)
         }
         
         
         public static func generateEphemeralKeyPair(curve:ElipticCurveType) throws -> KeyPair {
             //return try generateSecKeyPair(.ECDSA(curve: curve))
-            throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
+            throw NSError(domain: "Unsupported key type", code: 0, userInfo: nil)
         }
         
 //        public static func generateRawEphemeralKeyPair(curve:ElipticCurveType) throws -> RawKeyPair {
@@ -533,7 +564,7 @@ extension LibP2PCrypto {
         /// Given raw DER public key data, this method will compute the SubjectPublicKeyInfo for the DER and instantitate a PublicKey Protobuf object, then return the serialized data...
         /// Raw Data should be the DER Public Key ( aka the SecKey.rawRepresentation() )
         public static func marshalPublicKey(raw:Data, keyType:KeyPairType) throws -> [UInt8] {
-            throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
+            //throw NSError(domain: "Unsupported key type", code: 0, userInfo: nil)
 //            let subjectPublicKeyInfoData = RSAPublicKeyExporter().toSubjectPublicKeyInfo(raw)
             var pubKeyProto = PublicKey()
             pubKeyProto.data = raw
@@ -548,11 +579,11 @@ extension LibP2PCrypto {
             guard !pubKeyProto.data.isEmpty else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
             switch pubKeyProto.type {
             case .rsa:
-                throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
+                throw NSError(domain: "Unsupported key type", code: 0, userInfo: nil)
             case .ed25519:
                 return pubKeyProto.data.asString(base: base)
             case .secp256K1:
-                throw NSError(domain: "Unsupport key type", code: 0, userInfo: nil)
+                return pubKeyProto.data.asString(base: base)
             }
             
         }
@@ -890,7 +921,14 @@ extension LibP2PCrypto {
                 } else {
                     return try KeyPair(Curve25519.Signing.PublicKey(rawRepresentation: keyData))
                 }
-            
+                
+            case .Secp256k1:
+                if isPrivate {
+                    return try KeyPair(Secp256k1PrivateKey(keyData.bytes))
+                } else {
+                    return try KeyPair(Secp256k1PublicKey(keyData.bytes))
+                }
+                
             default:
                 /// - TODO: Internal Support For EC Keys (without support for marshaling)
                 throw NSError(domain: "Unsupported Key Type \(keyType.description)", code: 0, userInfo: nil)

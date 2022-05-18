@@ -42,8 +42,7 @@ extension RawPublicKey {
         case .ed25519:
             return try Multihash(raw: self.marshal(), hashedWith: .identity)
         default:
-            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
-            //return try Multihash(raw: self.marshal(), hashedWith: .sha2_256)
+            return try Multihash(raw: self.marshal(), hashedWith: .sha2_256)
         }
     }
     
@@ -170,6 +169,13 @@ extension RawPrivateKey: PublicKeyDerivation {
             } else {
                 throw NSError(domain: "Ed25519 Keys are only supported on MacOS 10.15 and greater", code: 0, userInfo: nil)
             }
+        case .secp256k1:
+            let privKey = try Secp256k1PrivateKey(privateKey: self.data.bytes)
+            let pubKey = privKey.publicKey
+            return RawPublicKey(
+                type: self.type,
+                data: Data(pubKey.rawPublicKey)
+            )
         
         default:
             throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
@@ -203,6 +209,10 @@ extension RawPrivateKey:Signable {
         case .ed25519:
             let privKey = try Curve25519.Signing.PrivateKey(rawRepresentation: self.data)
             return try privKey.signature(for: message)
+        case .secp256k1:
+            let privKey = try Secp256k1PrivateKey(self.data.bytes)
+            let signature = try privKey.sign(message: message.bytes)
+            return Data([UInt8(signature.v)] + signature.r + signature.s)
         default:
             throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
@@ -215,6 +225,14 @@ extension RawPublicKey:Verifiable {
         case .ed25519:
             let pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: self.data)
             return pubKey.isValidSignature(signature, for: expectedData)
+        case .secp256k1:
+            let pubKey = try Secp256k1PublicKey(self.data.bytes)
+            guard signature.count >= 32 + 32 + 1 else { throw NSError(domain: "Invalid Signature Length, expected at least 65 bytes, got \(signature.count)", code: 0, userInfo: nil) }
+            let bytes = signature.bytes
+            let v:[UInt8] = Array<UInt8>(bytes[0..<1]) //First byte
+            let r:[UInt8] = Array<UInt8>(bytes[1...32]) //Next 32 bytes
+            let s:[UInt8] = Array<UInt8>(bytes[33...64]) //Last 32 bytes
+            return try pubKey.verifySignature(message: expectedData.bytes, v: v, r: r, s: s)
         default:
             throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
