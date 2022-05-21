@@ -25,7 +25,6 @@ public struct RawPublicKey {
         // This is the subjectPublicKeyInfo, we need to parse the raw key out...
         switch pub.type {
         case .rsa:
-            //throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
             self.data = pub.data
         case .ed25519:
             self.data = pub.data
@@ -993,7 +992,7 @@ extension LibP2PCrypto {
                 
             default:
                 /// - TODO: Internal Support For EC Keys (without support for marshaling)
-                throw NSError(domain: "Unsupported Key Type \(keyType.description)", code: 0, userInfo: nil)
+                throw NSError(domain: "ParsePem -> Unsupported Key Type \(keyType.description)", code: 0, userInfo: nil)
             }
         }
         

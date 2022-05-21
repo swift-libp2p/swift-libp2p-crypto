@@ -195,7 +195,7 @@ extension RawPrivateKey: Decryptable, Encryptable {
             let rsa = try LibP2PCrypto.Keys.rsaKeyFromDER(data: self.data, isPrivateKey: true)
             return try Data(rsa.decrypt(message.bytes))
         default:
-            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+            throw NSError(domain: "RawPrivateKey::Decrypt -> Unsupported Key Type", code: 0, userInfo: nil)
         }
     }
     
@@ -205,7 +205,7 @@ extension RawPrivateKey: Decryptable, Encryptable {
             let rsa = try LibP2PCrypto.Keys.rsaKeyFromDER(data: self.data, isPrivateKey: true)
             return try Data(rsa.encrypt(message.bytes))
         default:
-            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+            throw NSError(domain: "RawPrivateKey::Encrypt -> Unsupported Key Type", code: 0, userInfo: nil)
         }
     }
 }
@@ -264,7 +264,7 @@ extension RawPublicKey: Encryptable {
             let rsa = try LibP2PCrypto.Keys.rsaKeyFromDER(data: self.data, isPrivateKey: false)
             return try Data(rsa.encrypt(message.bytes))
         default:
-            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+            throw NSError(domain: "RawPublicKey::Encrypt -> Unsupported Key Type", code: 0, userInfo: nil)
         }
         
     }
