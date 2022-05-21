@@ -9,6 +9,7 @@ import Foundation
 import Multibase
 import Multihash
 import Crypto
+import CryptoSwift
 
 /// A generic wrapper for libp2p supported Public keys
 public struct RawPublicKey {
@@ -24,7 +25,8 @@ public struct RawPublicKey {
         // This is the subjectPublicKeyInfo, we need to parse the raw key out...
         switch pub.type {
         case .rsa:
-            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+            //throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+            self.data = pub.data
         case .ed25519:
             self.data = pub.data
         case .secp256K1:
@@ -43,6 +45,15 @@ public struct RawPublicKey {
         self.data = Data(key.rawPublicKey)
     }
     
+    internal init(_ key:RSA) throws {
+        self.type = .rsa
+        //guard key.d == nil else { throw NSError(domain: "Invalid RSA Public Key", code: 0, userInfo: nil) }
+        self.data = key.rawRepresentation()
+    }
+    
+    func rawRepresentation() -> Data {
+        self.data
+    }
 }
 
 /// A generic wrapper for libp2p supported Private keys
@@ -69,12 +80,18 @@ public struct RawPrivateKey {
         self.type = .secp256k1
         self.data = Data(key.rawPrivateKey)
     }
+    
+    internal init(_ key:RSA) throws {
+        self.type = .rsa
+        guard key.d != nil else { throw NSError(domain: "Invalid RSA Private Key", code: 0, userInfo: nil) }
+        self.data = key.rawRepresentation()
+    }
 }
 
 extension LibP2PCrypto {
     public enum Keys {
-        public typealias PubKey = RawPublicKey //SecKey
-        public typealias PrivKey = RawPrivateKey //SecKey
+        public typealias PubKey = RSA //SecKey
+        public typealias PrivKey = RSA //SecKey
         
         public enum GenericKeyType {
             case rsa
@@ -129,7 +146,19 @@ extension LibP2PCrypto {
             public func attributes() -> Attributes? {
                 switch self.keyType {
                 case .rsa:
-                    return nil
+                    let count = self.publicKey.data.count
+                    if count == 140 || count == 162 {
+                        return Attributes(type: .RSA(bits: .B1024), size: 1024, isPrivate: (self.privateKey != nil))
+                    } else if count == 270 || count == 294 {
+                        return Attributes(type: .RSA(bits: .B2048), size: 2048, isPrivate: (self.privateKey != nil))
+                    } else if count == 398 || count == 422 {
+                        return Attributes(type: .RSA(bits: .B3072), size: 3072, isPrivate: (self.privateKey != nil))
+                    } else if count == 560 || count == 550 || count == 526 {
+                        return Attributes(type: .RSA(bits: .B4096), size: 4096, isPrivate: (self.privateKey != nil))
+                    } else {
+                        print("PubKey Data Count: \(count)");
+                        return nil
+                    }
                     
                 case .ed25519:
                     //print("ed25519 PubKey Data Count: \(self.publicKey.data.count)")
@@ -212,6 +241,19 @@ extension LibP2PCrypto {
                 self.keyType = .secp256k1
                 self.privateKey = RawPrivateKey(priv)
                 self.publicKey = RawPublicKey(priv.publicKey)
+            }
+            
+            // Public RSA Key
+            internal init(public pub: CryptoSwift.RSA) throws {
+                self.keyType = .rsa
+                self.privateKey = nil
+                self.publicKey = try RawPublicKey(pub)
+            }
+            /// Private RSA Key
+            internal init(private priv: CryptoSwift.RSA) throws {
+                self.keyType = .rsa
+                self.privateKey = try RawPrivateKey(priv)
+                self.publicKey = try RawPublicKey(priv.publicKey())
             }
         }
         
@@ -488,11 +530,17 @@ extension LibP2PCrypto {
             return KeyPair(try Secp256k1PrivateKey())
         }
         
+        private static func generateRSAKeyPair(_ bits:RSABitLength = .B2048) throws -> KeyPair {
+            return try KeyPair(private: RSA(keySize: bits.bits))
+        }
+        
         /// This does unescesary work by creating both priv and public key then tossing out the public key... Lets have direct methods for only private key generation...
         public static func generateRawPrivateKey(_ type:KeyPairType) throws -> RawPrivateKey {
             if case .Ed25519 = type { return try self.generateEd25519KeyPair().privateKey! }
             
             else if case .Secp256k1 = type { return try self.generateSecp256k1KeyPair().privateKey! }
+            
+            else if case .RSA(let bits) = type { return try self.generateRSAKeyPair(bits).privateKey! }
             
             throw NSError(domain: "Unsupported key type", code: 0, userInfo: nil)
         }
@@ -502,6 +550,8 @@ extension LibP2PCrypto {
             if case .Ed25519 = type { return try self.generateEd25519KeyPair() }
             
             else if case .Secp256k1 = type { return try self.generateSecp256k1KeyPair() }
+            
+            else if case .RSA(let bits) = type { return try self.generateRSAKeyPair(bits) }
             
             throw NSError(domain: "Unsupported key type", code: 0, userInfo: nil)
         }
@@ -516,22 +566,23 @@ extension LibP2PCrypto {
 //            return try generateRawKeyPair(.ECDSA(curve: curve))
 //        }
         
-        
-//        public static func encrypt(_ data:Data, publicKey:SecKey) throws -> Data {
-//            var error:Unmanaged<CFError>?
-//            guard let encryptedData = SecKeyCreateEncryptedData(publicKey, .rsaEncryptionPKCS1, data as CFData, &error) else {
-//                throw NSError(domain: "Error Encrypting Data: \(error.debugDescription)", code: 0, userInfo: nil)
-//            }
-//            return encryptedData as Data
-//        }
-//
-//        public static func decrypt(_ data:Data, privateKey:SecKey) throws -> Data {
-//            var error:Unmanaged<CFError>?
-//            guard let decryptedData = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionPKCS1, data as CFData, &error) else {
-//                throw NSError(domain: "Error Decrypting Data: \(error.debugDescription)", code: 0, userInfo: nil)
-//            }
-//            return decryptedData as Data
-//        }
+        public static func encrypt(_ data:Data, publicKey:RawPublicKey) throws -> Data {
+            switch publicKey.type {
+            case .rsa:
+                return try Data(publicKey.encrypt(data.bytes))
+            default:
+                throw NSError(domain: "The \(publicKey.type) doesn't support encryption", code: 0)
+            }
+        }
+
+        public static func decrypt(_ data:Data, privateKey:RawPrivateKey) throws -> Data {
+            switch privateKey.type {
+            case .rsa:
+                return try Data(privateKey.decrypt(data.bytes))
+            default:
+                throw NSError(domain: "The \(privateKey.type) doesn't support decryption", code: 0)
+            }
+        }
         
         func keyStretcher(cipherType:String, hashType:String, secret:String) {}
         
@@ -552,7 +603,7 @@ extension LibP2PCrypto {
         }
         
 //        public static func marshalPublicKey(_ keyPair:KeyPair) throws -> [UInt8] {
-//            try self.marshalPublicKey(raw: keyPair.publicKey.rawRepresentation(), keyType: keyPair.keyType)
+//            try self.marshalPublicKey(raw: keyPair.publicKey.rawRepresentation, keyType: keyPair.keyType)
 //        }
         
 //        public static func marshalPublicKey(_ secKey:SecKey, keyType:KeyPairType) throws -> [UInt8] {
@@ -579,7 +630,7 @@ extension LibP2PCrypto {
             guard !pubKeyProto.data.isEmpty else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
             switch pubKeyProto.type {
             case .rsa:
-                throw NSError(domain: "Unsupported key type", code: 0, userInfo: nil)
+                return pubKeyProto.data.asString(base: base)
             case .ed25519:
                 return pubKeyProto.data.asString(base: base)
             case .secp256K1:
@@ -648,35 +699,39 @@ extension LibP2PCrypto {
 //            }
         }
         
-//        public static func importMarshaledPublicKey(_ marshaled:[UInt8]) throws -> PubKey {
-//            let pubKeyProto = try PublicKey(contiguousBytes: marshaled)
-//            guard pubKeyProto.data.isEmpty == false else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
-//
+        public static func importMarshaledPublicKey(_ marshaled:[UInt8]) throws -> PubKey {
+            let pubKeyProto = try PublicKey(contiguousBytes: marshaled)
+            guard pubKeyProto.data.isEmpty == false else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
+
 //            print("We Unmarshaled a PublicKey Proto!")
 //            print(pubKeyProto.type)
 //            print(pubKeyProto.data.asString(base: .base64))
-//
-//            switch pubKeyProto.type {
-//            case .rsa:
-//                //init rsa pub key
-//                return try LibP2PCrypto.Keys.secKeyFrom(data: pubKeyProto.data, isPrivateKey: false, keyType: .RSA(bits: .B1024))
-//            default:
-//                throw NSError(domain: "We dont support exotic public keys yet...", code: 0, userInfo: nil)
-//            }
-//        }
-//
-//        public static func importMarshaledPrivateKey(_ marshaled:[UInt8]) throws -> PrivKey {
-//            let pubKeyProto = try PrivateKey(contiguousBytes: marshaled)
-//            guard pubKeyProto.data.isEmpty == false else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
-//
-//            switch pubKeyProto.type {
-//            case .rsa:
-//                //init rsa pub key
-//                return try LibP2PCrypto.Keys.secKeyFrom(data: pubKeyProto.data, isPrivateKey: true, keyType: .RSA(bits: .B1024))
-//            default:
-//                throw NSError(domain: "We dont support exotic private keys yet...", code: 0, userInfo: nil)
-//            }
-//        }
+
+            switch pubKeyProto.type {
+            case .rsa:
+                //init rsa pub key
+                let rsa = try CryptoSwift.RSA(marshaledData: pubKeyProto.data, isPrivate: false)
+                return rsa
+                //return try LibP2PCrypto.Keys.secKeyFrom(data: pubKeyProto.data, isPrivateKey: false, keyType: .RSA(bits: .B1024))
+            default:
+                throw NSError(domain: "We dont support \(pubKeyProto.type) public keys yet...", code: 0, userInfo: nil)
+            }
+        }
+
+        public static func importMarshaledPrivateKey(_ marshaled:[UInt8]) throws -> PrivKey {
+            let pubKeyProto = try PrivateKey(contiguousBytes: marshaled)
+            guard pubKeyProto.data.isEmpty == false else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
+
+            switch pubKeyProto.type {
+            case .rsa:
+                //init rsa pub key
+                //return try LibP2PCrypto.Keys.secKeyFrom(data: pubKeyProto.data, isPrivateKey: true, keyType: .RSA(bits: .B1024))
+                let rsa = try CryptoSwift.RSA(marshaledData: pubKeyProto.data, isPrivate: true)
+                return rsa
+            default:
+                throw NSError(domain: "We dont support \(pubKeyProto.type) private keys yet...", code: 0, userInfo: nil)
+            }
+        }
         
         /// Converts a public key object into a protobuf serialized public key.
         /// - TODO: PEM Format
@@ -749,7 +804,7 @@ extension LibP2PCrypto {
 //            // Line length is typically 64 characters, except the last line.
 //            // See https://tools.ietf.org/html/rfc7468#page-6 (64base64char)
 //            // See https://tools.ietf.org/html/rfc7468#page-11 (example)
-//            let keyData = try keyPair.publicKey.rawRepresentation()
+//            let keyData = keyPair.publicKey.data
 //            let chunks = keyData.base64EncodedString().split(intoChunksOfLength: 64)
 //
 //            let pem = [
@@ -915,6 +970,13 @@ extension LibP2PCrypto {
             // We can instantiate the key, ensure it's valid, then create a return a PublicKey or PrivateKey
             switch keyType {
             
+            case .RSA:
+                if isPrivate {
+                    return try KeyPair(private: LibP2PCrypto.Keys.rsaKeyFromData(data: keyData, isPrivateKey: true))
+                } else {
+                    return try KeyPair(public: LibP2PCrypto.Keys.rsaKeyFromData(data: keyData, isPrivateKey: false))
+                }
+                
             case .Ed25519:
                 if isPrivate {
                     return try KeyPair(Curve25519.Signing.PrivateKey(rawRepresentation: keyData))
@@ -1100,40 +1162,75 @@ extension LibP2PCrypto {
 //
 //            return secKey
 //        }
+        public static func rsaKeyFromDER(data: Data, isPrivateKey:Bool) throws -> RSA {
+            if isPrivateKey {
+                return try rsaKeyFromData(data: data, isPrivateKey: true)
+            } else {
+                let asn1 = try Asn1Parser.parse(data: data)
+                
+                guard case .sequence(let params) = asn1 else { throw NSError(domain: "Invalid ASN1 Encoding", code: 0) }
+                guard case .sequence(let objectID) = params.first else { throw NSError(domain: "Invalid ASN1 Encoding -> No ObjectID Sequence Node -> \(params)", code: 0) }
+                guard case .objectIdentifier(let oid) = objectID.first else { throw NSError(domain: "Invalid ASN1 Encoding -> No ObjectID -> \(params)", code: 0) }
+                guard oid.bytes == Array<UInt8>(arrayLiteral: 42, 134, 72, 134, 247, 13, 1, 1, 1) else { throw NSError(domain: "Invalid ASN1 Encoding -> ObjectID != Public RSA Key ID", code: 0) }
+                guard case .bitString(let bits) = params.last else { throw NSError(domain: "Invalid ASN1 Encoding -> No BitString", code: 0) }
+                
+                return try rsaKeyFromData(data: bits, isPrivateKey: isPrivateKey)
+            }
+        }
+        
+        internal static func rsaKeyFromData(data: Data, isPrivateKey:Bool) throws -> RSA {
+            if isPrivateKey {
+                guard case .sequence(let params) = try Asn1Parser.parse(data: data) else { throw NSError(domain: "Invalid ASN1 Encoding -> No PrivKey Sequence", code: 0) }
+                // We check for 4 here because internally we can only marshal the first 4 integers at the moment...
+                guard params.count == 4 || params.count == 9 else { throw NSError(domain: "Invalid ASN1 Encoding -> Invalid Private RSA param count. Expected 9 got \(params.count)", code: 0) }
+                guard case .integer(let n) = params[1] else { throw NSError(domain: "Invalid ASN1 Encoding -> PrivKey No Modulus", code: 0) }
+                guard case .integer(let e) = params[2] else { throw NSError(domain: "Invalid ASN1 Encoding -> PrivKey No Public Exponent", code: 0) }
+                guard case .integer(let d) = params[3] else { throw NSError(domain: "Invalid ASN1 Encoding -> PrivKey No Private Exponent", code: 0) }
+                
+                return RSA(n: n.bytes, e: e.bytes, d: d.bytes)
+            } else {
+                guard case .sequence(let params) = try Asn1Parser.parse(data: data) else { throw NSError(domain: "Invalid ASN1 Encoding -> No PubKey Sequence", code: 0) }
+                guard case .integer(let n) = params.first else { throw NSError(domain: "Invalid ASN1 Encoding -> PubKey No Modulus -> \(params)", code: 0) }
+                guard case .integer(let e) = params.last else { throw NSError(domain: "Invalid ASN1 Encoding -> PubKey No Public Exponent -> \(params)", code: 0) }
+                
+                return RSA(n: n.bytes, e: e.bytes)
+            }
+        }
         
         /// Expects a PEM Public Key with the x509 header information included (object identifier)
         ///
         /// - Note: Handles RSA and EC Public Keys
-//        public static func importPublicPem(_ pem:String) throws -> PubKey {
-//            let chunks = pem.split(separator: "\n")
-//            guard chunks.count > 3,
-//                  let f = chunks.first, f.hasPrefix("-----BEGIN"),
-//                  let l = chunks.last, l.hasSuffix("-----") else {
-//                throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
-//            }
-//
-//            //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
-//            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-//            //print(raw.data)
-//
-//            //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
-//
-//            let ans1 = try LibP2PCrypto.Keys.parseANS1(pemData: raw.data)
-//
-//            guard ans1.isPrivateKey == false else {
-//                throw NSError(domain: "The provided PEM isn't a Public Key. Try importPrivatePem() instead...", code: 0, userInfo: nil)
-//            }
-//
-//            if ans1.objectIdentifier == Data([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]) {
-//                print("Trying to Init RSA Key")
-//                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .RSA(bits: .B1024))
-//            } else if ans1.objectIdentifier.prefix(5) == Data([0x2a, 0x86, 0x48, 0xce, 0x3d]) {
-//                print("Trying to Init EC Key")
-//                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .EC(curve: .P256))
-//            }
-//
-//            throw NSError(domain: "Failed to parse PEM into known key type \(ans1)", code: 0, userInfo: nil)
-//        }
+        public static func importPublicPem(_ pem:String) throws -> PubKey {
+            let chunks = pem.split(separator: "\n")
+            guard chunks.count > 3,
+                  let f = chunks.first, f.hasPrefix("-----BEGIN"),
+                  let l = chunks.last, l.hasSuffix("-----") else {
+                throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
+            }
+
+            //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
+            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
+            //print(raw.data)
+
+            //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
+
+            let ans1 = try LibP2PCrypto.Keys.parseANS1(pemData: raw.data)
+
+            guard ans1.isPrivateKey == false else {
+                throw NSError(domain: "The provided PEM isn't a Public Key. Try importPrivatePem() instead...", code: 0, userInfo: nil)
+            }
+
+            if ans1.objectIdentifier == Data([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]) {
+                print("Trying to Init RSA Key")
+                return try LibP2PCrypto.Keys.rsaKeyFromData(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey)
+            } else if ans1.objectIdentifier.prefix(5) == Data([0x2a, 0x86, 0x48, 0xce, 0x3d]) {
+                //print("Trying to Init EC Key")
+                //return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .EC(curve: .P256))
+                throw NSError(domain: "We dont support EC Curves Yet", code: 0, userInfo: nil)
+            }
+
+            throw NSError(domain: "Failed to parse PEM into known key type \(ans1)", code: 0, userInfo: nil)
+        }
         
         /// - TODO: Make this better...
 //        public static func importRawPublicPem(_ pem:String) throws -> Data {
@@ -1178,72 +1275,74 @@ extension LibP2PCrypto {
         ///
         /// - Note: Handles RSA and EC Public Keys
         public static func importPublicDER(_ der:String) throws -> KeyPair {
-            throw NSError(domain: "Unsupported", code: 0, userInfo: nil)
-//            let chunks = der.split(separator: "\n")
-//            guard chunks.count > 3,
-//                  let f = chunks.first, f.hasPrefix("-----BEGIN RSA PUBLIC"),
-//                  let l = chunks.last, l.hasSuffix("-----") else {
-//                throw NSError(domain: "Invalid DER Format", code: 0, userInfo: nil)
-//            }
-//
-//            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-//
-//            print("Trying to Init RSA DER Key")
-//            return try KeyPair(publicSecKey: LibP2PCrypto.Keys.secKeyFrom(data: raw.data, isPrivateKey: false, keyType: .RSA(bits: .B1024)))
+//            throw NSError(domain: "Unsupported", code: 0, userInfo: nil)
+            let chunks = der.split(separator: "\n")
+            guard chunks.count > 3,
+                  let f = chunks.first, f.hasPrefix("-----BEGIN RSA PUBLIC"),
+                  let l = chunks.last, l.hasSuffix("-----") else {
+                throw NSError(domain: "Invalid DER Format", code: 0, userInfo: nil)
+            }
+
+            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
+
+            print("Trying to Init RSA DER Key")
+            return try KeyPair(public: LibP2PCrypto.Keys.rsaKeyFromData(data: raw.data, isPrivateKey: false))
         }
         
         public static func importPrivateDER(_ der:String) throws -> KeyPair {
-            throw NSError(domain: "Unsupported", code: 0, userInfo: nil)
-//            let chunks = der.split(separator: "\n")
-//            guard chunks.count > 3,
-//                  let f = chunks.first, f.hasPrefix("-----BEGIN RSA PRIVATE"),
-//                  let l = chunks.last, l.hasSuffix("-----") else {
-//                throw NSError(domain: "Invalid DER Format", code: 0, userInfo: nil)
-//            }
-//
-//            var raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64).data
-//
-//            while raw.count % 4 != 0 {
-//                raw.insert(0, at: 0)
-//            }
-//
-//            print("Trying to Init RSA DER Key")
-//            return try KeyPair(publicSecKey: LibP2PCrypto.Keys.secKeyFrom(data: raw, isPrivateKey: true, keyType: .RSA(bits: .B1024)))
+//            throw NSError(domain: "Unsupported", code: 0, userInfo: nil)
+            let chunks = der.split(separator: "\n")
+            guard chunks.count > 3,
+                  let f = chunks.first, f.hasPrefix("-----BEGIN RSA PRIVATE"),
+                  let l = chunks.last, l.hasSuffix("-----") else {
+                throw NSError(domain: "Invalid DER Format", code: 0, userInfo: nil)
+            }
+
+            var raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64).data
+
+            while raw.count % 4 != 0 {
+                raw.insert(0, at: 0)
+            }
+
+            print("Trying to Init RSA DER Key")
+            return try KeyPair(public: LibP2PCrypto.Keys.rsaKeyFromData(data: raw, isPrivateKey: true))
         }
         
         /// Expects a PEM Private Key with the x509 header information included (object identifier)
         ///
         /// - Note: Only handles RSA Pirvate Keys at the moment
-//        public static func importPrivatePem(_ pem:String) throws -> PrivKey {
-//            let chunks = pem.split(separator: "\n")
-//            guard chunks.count > 3,
-//                  let f = chunks.first, f.hasPrefix("-----BEGIN PRIVATE"),
-//                  let l = chunks.last, l.hasSuffix("-----") else {
-//                throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
-//            }
-//
-//            //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
-//            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-//            //print(raw.data)
-//
-//            //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
-//
-//            let ans1 = try LibP2PCrypto.Keys.parseANS1(pemData: raw.data)
-//
-//            guard ans1.isPrivateKey == true else {
-//                throw NSError(domain: "The provided PEM isn't a Private Key. Try importPublicPem() instead...", code: 0, userInfo: nil)
-//            }
-//
-//            if ans1.objectIdentifier == Data([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]) {
-//                print("Trying to Init RSA Key")
-//                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .RSA(bits: .B1024))
-//            } else if ans1.objectIdentifier.prefix(5) == Data([0x2a, 0x86, 0x48, 0xce, 0x3d]) {
-//                print("Trying to Init EC Key")
-//                return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .EC(curve: .P256))
-//            }
-//
-//            throw NSError(domain: "Failed to parse PEM into known key type \(ans1)", code: 0, userInfo: nil)
-//        }
+        public static func importPrivatePem(_ pem:String) throws -> PrivKey {
+            let chunks = pem.split(separator: "\n")
+            guard chunks.count > 3,
+                  let f = chunks.first, f.hasPrefix("-----BEGIN PRIVATE"),
+                  let l = chunks.last, l.hasSuffix("-----") else {
+                throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
+            }
+
+            //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
+            let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
+            //print(raw.data)
+
+            //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
+
+            let ans1 = try LibP2PCrypto.Keys.parseANS1(pemData: raw.data)
+
+            guard ans1.isPrivateKey == true else {
+                throw NSError(domain: "The provided PEM isn't a Private Key. Try importPublicPem() instead...", code: 0, userInfo: nil)
+            }
+
+            if ans1.objectIdentifier == Data([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]) {
+                //print("Trying to Init RSA Key")
+                //return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .RSA(bits: .B1024))
+                return try LibP2PCrypto.Keys.rsaKeyFromData(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey)
+            } else if ans1.objectIdentifier.prefix(5) == Data([0x2a, 0x86, 0x48, 0xce, 0x3d]) {
+                //print("Trying to Init EC Key")
+                //return try LibP2PCrypto.Keys.secKeyFrom(data: ans1.keyBits, isPrivateKey: ans1.isPrivateKey, keyType: .EC(curve: .P256))
+                throw NSError(domain: "We don't support EC Keys yet.", code: 0, userInfo: nil)
+            }
+
+            throw NSError(domain: "Failed to parse PEM into known key type \(ans1)", code: 0, userInfo: nil)
+        }
         
         /// Expects a PEM Private Key with the x509 header information included (object identifier)
         ///
@@ -1799,3 +1898,260 @@ public extension String {
 //        throw NSError(domain: "Failed to parse PEM into known key type \(ans1)", code: 0, userInfo: nil)
 //    }
 //}
+
+
+/// - Note: https://cryptobook.nakov.com/digital-signatures/rsa-sign-verify-examples
+/// - Note: https://rosettacode.org/wiki/Modular_exponentiation#Swift
+/// - Note: https://datatracker.ietf.org/doc/html/rfc8017#section-8.2
+extension CryptoSwift.RSA {
+    convenience init(marshaledData data: Data, isPrivate:Bool) throws {
+        if isPrivate {
+            throw NSError(domain: "Unmarshalling RSA private keys is not supported yet", code: 0)
+        } else {
+            let asn1 = try Asn1Parser.parse(data: data)
+            
+            guard case .sequence(let params) = asn1 else { throw NSError(domain: "Invalid ASN1 Encoding", code: 0) }
+            guard case .sequence(let objectID) = params.first else { throw NSError(domain: "Invalid ASN1 Encoding -> No ObjectID Sequence Node", code: 0) }
+            guard case .objectIdentifier(let oid) = objectID.first else { throw NSError(domain: "Invalid ASN1 Encoding -> No ObjectID", code: 0) }
+            guard oid.bytes == Array<UInt8>(arrayLiteral: 42, 134, 72, 134, 247, 13, 1, 1, 1) else { throw NSError(domain: "Invalid ASN1 Encoding -> ObjectID != Public RSA Key ID", code: 0) }
+            guard case .bitString(let bits) = params.last else { throw NSError(domain: "Invalid ASN1 Encoding -> No BitString", code: 0) }
+            
+            guard case .sequence(let params2) = try Asn1Parser.parse(data: bits) else { throw NSError(domain: "Invalid ASN1 Encoding -> No PubKey Sequence", code: 0) }
+            guard case .integer(let n) = params2.first else { throw NSError(domain: "Invalid ASN1 Encoding -> No Modulus", code: 0) }
+            guard case .integer(let e) = params2.last else { throw NSError(domain: "Invalid ASN1 Encoding -> No Public Exponent", code: 0) }
+            
+            self.init(n: n.bytes, e: e.bytes)
+        }
+    }
+    
+    func rawRepresentation() -> Data {
+        if self.d != nil {
+            return (try? marshaledPrivateKey()) ?? Data()
+        } else {
+            return marshaledPublicKey()
+        }
+    }
+    
+    ///
+//    public func marshalOLD() throws -> Data {
+//        //var publicKey = PublicKey()
+//        if self.d != nil {
+//            return (try? marshaledPrivateKey()) ?? Data()
+//        } else {
+//            return marshaledPublicKey()
+//        }
+//    }
+    
+    public func marshal() throws -> Data {
+        var publicKey = PublicKey()
+        publicKey.type = .rsa
+        publicKey.data = marshaledPublicKey()
+        return try publicKey.serializedData()
+    }
+    
+    func publicKey() throws -> RSA {
+        guard self.d != nil else { throw NSError(domain: "Not Supported", code: 0) }
+        return RSA(n: self.n, e: self.e)
+    }
+    
+    internal func marshaledPublicKey() -> Data {
+        let mod = self.n.serialize()
+        let pubkeyAsnNode:Asn1Parser.Node =
+            .sequence(nodes: [
+                .integer(data: Data(RSA.zeroPad(n: mod.bytes, to: mod.count + 1))),
+                .integer(data: self.e.serialize())
+            ])
+        
+        let asnNodes:Asn1Parser.Node = .sequence(nodes: [
+            .sequence(nodes: [
+                .objectIdentifier(data: Data(Array<UInt8>(arrayLiteral: 42, 134, 72, 134, 247, 13, 1, 1, 1))),
+                .null
+            ]),
+            .bitString(data: Data(ASN1Encoder.encode(pubkeyAsnNode)))
+        ])
+        
+        return Data(ASN1Encoder.encode(asnNodes))
+    }
+    
+    // - TODO: Implement Me! (we need both primes, exponents and the coefficient to be compliant)
+    internal func marshaledPrivateKey() throws -> Data {
+        guard let d = self.d else { throw NSError(domain: "Not a valid private RSA Key", code: 0) }
+        let mod = n.serialize()
+        let privkeyAsnNode:Asn1Parser.Node =
+            .sequence(nodes: [
+                .integer(data: Data( Array<UInt8>(arrayLiteral: 0x00) )),
+                .integer(data: Data(RSA.zeroPad(n: mod.bytes, to: mod.count + 1))),
+                .integer(data: e.serialize()),
+                .integer(data: d.serialize())
+            ])
+        return Data(ASN1Encoder.encode(privkeyAsnNode))
+    }
+    
+    private static func zeroPad(n:[UInt8], to:Int) -> [UInt8] {
+        var modulus = n
+        while modulus.count < to {
+            modulus.insert(0x00, at: 0)
+        }
+        return modulus
+    }
+    
+    /// This is unsafe without PKCS#1 Padding and Hashing
+    func signRaw(message:Data) throws -> Data {
+        guard let d = self.d else { throw NSError(domain: "Signing data requires a Private RSA key", code: 0) }
+        let n = BigUInteger(Data(message))
+        let e = d
+        let m = self.n
+        return RSA.modPow(n: n, e: e, m: m).serialize()
+    }
+    
+    /// This is unsafe without PKCS#1 Padding and Hashing
+    func verifyRaw(signedData:Data, expectedData:Data) -> Bool {
+        let n = BigUInteger(signedData)
+        let e = self.e
+        let m = self.n
+        let fromSignedData = RSA.modPow(n: n, e: e, m: m).serialize()
+        
+        return fromSignedData == expectedData
+    }
+    
+    /// This is unsafe without PKCS#1 Padding and Hashing
+    static func verifyRaw(signedData:Data, expectedData:Data, usingPublicKey key:RSA) -> Bool {
+        let n = BigUInteger(signedData)
+        let e = key.e
+        let m = key.n
+        let fromSignedData = modPow(n: n, e: e, m: m).serialize()
+        
+        return fromSignedData == expectedData
+    }
+    
+    /// Signs a message using SHA256 PKCS#1v15 Padding Scheme
+    ///
+    /// - Note: [EMSA-PKCS1-v1_5](https://datatracker.ietf.org/doc/html/rfc8017#section-9.2)
+    func sign(message:Data) throws -> Data {
+        guard let d = self.d else { throw NSError(domain: "Signing data requires a Private RSA key", code: 0) }
+        let encodedMessage = try RSA.hashedAndPKCSEncoded(message.bytes, modLength: self.n.serialize().count)
+        
+        let n = BigUInteger(Data(encodedMessage))
+        let e = d
+        let m = self.n
+        let signedData_RsaKey = RSA.modPow(n: n, e: e, m: m).serialize()
+        return signedData_RsaKey
+    }
+    
+    /// Signs a message using SHA256 PKCS#1v15 Padding Scheme
+    ///
+    /// - Note: [EMSA-PKCS1-v1_5](https://datatracker.ietf.org/doc/html/rfc8017#section-9.2)
+    static func sign(message:Data, withKey key:RSA) throws -> Data {
+        guard let d = key.d else { throw NSError(domain: "Signing data requires a Private RSA key", code: 0) }
+        let encodedMessage = try RSA.hashedAndPKCSEncoded(message.bytes, modLength: key.n.serialize().count)
+        
+        let n = BigUInteger(Data(encodedMessage))
+        let e = d
+        let m = key.n
+        let signedData_RsaKey = RSA.modPow(n: n, e: e, m: m).serialize()
+        return signedData_RsaKey
+    }
+    
+    
+    static func verify(signature:Data, fromMessage message:Data, usingKey key:RSA) throws -> Bool {
+        let modLength = key.n.serialize().count
+        /// Step 1: Ensure the signature is the same length as the key's modulus
+        guard signature.count == modLength else { throw NSError(domain: "Invalid Signature Length", code: 0) }
+        
+        /// Step 2: 'Decrypt' the signature
+        let n = BigUInteger(signature)
+        let e = key.e
+        let m = key.n
+        let pkcsEncodedSHA256HashedMessage = modPow(n: n, e: e, m: m).serialize()
+        
+        /// Step 3: Compare the 'decrypted' signature with the prepared / encoded expected message....
+        let preparedExpectedMessage = try CryptoSwift.RSA.hashedAndPKCSEncoded(message.bytes, modLength: modLength).dropFirst()
+
+        guard pkcsEncodedSHA256HashedMessage == preparedExpectedMessage else { return false }
+        
+        return true
+    }
+    
+    func verify(signature:Data, fromMessage message:Data) throws -> Bool {
+        let modLength = self.n.serialize().count
+        /// Step 1: Ensure the signature is the same length as the key's modulus
+        guard signature.count == modLength else { throw NSError(domain: "Invalid Signature Length", code: 0) }
+        
+        /// Step 2: 'Decrypt' the signature
+        let n = BigUInteger(signature)
+        let e = self.e
+        let m = self.n
+        let pkcsEncodedSHA256HashedMessage = RSA.modPow(n: n, e: e, m: m).serialize()
+        
+        /// Step 3: Compare the 'decrypted' signature with the prepared / encoded expected message....
+        let preparedExpectedMessage = try RSA.hashedAndPKCSEncoded(message.bytes, modLength: modLength).dropFirst()
+
+        guard pkcsEncodedSHA256HashedMessage == preparedExpectedMessage else { return false }
+        
+        return true
+    }
+    
+    /// Hashes and Encodes a message for signing and verifying
+    ///
+    /// - Note: [EMSA-PKCS1-v1_5](https://datatracker.ietf.org/doc/html/rfc8017#section-9.2)
+    private static func hashedAndPKCSEncoded(_ message:[UInt8], modLength:Int) throws -> Data {
+        /// 1.  Apply the hash function to the message M to produce a hash
+        let hashedMessage = SHA2(variant: .sha256).calculate(for: message)
+        
+        /// 2. Encode the algorithm ID for the hash function and the hash value into an ASN.1 value of type DigestInfo
+        /// PKCS#1_15 DER Structure (OID == sha256WithRSAEncryption)
+        let asn:Asn1Parser.Node = .sequence(nodes: [
+            .sequence(nodes: [
+                .objectIdentifier(data: Data(Array<UInt8>(arrayLiteral: 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01))),
+                .null
+            ]),
+            .octetString(data: Data(hashedMessage))
+        ])
+        
+        let t = ASN1Encoder.encode(asn)
+                
+        /// 3.  If emLen < tLen + 11, output "intended encoded message lengthtoo short" and stop
+        if modLength < t.count + 11 { throw NSError(domain: "intended encoded message length too short", code: 0) }
+        
+        /// 4.  Generate an octet string PS consisting of emLen - tLen - 3
+        /// octets with hexadecimal value 0xff. The length of PS will be
+        /// at least 8 octets.
+        let r = modLength - t.count - 3
+        let padding = [0x00, 0x01] + Array<UInt8>(repeating: 0xFF, count: r) + [0x00]
+        
+        /// 5.  Concatenate PS, the DER encoding T, and other padding to form
+        /// the encoded message EM as EM = 0x00 || 0x01 || PS || 0x00 || T.
+        return Data(padding + t)
+    }
+    
+    /// Modular exponentiation
+    ///
+    /// - Credit: AttaSwift BigInt
+    /// - Source: https://rosettacode.org/wiki/Modular_exponentiation#Swift
+    private static func modPow<T: BinaryInteger>(n: T, e: T, m: T) -> T {
+      guard e != 0 else {
+        return 1
+      }
+     
+      var res = T(1)
+      var base = n % m
+      var exp = e
+     
+      while true {
+        if exp & 1 == 1 {
+          res *= base
+          res %= m
+        }
+     
+        if exp == 1 {
+          return res
+        }
+     
+        exp /= 2
+        base *= base
+        base %= m
+      }
+    }
+}
+
+
