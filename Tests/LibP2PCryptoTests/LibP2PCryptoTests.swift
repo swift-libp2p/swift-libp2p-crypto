@@ -15,27 +15,27 @@ final class libp2p_cryptoTests: XCTestCase {
     }
     
     /// RSA
-    func testRSALengths() throws {
-        let rsa1024 = RSA(keySize: 1024)
-        print(rsa1024.n.serialize().count)
-        print(rsa1024.e.serialize().count)
-        print(rsa1024.d?.serialize().count ?? -1)
-
-        let rsa2048 = RSA(keySize: 2048)
-        print(rsa2048.n.serialize().count)
-        print(rsa2048.e.serialize().count)
-        print(rsa2048.d?.serialize().count ?? -1)
-        
-        let rsa3072 = RSA(keySize: 3072)
-        print(rsa3072.n.serialize().count)
-        print(rsa3072.e.serialize().count)
-        print(rsa3072.d?.serialize().count ?? -1)
-        
-        let rsa4096 = RSA(keySize: 4096)
-        print(rsa4096.n.serialize().count)
-        print(rsa4096.e.serialize().count)
-        print(rsa4096.d?.serialize().count ?? -1)
-    }
+//    func testRSALengths() throws {
+//        let rsa1024 = RSA(keySize: 1024)
+//        print(rsa1024.n.serialize().count)
+//        print(rsa1024.e.serialize().count)
+//        print(rsa1024.d?.serialize().count ?? -1)
+//
+//        let rsa2048 = RSA(keySize: 2048)
+//        print(rsa2048.n.serialize().count)
+//        print(rsa2048.e.serialize().count)
+//        print(rsa2048.d?.serialize().count ?? -1)
+//
+//        let rsa3072 = RSA(keySize: 3072)
+//        print(rsa3072.n.serialize().count)
+//        print(rsa3072.e.serialize().count)
+//        print(rsa3072.d?.serialize().count ?? -1)
+//
+//        let rsa4096 = RSA(keySize: 4096)
+//        print(rsa4096.n.serialize().count)
+//        print(rsa4096.e.serialize().count)
+//        print(rsa4096.d?.serialize().count ?? -1)
+//    }
     
     func testRSAToDataAndBack_1024() throws {
         let rsa = RSA(keySize: 1024)
@@ -50,7 +50,6 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssertEqual(recovered.n, rsa.n)
         XCTAssertEqual(recovered.e, rsa.e)
         //XCTAssertEqual(recovered.d, rsa1024.d)
-        
     }
     
     func testRSAToDataAndBack_2048() throws {
@@ -58,15 +57,14 @@ final class libp2p_cryptoTests: XCTestCase {
         print(rsa.n.serialize().count)
         print(rsa.e.serialize().count)
         print(rsa.d?.serialize().count ?? -1)
-        
+
         let raw = rsa.marshaledPublicKey()
-        
+
         let recovered = try RSA(marshaledData: raw, isPrivate: false)
-        
+
         XCTAssertEqual(recovered.n, rsa.n)
         XCTAssertEqual(recovered.e, rsa.e)
         //XCTAssertEqual(recovered.d, rsa1024.d)
-        
     }
     
     func testRSA1024() throws {
@@ -92,39 +90,39 @@ final class libp2p_cryptoTests: XCTestCase {
         //XCTAssertEqual(keyPair.publicKey.data.count, 270)
         //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 1193)
         //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 1194)
-        
+
         let attributes = keyPair.attributes()
         XCTAssertEqual(attributes?.size, 2048)
         XCTAssertEqual(attributes?.isPrivate, true)
     }
 
-    func testRSA3072() throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B3072))
-        print(keyPair)
-        XCTAssert(keyPair.keyType == .rsa)
-        XCTAssertNotNil(keyPair.privateKey)
-        //XCTAssertEqual(keyPair.publicKey.data.count, 398)
-        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 1768)
-        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 1768)
-        
-        let attributes = keyPair.attributes()
-        XCTAssertEqual(attributes?.size, 3072)
-        XCTAssertEqual(attributes?.isPrivate, true)
-    }
+//    func testRSA3072() throws {
+//        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B3072))
+//        print(keyPair)
+//        XCTAssert(keyPair.keyType == .rsa)
+//        XCTAssertNotNil(keyPair.privateKey)
+//        //XCTAssertEqual(keyPair.publicKey.data.count, 398)
+//        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 1768)
+//        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 1768)
+//
+//        let attributes = keyPair.attributes()
+//        XCTAssertEqual(attributes?.size, 3072)
+//        XCTAssertEqual(attributes?.isPrivate, true)
+//    }
 
-    func testRSA4096() throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B4096))
-        print(keyPair)
-        XCTAssert(keyPair.keyType == .rsa)
-        XCTAssertNotNil(keyPair.privateKey)
-        //XCTAssertEqual(keyPair.publicKey.data.count, 526)
-        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 2349)
-        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 2349)
-        
-        let attributes = keyPair.attributes()
-        XCTAssertEqual(attributes?.size, 4096)
-        XCTAssertEqual(attributes?.isPrivate, true)
-    }
+//    func testRSA4096() throws {
+//        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B4096))
+//        print(keyPair)
+//        XCTAssert(keyPair.keyType == .rsa)
+//        XCTAssertNotNil(keyPair.privateKey)
+//        //XCTAssertEqual(keyPair.publicKey.data.count, 526)
+//        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 2349)
+//        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 2349)
+//
+//        let attributes = keyPair.attributes()
+//        XCTAssertEqual(attributes?.size, 4096)
+//        XCTAssertEqual(attributes?.isPrivate, true)
+//    }
 
     func testED25519() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
