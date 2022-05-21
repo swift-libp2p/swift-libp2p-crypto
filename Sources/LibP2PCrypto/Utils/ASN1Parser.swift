@@ -179,7 +179,7 @@ enum Asn1Parser {
         if firstByte == 0x02 {
             let length = try scanner.consumeLength()
             let data = try scanner.consume(length: length)
-            print(Int(data.asString(base: .base16), radix: 16) ?? -1)
+            //print(Int(data.asString(base: .base16), radix: 16) ?? -1)
             return .integer(data: data)
         }
         
@@ -188,7 +188,7 @@ enum Asn1Parser {
             let length = try scanner.consumeLength()
             let data = try scanner.consume(length: length)
             //print(String(data: data, encoding: .ascii))
-            print("Object ID: [\(data.map { "\($0)" }.joined(separator: ","))]")
+            //print("Object ID: [\(data.map { "\($0)" }.joined(separator: ","))]")
             return .objectIdentifier(data: data)
         }
         
@@ -472,5 +472,40 @@ enum Asn1ParserECPrivate {
             return nodes
         }
         return nodes
+    }
+}
+
+enum ASN1Encoder {
+    private static func asn1LengthPrefix(_ bytes:[UInt8]) -> [UInt8] {
+        if bytes.count >= 0x80 {
+            var lengthAsBytes = withUnsafeBytes(of: bytes.count.bigEndian, Array<UInt8>.init)
+            while lengthAsBytes.first == 0 { lengthAsBytes.removeFirst() }
+            return [(0x80 + UInt8(lengthAsBytes.count))] + lengthAsBytes
+        } else {
+            return [UInt8(bytes.count)]
+        }
+    }
+    
+    private static func asn1LengthPrefixed(_ bytes:[UInt8]) -> [UInt8] {
+        asn1LengthPrefix(bytes) + bytes
+    }
+    
+    public static func encode(_ node:Asn1Parser.Node) -> [UInt8] {
+        switch node {
+        case .integer(let integer):
+            return [0x02] + asn1LengthPrefixed(integer.bytes)
+        case .bitString(let bits):
+            return [0x03] + asn1LengthPrefixed([0x00] + bits.bytes)
+        case .octetString(let octet):
+            return [0x04] + asn1LengthPrefixed(octet.bytes)
+        case .null:
+            return [0x05, 0x00]
+        case .objectIdentifier(let oid):
+            return [0x06] + asn1LengthPrefixed(oid.bytes)
+        case .sequence(let nodes):
+            return [0x30] + asn1LengthPrefixed( nodes.reduce(into: Array<UInt8>(), { partialResult, node in
+                partialResult += encode(node)
+            }) )
+        }
     }
 }
