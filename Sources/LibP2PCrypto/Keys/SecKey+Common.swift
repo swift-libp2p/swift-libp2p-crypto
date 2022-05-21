@@ -9,6 +9,7 @@ import Foundation
 import Crypto
 import Multibase
 import Multihash
+import CryptoSwift
 
 protocol PublicKeyDerivation {
     func derivePublicKey() throws -> RawPublicKey
@@ -158,6 +159,10 @@ extension LibP2PCrypto.Keys.KeyPair {
 extension RawPrivateKey: PublicKeyDerivation {
     func derivePublicKey() throws -> RawPublicKey {
         switch self.type {
+        case .rsa:
+            let priv = try LibP2PCrypto.Keys.rsaKeyFromDER(data: self.data, isPrivateKey: true)
+            return try RawPublicKey(CryptoSwift.RSA(n: priv.n, e: priv.e))
+        
         case .ed25519:
             if #available(OSX 10.15, *) {
                 let privKey = try Curve25519.Signing.PrivateKey(rawRepresentation: self.data.bytes)
@@ -177,8 +182,8 @@ extension RawPrivateKey: PublicKeyDerivation {
                 data: Data(pubKey.rawPublicKey)
             )
         
-        default:
-            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+        //default:
+        //   throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
     }
 }
@@ -186,6 +191,9 @@ extension RawPrivateKey: PublicKeyDerivation {
 extension RawPrivateKey: Decryptable, Encryptable {
     public func decrypt(_ message: Data) throws -> Data {
         switch self.type {
+        case .rsa:
+            let rsa = try LibP2PCrypto.Keys.rsaKeyFromDER(data: self.data, isPrivateKey: true)
+            return try Data(rsa.decrypt(message.bytes))
         default:
             throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
@@ -193,6 +201,9 @@ extension RawPrivateKey: Decryptable, Encryptable {
     
     public func encrypt(_ message: Data) throws -> Data {
         switch self.type {
+        case .rsa:
+            let rsa = try LibP2PCrypto.Keys.rsaKeyFromDER(data: self.data, isPrivateKey: true)
+            return try Data(rsa.encrypt(message.bytes))
         default:
             throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
@@ -206,6 +217,9 @@ extension RawPrivateKey: Decryptable, Encryptable {
 extension RawPrivateKey:Signable {
     public func sign(message: Data) throws -> Data {
         switch self.type {
+        case .rsa:
+            let privKey = try LibP2PCrypto.Keys.rsaKeyFromDER(data: self.data, isPrivateKey: true)
+            return try privKey.sign(message: message)
         case .ed25519:
             let privKey = try Curve25519.Signing.PrivateKey(rawRepresentation: self.data)
             return try privKey.signature(for: message)
@@ -213,8 +227,8 @@ extension RawPrivateKey:Signable {
             let privKey = try Secp256k1PrivateKey(self.data.bytes)
             let signature = try privKey.sign(message: message.bytes)
             return Data([UInt8(signature.v)] + signature.r + signature.s)
-        default:
-            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+        //default:
+        //    throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
     }
 }
@@ -222,6 +236,9 @@ extension RawPrivateKey:Signable {
 extension RawPublicKey:Verifiable {
     public func verfiy(_ signature: Data, for expectedData:Data) throws -> Bool {
         switch self.type {
+        case .rsa:
+            let pubKey = try LibP2PCrypto.Keys.rsaKeyFromDER(data: self.data, isPrivateKey: false)
+            return try pubKey.verify(signature: signature, fromMessage: expectedData)
         case .ed25519:
             let pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: self.data)
             return pubKey.isValidSignature(signature, for: expectedData)
@@ -233,8 +250,8 @@ extension RawPublicKey:Verifiable {
             let r:[UInt8] = Array<UInt8>(bytes[1...32]) //Next 32 bytes
             let s:[UInt8] = Array<UInt8>(bytes[33...64]) //Last 32 bytes
             return try pubKey.verifySignature(message: expectedData.bytes, v: v, r: r, s: s)
-        default:
-            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+        //default:
+        //    throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
     }
 }
@@ -243,6 +260,9 @@ extension RawPublicKey: Encryptable {
     public func encrypt(_ message: Data) throws -> Data {
         
         switch self.type {
+        case .rsa:
+            let rsa = try LibP2PCrypto.Keys.rsaKeyFromDER(data: self.data, isPrivateKey: false)
+            return try Data(rsa.encrypt(message.bytes))
         default:
             throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         }
@@ -282,8 +302,8 @@ extension RawPublicKey: Marshalable {
     /// For public keys, we need to make sure the data that we're marshaling is the SubjectPublicKeyInfo of the RSA Public Key.... (we normally store the raw representation, which is in DER format without the ASN1 headers)
     public func marshal() throws -> Data {
         switch self.type {
-        case .rsa:
-            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
+//        case .rsa:
+//            throw NSError(domain: "Unsupported Key Type", code: 0, userInfo: nil)
         default:
             var pubKeyProto = PublicKey()
             pubKeyProto.data = self.data
