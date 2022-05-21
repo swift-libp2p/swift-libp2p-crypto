@@ -3,6 +3,7 @@ import XCTest
 import Multibase
 import Crypto
 import Multihash
+import CryptoSwift
 
 final class libp2p_cryptoTests: XCTestCase {
     
@@ -14,63 +15,116 @@ final class libp2p_cryptoTests: XCTestCase {
     }
     
     /// RSA
-//    func testRSA1024() throws {
-//        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B1024))
-//
-//        print(keyPair)
-//        XCTAssert(keyPair.keyType == .rsa)
-//        XCTAssertNotNil(keyPair.privateKey)
-//        XCTAssertEqual(keyPair.publicKey.data.count, 140)
-//        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 608)
-//        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 610)
-//
-//        let attributes = keyPair.attributes()
-//        print(attributes ?? "NIL")
-//        XCTAssertEqual(attributes?.size, 1024)
-//        XCTAssertEqual(attributes?.isPrivate, true)
-//    }
-//
-//    func testRSA1024_KeyPair() throws {
-//        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B1024))
-//        print(keyPair.privateKey.attributes)
-//        print(keyPair.publicKey.attributes)
-//
-//        XCTAssertFalse(keyPair.privateKey.isPublicKey)
-//        XCTAssertTrue(keyPair.publicKey.isPublicKey)
-//
-//        XCTAssertTrue(keyPair.privateKey.isRSAKey)
-//        XCTAssertTrue(keyPair.publicKey.isRSAKey)
-//    }
-//
-//    func testRSA2048() throws {
-//        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
-//        print(keyPair)
-//        XCTAssert(keyPair.keyType == .rsa)
-//        XCTAssertNotNil(keyPair.privateKey)
-//        XCTAssertEqual(keyPair.publicKey.data.count, 270)
-//        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 1193)
-//        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 1194)
-//    }
-//
-//    func testRSA3072() throws {
-//        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B3072))
-//        print(keyPair)
-//        XCTAssert(keyPair.keyType == .rsa)
-//        XCTAssertNotNil(keyPair.privateKey)
-//        XCTAssertEqual(keyPair.publicKey.data.count, 398)
-//        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 1768)
-//        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 1768)
-//    }
-//
-//    func testRSA4096() throws {
-//        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B4096))
-//        print(keyPair)
-//        XCTAssert(keyPair.keyType == .rsa)
-//        XCTAssertNotNil(keyPair.privateKey)
-//        XCTAssertEqual(keyPair.publicKey.data.count, 526)
-//        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 2349)
-//        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 2349)
-//    }
+    func testRSALengths() throws {
+        let rsa1024 = RSA(keySize: 1024)
+        print(rsa1024.n.serialize().count)
+        print(rsa1024.e.serialize().count)
+        print(rsa1024.d?.serialize().count ?? -1)
+
+        let rsa2048 = RSA(keySize: 2048)
+        print(rsa2048.n.serialize().count)
+        print(rsa2048.e.serialize().count)
+        print(rsa2048.d?.serialize().count ?? -1)
+        
+        let rsa3072 = RSA(keySize: 3072)
+        print(rsa3072.n.serialize().count)
+        print(rsa3072.e.serialize().count)
+        print(rsa3072.d?.serialize().count ?? -1)
+        
+        let rsa4096 = RSA(keySize: 4096)
+        print(rsa4096.n.serialize().count)
+        print(rsa4096.e.serialize().count)
+        print(rsa4096.d?.serialize().count ?? -1)
+    }
+    
+    func testRSAToDataAndBack_1024() throws {
+        let rsa = RSA(keySize: 1024)
+        print(rsa.n.serialize().count)
+        print(rsa.e.serialize().count)
+        print(rsa.d?.serialize().count ?? -1)
+        
+        let raw = rsa.marshaledPublicKey()
+        
+        let recovered = try RSA(marshaledData: raw, isPrivate: false)
+        
+        XCTAssertEqual(recovered.n, rsa.n)
+        XCTAssertEqual(recovered.e, rsa.e)
+        //XCTAssertEqual(recovered.d, rsa1024.d)
+        
+    }
+    
+    func testRSAToDataAndBack_2048() throws {
+        let rsa = RSA(keySize: 2048)
+        print(rsa.n.serialize().count)
+        print(rsa.e.serialize().count)
+        print(rsa.d?.serialize().count ?? -1)
+        
+        let raw = rsa.marshaledPublicKey()
+        
+        let recovered = try RSA(marshaledData: raw, isPrivate: false)
+        
+        XCTAssertEqual(recovered.n, rsa.n)
+        XCTAssertEqual(recovered.e, rsa.e)
+        //XCTAssertEqual(recovered.d, rsa1024.d)
+        
+    }
+    
+    func testRSA1024() throws {
+        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B1024))
+
+        print(keyPair)
+        XCTAssert(keyPair.keyType == .rsa)
+        XCTAssertNotNil(keyPair.privateKey)
+        //XCTAssertEqual(keyPair.publicKey.data.count, 140)
+        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 608)
+        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 610)
+
+        let attributes = keyPair.attributes()
+        XCTAssertEqual(attributes?.size, 1024)
+        XCTAssertEqual(attributes?.isPrivate, true)
+    }
+
+    func testRSA2048() throws {
+        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
+        print(keyPair)
+        XCTAssert(keyPair.keyType == .rsa)
+        XCTAssertNotNil(keyPair.privateKey)
+        //XCTAssertEqual(keyPair.publicKey.data.count, 270)
+        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 1193)
+        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 1194)
+        
+        let attributes = keyPair.attributes()
+        XCTAssertEqual(attributes?.size, 2048)
+        XCTAssertEqual(attributes?.isPrivate, true)
+    }
+
+    func testRSA3072() throws {
+        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B3072))
+        print(keyPair)
+        XCTAssert(keyPair.keyType == .rsa)
+        XCTAssertNotNil(keyPair.privateKey)
+        //XCTAssertEqual(keyPair.publicKey.data.count, 398)
+        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 1768)
+        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 1768)
+        
+        let attributes = keyPair.attributes()
+        XCTAssertEqual(attributes?.size, 3072)
+        XCTAssertEqual(attributes?.isPrivate, true)
+    }
+
+    func testRSA4096() throws {
+        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B4096))
+        print(keyPair)
+        XCTAssert(keyPair.keyType == .rsa)
+        XCTAssertNotNil(keyPair.privateKey)
+        //XCTAssertEqual(keyPair.publicKey.data.count, 526)
+        //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 2349)
+        //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 2349)
+        
+        let attributes = keyPair.attributes()
+        XCTAssertEqual(attributes?.size, 4096)
+        XCTAssertEqual(attributes?.isPrivate, true)
+    }
 
     func testED25519() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
@@ -88,24 +142,24 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssertEqual(keyPair.publicKey.data.count, 64)
     }
     
-//    func testRSAMashallingRoundTrip() throws {
-//        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B1024))
-//
-//        print("Public Key: \(keyPair.publicKey.asString(base: .base16))")
-//
-//        let marshaledPubKey = try keyPair.publicKey.marshal()
-//        //let marshaledPubKey = try LibP2PCrypto.Keys.marshalPublicKey(raw: keyPair.publicKey, keyType: .RSA(bits: .B1024))
-//        print("Marshaled PubKey Bytes: \(marshaledPubKey)")
-//
-//        let unmarshaledPubKey = try LibP2PCrypto.Keys.unmarshalPublicKey(buf: marshaledPubKey.bytes, into: .base16)
-//
-//        print("Public Key: \(unmarshaledPubKey)")
-//        XCTAssertEqual(unmarshaledPubKey, keyPair.publicKey.asString(base: .base16))
-//
-//        let rPubKey = try RawPublicKey(marshaledKey: marshaledPubKey)
-//
-//        XCTAssertEqual(rPubKey.data, keyPair.publicKey.data)
-//    }
+    func testRSAMashallingRoundTrip() throws {
+        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B1024))
+
+        print("Public Key: \(keyPair.publicKey.asString(base: .base16))")
+
+        let marshaledPubKey = try keyPair.publicKey.marshal()
+        //let marshaledPubKey = try LibP2PCrypto.Keys.marshalPublicKey(raw: keyPair.publicKey, keyType: .RSA(bits: .B1024))
+        print("Marshaled PubKey Bytes: \(marshaledPubKey)")
+
+        let unmarshaledPubKey = try LibP2PCrypto.Keys.unmarshalPublicKey(buf: marshaledPubKey.bytes, into: .base16)
+
+        print("Public Key: \(unmarshaledPubKey)")
+        XCTAssertEqual(unmarshaledPubKey, keyPair.publicKey.asString(base: .base16))
+
+        let rPubKey = try RawPublicKey(marshaledKey: marshaledPubKey)
+
+        XCTAssertEqual(rPubKey.data, keyPair.publicKey.data)
+    }
     
     func testED25519MarshallingRoundTrip() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
@@ -191,101 +245,165 @@ final class libp2p_cryptoTests: XCTestCase {
 //    }
 //
     
-    // - MARK: Marshaling
+    func testImportFromMarshalledPublicKey_1024() throws {
+        let marshaledData = try BaseEncoding.decode(MarshaledData.PUBLIC_RSA_KEY_1024, as: .base64Pad)
+        let pubKey = try LibP2PCrypto.Keys.importMarshaledPublicKey(marshaledData.data.bytes)
+        
+        print(pubKey)
+        
+        let remarshalledData = try pubKey.marshal()
     
-    // Manual
-//    func testImportFromMarshalledPublicKey_Manual() throws {
-//        let marshaledData = try BaseEncoding.decode(MarshaledData.PUBLIC_KEY, as: .base64Pad)
-//        let pubKey = try LibP2PCrypto.Keys.importMarshaledPublicKey(marshaledData.data.bytes)
-//
-//        /// We've imported a Public Key!  🥳
-//        print(pubKey)
-//
-//        /// Now lets try and re-marshal the imported key and make sure it matches the original data...
-//        let marshaledKey = try LibP2PCrypto.Keys.marshalPublicKey(pubKey, keyType: .RSA(bits: .B1024))
-//
-//        let base64MarshaledPublicKey = marshaledKey.asString(base: .base64Pad)
-//
-//        print(base64MarshaledPublicKey)
-//        XCTAssertEqual(base64MarshaledPublicKey, MarshaledData.PUBLIC_KEY)
-//    }
+        XCTAssertEqual(remarshalledData, marshaledData.data)
+    }
     
-//    func testImportFromMarshalledPublicKey() throws {
-//        let pubKey = try RawPublicKey(marshaledKey: MarshaledData.PUBLIC_KEY, base: .base64Pad)
-//
-//        /// We've imported a Public Key!  🥳
-//        print(pubKey)
-//
-//        /// Now lets try and re-marshal the imported key and make sure it matches the original data...
-//        let base64MarshaledPublicKey = try pubKey.marshal().asString(base: .base64Pad)
-//
-//        XCTAssertEqual(base64MarshaledPublicKey, MarshaledData.PUBLIC_KEY)
-//    }
-//
-//    func testCreateKeyPairFromMarshalledPublicKey() throws {
-//        let keyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: MarshaledData.PUBLIC_KEY, base: .base64Pad)
-//
-//        print(keyPair)
-//
-//        XCTAssertNil(keyPair.privateKey)
-//        /// Ensures that the public key was instantiated properly and then we can marshal it back into the original marshaled data
-//        XCTAssertEqual(try keyPair.publicKey.marshal().asString(base: .base64Pad), MarshaledData.PUBLIC_KEY)
-//    }
+    func testImportFromMarshalledPublicKey_2048() throws {
+        let marshaledData = try BaseEncoding.decode(MarshaledData.PUBLIC_RSA_KEY_2048, as: .base64Pad)
+        let pubKey = try LibP2PCrypto.Keys.importMarshaledPublicKey(marshaledData.data.bytes)
+        
+        print(pubKey)
+        
+        let remarshalledData = try pubKey.marshal()
+    
+        XCTAssertEqual(remarshalledData, marshaledData.data)
+    }
+    
+    func testImportFromMarshalledPublicKey_3072() throws {
+        let marshaledData = try BaseEncoding.decode(MarshaledData.PUBLIC_RSA_KEY_3072, as: .base64Pad)
+        let pubKey = try LibP2PCrypto.Keys.importMarshaledPublicKey(marshaledData.data.bytes)
+        
+        print(pubKey)
+        
+        let remarshalledData = try pubKey.marshal()
+    
+        XCTAssertEqual(remarshalledData, marshaledData.data)
+    }
+    
+    func testImportFromMarshalledPublicKey_4096() throws {
+        let marshaledData = try BaseEncoding.decode(MarshaledData.PUBLIC_RSA_KEY_4096, as: .base64Pad)
+        let pubKey = try LibP2PCrypto.Keys.importMarshaledPublicKey(marshaledData.data.bytes)
+        
+        print(pubKey)
+        
+        let remarshalledData = try pubKey.marshal()
+    
+        XCTAssertEqual(remarshalledData, marshaledData.data)
+    }
+    
+    
+    /// https://letsencrypt.org/docs/a-warm-welcome-to-asn1-and-der/
+    //private func toDER(rsa:CryptoSwift.RSA) -> Data {
+    //
+    //}
+    
+    func testImportFromMarshalledPublicKey_Manual() throws {
+        let marshaledData = try BaseEncoding.decode(MarshaledData.PUBLIC_RSA_KEY_2048, as: .base64Pad)
+        let pubKey = try LibP2PCrypto.Keys.importMarshaledPublicKey(marshaledData.data.bytes)
+
+        /// We've imported a Public Key!  🥳
+        print(pubKey)
+
+        /// Now lets try and re-marshal the imported key and make sure it matches the original data...
+        let marshaledKey = try pubKey.marshal()
+
+        let base64MarshaledPublicKey = marshaledKey.asString(base: .base64Pad)
+
+        print(base64MarshaledPublicKey)
+        XCTAssertEqual(base64MarshaledPublicKey, MarshaledData.PUBLIC_RSA_KEY_2048)
+    }
+    
+    func testImportFromMarshalledPublicKey() throws {
+        let pubKey = try RawPublicKey(marshaledKey: MarshaledData.PUBLIC_RSA_KEY_2048, base: .base64Pad)
+
+        /// We've imported a Public Key!  🥳
+        print(pubKey)
+
+        /// Now lets try and re-marshal the imported key and make sure it matches the original data...
+        let base64MarshaledPublicKey = try pubKey.marshal().asString(base: .base64Pad)
+
+        XCTAssertEqual(base64MarshaledPublicKey, MarshaledData.PUBLIC_RSA_KEY_2048)
+    }
+
+    func testCreateKeyPairFromMarshalledPublicKey() throws {
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: MarshaledData.PUBLIC_RSA_KEY_2048, base: .base64Pad)
+
+        print(keyPair)
+
+        XCTAssertNil(keyPair.privateKey)
+        /// Ensures that the public key was instantiated properly and then we can marshal it back into the original marshaled data
+        XCTAssertEqual(try keyPair.publicKey.marshal().asString(base: .base64Pad), MarshaledData.PUBLIC_RSA_KEY_2048)
+    }
     
 //    func testImportFromMarshalledPrivateKey_Manual() throws {
-//        let marshaledData = try BaseEncoding.decode(MarshaledData.PRIVATE_KEY, as: .base64Pad)
+//        let marshaledData = try BaseEncoding.decode(MarshaledData.PRIVATE_RSA_KEY_2048, as: .base64Pad)
 //        let privKey = try LibP2PCrypto.Keys.importMarshaledPrivateKey(marshaledData.data.bytes)
 //
 //        print(privKey)
 //    }
     
     func testImportFromMarshalledPrivateKey() throws {
-        let privKey = try RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
+        let privKey = try RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_RSA_KEY_2048, base: .base64Pad)
 
         print(privKey)
     }
     
-//    func testCreateKeyPairFromMarshalledPrivateKey() throws {
-//        let keyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
-//
-//        print(keyPair)
-//
-//        XCTAssertNotNil(keyPair.privateKey)
-//        /// Ensures that the private key was instantiated properly and then we can derive the public key from it and then marshal it
-//        XCTAssertEqual(try keyPair.publicKey.marshal().asString(base: .base64Pad), MarshaledData.PUBLIC_KEY)
-//    }
+    func testCreateKeyPairFromMarshalledPrivateKey() throws {
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: MarshaledData.PRIVATE_RSA_KEY_2048, base: .base64Pad)
+
+        print(keyPair)
+
+        XCTAssertNotNil(keyPair.privateKey)
+        /// Ensures that the private key was instantiated properly and then we can derive the public key from it and then marshal it
+        XCTAssertEqual(try keyPair.publicKey.marshal().asString(base: .base64Pad), MarshaledData.PUBLIC_RSA_KEY_2048)
+    }
+    
+    func testCreateKeyPairFromMarshalledPrivateKey_Encryption_Decryption() throws {
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: MarshaledData.PRIVATE_RSA_KEY_2048, base: .base64Pad)
+
+        print(keyPair)
+
+        XCTAssertNotNil(keyPair.privateKey)
+        /// Ensures that the private key was instantiated properly and then we can derive the public key from it and then marshal it
+        XCTAssertEqual(try keyPair.publicKey.marshal().asString(base: .base64Pad), MarshaledData.PUBLIC_RSA_KEY_2048)
+        
+        let encrypted = try keyPair.publicKey.encrypt("Hello".bytes)
+        let decrypted = try keyPair.decrypt(encrypted)
+        
+        print(encrypted.asString(base: .base16))
+        
+        XCTAssertEqual(decrypted.bytes, "Hello".bytes)
+        XCTAssertNotEqual(encrypted.bytes, "Hello".bytes)
+    }
 
     // - MARK: SIGN & VERIFY
     
-//    func testRSAMessageSignVerify() throws {
-//        let message = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
-//
-//        let rsa = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
-//
-//        let signedData = try rsa.privateKey!.sign(message: message)
-//
-//        print(signedData.asString(base: .base16))
-//
-//        XCTAssertNotEqual(message, signedData)
-//
-//        // This just ensures that a newly instantiated Pub SecKey matches the derived pubkey from the keypair...
-//        let recoveredPubKey:SecKey = try LibP2PCrypto.Keys.secKeyFrom(data: rsa.publicKey.data, isPrivateKey: false, keyType: .RSA(bits: .B1024))
-//        XCTAssertEqual(rsa.publicKey.data, try recoveredPubKey.rawRepresentation())
-//
-//        // Ensure the rsaSignatureMessagePKCS1v15SHA256 algorithm works with our RSA KeyPair
-//        XCTAssertTrue(SecKeyIsAlgorithmSupported(recoveredPubKey, .verify, .rsaSignatureMessagePKCS1v15SHA256))
-//
-//        // Ensure the Signed Data is Valid for the given message
-//        XCTAssertTrue(try rsa.publicKey.verfiy(signedData, for: message))
-//
-//        // Ensure that the signature is no longer valid if it is tweaked in any way
-//        XCTAssertThrowsError(try rsa.publicKey.verfiy(Data(signedData.shuffled()), for: message))
-//        XCTAssertThrowsError(try rsa.publicKey.verfiy(Data(signedData.dropFirst()), for: message))
-//
-//        // Ensure that the signature is no longer valid if the message is tweaked in any way
-//        XCTAssertThrowsError(try rsa.publicKey.verfiy(signedData, for: Data(message.shuffled())))
-//        XCTAssertThrowsError(try rsa.publicKey.verfiy(signedData, for: Data(message.dropFirst())))
-//    }
+    func testRSAMessageSignVerify() throws {
+        let message = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
+
+        let rsa = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B1024))
+
+        let signedData = try rsa.privateKey!.sign(message: message)
+
+        print(signedData.asString(base: .base16))
+
+        XCTAssertNotEqual(message, signedData)
+
+        // This just ensures that a newly instantiated Pub SecKey matches the derived pubkey from the keypair...
+        let recoveredPubKey = try LibP2PCrypto.Keys.rsaKeyFromDER(data: rsa.publicKey.rawRepresentation(), isPrivateKey: false)
+        XCTAssertEqual(rsa.publicKey.data, recoveredPubKey.rawRepresentation())
+
+        // Ensure the Signed Data is Valid for the given message
+        XCTAssertTrue(try rsa.publicKey.verfiy(signedData, for: message))
+
+        // Ensure that the signature is no longer valid if it is tweaked in any way
+        // Correct signature length but invalid signature should return false
+        XCTAssertFalse(try rsa.publicKey.verfiy(Data(signedData.shuffled()), for: message))
+        // Invalid signature length should throw error
+        XCTAssertThrowsError(try rsa.publicKey.verfiy(Data(signedData.dropFirst()), for: message))
+
+        // Ensure that the signature is no longer valid if the message is tweaked in any way
+        XCTAssertFalse(try rsa.publicKey.verfiy(signedData, for: Data(message.shuffled())))
+        XCTAssertFalse(try rsa.publicKey.verfiy(signedData, for: Data(message.dropFirst())))
+    }
     
     func testED25519MessageSignVerify() throws {
         let message = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
@@ -662,102 +780,102 @@ final class libp2p_cryptoTests: XCTestCase {
 //
     
     // - MARK: PEM Decoding
-//    func testPemParsing_RSA_1024_Public() throws {
-//
-//        let pem = """
-//        -----BEGIN PUBLIC KEY-----
-//        MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDcZ/r0nvJyHUUstIB5BqCUJ1CC
-//        Cd1nzle4bEpPQJ/S0Wn7mV2FDAeh+UcbVhZu9n+5zypYNjeZKapPqBLoT8eCK51y
-//        Kpzeb8LuEm3P8PK4xN18XBrIF1GprN8IIgSdK9f5SwnemutcURrY+PlWnvj7N5s/
-//        03RlJA3/NHVXpPW/VQIDAQAB
-//        -----END PUBLIC KEY-----
-//        """
-//
-//        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
-//
-//        print(keyPair)
-//        print(keyPair.attributes() ?? "NIL")
-//
-//        XCTAssert(keyPair.keyType == .rsa)
-//        XCTAssertEqual(keyPair.attributes()?.size, 1024)
-//        XCTAssertNil(keyPair.privateKey)
-//    }
+    func testPemParsing_RSA_1024_Public() throws {
 
-//    func testPemParsing_RSA_1024_Public_2() throws {
-//        let pem = """
-//        -----BEGIN RSA PUBLIC KEY-----
-//        MIGJAoGBANxn+vSe8nIdRSy0gHkGoJQnUIIJ3WfOV7hsSk9An9LRafuZXY
-//        UMB6H5RxtWFm72f7nPKlg2N5kpqk+oEuhPx4IrnXIqnN5vwu4Sbc/w8rjE
-//        3XxcGsgXUams3wgiBJ0r1/lLCd6a61xRGtj4+Vae+Ps3mz/TdGUkDf80dV
-//        ek9b9VAgMBAAE=
-//        -----END RSA PUBLIC KEY-----
-//        """
-//
-//        /// Import DER directly
-//        let key = try LibP2PCrypto.Keys.importPublicDER(pem)
-//
-//        /// Let the parsePem method determine that it's a DER file and handle it accordingly
-//        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
-//
-//        print(key)
-//        print(keyPair)
-//
-//        XCTAssertEqual(key.publicKey.data, keyPair.publicKey.data)
-//        XCTAssert(keyPair.keyType == .rsa)
-//        XCTAssertEqual(keyPair.attributes()?.size, 1024)
-//        XCTAssertNil(keyPair.privateKey)
-//    }
+        let pem = """
+        -----BEGIN PUBLIC KEY-----
+        MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDcZ/r0nvJyHUUstIB5BqCUJ1CC
+        Cd1nzle4bEpPQJ/S0Wn7mV2FDAeh+UcbVhZu9n+5zypYNjeZKapPqBLoT8eCK51y
+        Kpzeb8LuEm3P8PK4xN18XBrIF1GprN8IIgSdK9f5SwnemutcURrY+PlWnvj7N5s/
+        03RlJA3/NHVXpPW/VQIDAQAB
+        -----END PUBLIC KEY-----
+        """
 
-//    func testPemParsing_RSA_2048_Public() throws {
-//
-//        /// Import PEM directly
-//        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_2048_PUBLIC)
-//
-//        /// Let the parsePem method determine the format and handle it accordingly
-//        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_2048_PUBLIC)
-//
-//        print(key)
-//        print(keyPair)
-//
-//        XCTAssertEqual(try key.rawRepresentation(), keyPair.publicKey.data)
-//        XCTAssert(keyPair.keyType == .rsa)
-//        XCTAssertEqual(keyPair.attributes()?.size, 2048)
-//        XCTAssertNil(keyPair.privateKey)
-//    }
+        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
 
-//    func testPemParsing_RSA_3072_Public() throws {
-//
-//        /// Import PEM directly
-//        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_3072_PUBLIC)
-//
-//        /// Let the parsePem method determine the format and handle it accordingly
-//        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_3072_PUBLIC)
-//
-//        print(key)
-//        print(keyPair)
-//
-//        XCTAssertEqual(try key.rawRepresentation(), keyPair.publicKey.data)
-//        XCTAssert(keyPair.keyType == .rsa)
-//        XCTAssertEqual(keyPair.attributes()?.size, 3072)
-//        XCTAssertNil(keyPair.privateKey)
-//    }
+        print(keyPair)
+        print(keyPair.attributes() ?? "NIL")
 
-//    func testPemParsing_RSA_4096_Public() throws {
-//
-//        /// Import PEM directly
-//        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_4096_PUBLIC)
-//
-//        /// Let the parsePem method determine the format and handle it accordingly
-//        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_4096_PUBLIC)
-//
-//        print(key)
-//        print(keyPair)
-//
-//        XCTAssertEqual(try key.rawRepresentation(), keyPair.publicKey.data)
-//        XCTAssert(keyPair.keyType == .rsa)
-//        XCTAssertEqual(keyPair.attributes()?.size, 4096)
-//        XCTAssertNil(keyPair.privateKey)
-//    }
+        XCTAssert(keyPair.keyType == .rsa)
+        XCTAssertEqual(keyPair.attributes()?.size, 1024)
+        XCTAssertNil(keyPair.privateKey)
+    }
+
+    func testPemParsing_RSA_1024_Public_2() throws {
+        let pem = """
+        -----BEGIN RSA PUBLIC KEY-----
+        MIGJAoGBANxn+vSe8nIdRSy0gHkGoJQnUIIJ3WfOV7hsSk9An9LRafuZXY
+        UMB6H5RxtWFm72f7nPKlg2N5kpqk+oEuhPx4IrnXIqnN5vwu4Sbc/w8rjE
+        3XxcGsgXUams3wgiBJ0r1/lLCd6a61xRGtj4+Vae+Ps3mz/TdGUkDf80dV
+        ek9b9VAgMBAAE=
+        -----END RSA PUBLIC KEY-----
+        """
+
+        /// Import DER directly
+        let key = try LibP2PCrypto.Keys.importPublicDER(pem)
+
+        /// Let the parsePem method determine that it's a DER file and handle it accordingly
+        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
+
+        print(key)
+        print(keyPair)
+
+        XCTAssertEqual(key.publicKey.data, keyPair.publicKey.data)
+        XCTAssert(keyPair.keyType == .rsa)
+        XCTAssertEqual(keyPair.attributes()?.size, 1024)
+        XCTAssertNil(keyPair.privateKey)
+    }
+
+    func testPemParsing_RSA_2048_Public() throws {
+
+        /// Import PEM directly
+        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_2048_PUBLIC)
+
+        /// Let the parsePem method determine the format and handle it accordingly
+        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_2048_PUBLIC)
+
+        print(key)
+        print(keyPair)
+
+        XCTAssertEqual(key.rawRepresentation(), keyPair.publicKey.data)
+        XCTAssert(keyPair.keyType == .rsa)
+        XCTAssertEqual(keyPair.attributes()?.size, 2048)
+        XCTAssertNil(keyPair.privateKey)
+    }
+
+    func testPemParsing_RSA_3072_Public() throws {
+
+        /// Import PEM directly
+        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_3072_PUBLIC)
+
+        /// Let the parsePem method determine the format and handle it accordingly
+        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_3072_PUBLIC)
+
+        print(key)
+        print(keyPair)
+
+        XCTAssertEqual(key.rawRepresentation(), keyPair.publicKey.data)
+        XCTAssert(keyPair.keyType == .rsa)
+        XCTAssertEqual(keyPair.attributes()?.size, 3072)
+        XCTAssertNil(keyPair.privateKey)
+    }
+
+    func testPemParsing_RSA_4096_Public() throws {
+
+        /// Import PEM directly
+        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_4096_PUBLIC)
+
+        /// Let the parsePem method determine the format and handle it accordingly
+        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_4096_PUBLIC)
+
+        print(key)
+        print(keyPair)
+
+        XCTAssertEqual(key.rawRepresentation(), keyPair.publicKey.data)
+        XCTAssert(keyPair.keyType == .rsa)
+        XCTAssertEqual(keyPair.attributes()?.size, 4096)
+        XCTAssertNil(keyPair.privateKey)
+    }
 
 //    func testPemParsing_EC_P256_Public() throws {
 //        /// EC P256 Public Key
@@ -1746,20 +1864,19 @@ final class libp2p_cryptoTests: XCTestCase {
 ////
 ////        // We can't reserialize the SEC1 keys, we don't emit them.
 ////    }
-//
-//
-//    func testRSA_Pem_Parsing_Public() throws {
-//        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_1024_PUBLIC)
-//
-//        print(parsed)
-//    }
-//
-//    func testRSA_Pem_Parsing_Private() throws {
-//        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_1024_PRIVATE)
-//
-//        print(parsed)
-//    }
-//
+
+    func testRSA_Pem_Parsing_Public() throws {
+        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_1024_PUBLIC)
+
+        print(parsed)
+    }
+
+    func testRSA_Pem_Parsing_Private() throws {
+        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_1024_PRIVATE)
+
+        print(parsed)
+    }
+
 //    func testEC_Pem_Parsing_Public() throws {
 //        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.EC_256_PUBLIC)
 //
