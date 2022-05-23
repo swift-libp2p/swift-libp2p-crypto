@@ -1,10 +1,8 @@
 import XCTest
 @testable import LibP2PCrypto
-import secp256k1
 import Multibase
 import Crypto
 import CryptoSwift
-import JWTKit
 import Multihash
 
 final class libp2p_cryptoTests: XCTestCase {
@@ -26,6 +24,7 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssertEqual(attributes?.isPrivate, true)
     }
     
+    #if canImport(Security)
     func testRSA2048() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
         print(keyPair)
@@ -48,12 +47,12 @@ final class libp2p_cryptoTests: XCTestCase {
         //XCTAssertEqual(keyPair.publicKey.data.count, 398)
         //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 1768)
         //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 1768)
-        
+
         let attributes = keyPair.attributes()
         XCTAssertEqual(attributes?.size, 3072)
         XCTAssertEqual(attributes?.isPrivate, true)
     }
-    
+
     func testRSA4096() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B4096))
         print(keyPair)
@@ -62,11 +61,12 @@ final class libp2p_cryptoTests: XCTestCase {
         //XCTAssertEqual(keyPair.publicKey.data.count, 526)
         //XCTAssertGreaterThanOrEqual(keyPair.privateKey!.data.count, 2349)
         //XCTAssertLessThanOrEqual(keyPair.privateKey!.data.count, 2349)
-        
+
         let attributes = keyPair.attributes()
         XCTAssertEqual(attributes?.size, 4096)
         XCTAssertEqual(attributes?.isPrivate, true)
     }
+    #endif
 
     func testED25519() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
