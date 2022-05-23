@@ -183,7 +183,7 @@ enum Asn1Parser {
         if firstByte == 0x02 {
             let length = try scanner.consumeLength()
             let data = try scanner.consume(length: length)
-            print(Int(data.asString(base: .base16), radix: 16) ?? -1)
+            //print(Int(data.asString(base: .base16), radix: 16) ?? -1)
             return .integer(data: data)
         }
         
@@ -192,7 +192,7 @@ enum Asn1Parser {
             let length = try scanner.consumeLength()
             let data = try scanner.consume(length: length)
             //print(String(data: data, encoding: .ascii))
-            print("Object ID: [\(data.map { "\($0)" }.joined(separator: ","))]")
+            //print("Object ID: [\(data.map { "\($0)" }.joined(separator: ","))]")
             return .objectIdentifier(data: data)
         }
         
@@ -450,7 +450,7 @@ enum Asn1ParserECPrivate {
             _ = try scanner.consume(length: 1)
             
             let data = try scanner.consume(length: length - 1)
-            print("Found an EC Curve Bit String: [\(data.map { "\($0)" }.joined(separator: ","))]")
+            //print("Found an EC Curve Bit String: [\(data.map { "\($0)" }.joined(separator: ","))]")
             return .bitString(data: data)
         }
         
@@ -501,22 +501,22 @@ extension LibP2PCrypto.Keys {
                 switch $0 {
                 case .objectIdentifier(let data):
                     if data.first == 0x2a {
-                        print("Got our obj id: \(data.asString(base: .base64))")
+                        //print("Got our obj id: \(data.asString(base: .base64))")
                         objId = data
                     }
                 case .bitString(let data):
-                    print("Got our bit string: \(data.asString(base: .base64))")
+                    //print("Got our bit string: \(data.asString(base: .base64))")
                     bitString = data
                 case .sequence(let nodes):
                     nodes.forEach { n in
                         switch n {
                         case .objectIdentifier(let data):
                             if data.first == 0x2a {
-                                print("Got our obj id: \(data.asString(base: .base64))")
+                                //print("Got our obj id: \(data.asString(base: .base64))")
                                 objId = data
                             }
                         case .bitString(let data):
-                            print("Got our bit string: \(data.asString(base: .base64))")
+                            //print("Got our bit string: \(data.asString(base: .base64))")
                             bitString = data
                         case .octetString(let data):
                             //Private Keys trigger
