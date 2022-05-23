@@ -1,7 +1,7 @@
 import XCTest
 
-import libp2p_cryptoTests
+import LibP2PCryptoTests
 
 var tests = [XCTestCaseEntry]()
-tests += libp2p_cryptoTests.allTests()
+tests += LibP2PCryptoTests.allTests()
 XCTMain(tests)

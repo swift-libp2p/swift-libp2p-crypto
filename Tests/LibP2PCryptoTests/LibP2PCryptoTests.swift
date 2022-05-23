@@ -9,13 +9,6 @@ import Multihash
 
 final class libp2p_cryptoTests: XCTestCase {
     
-    func testSECP256K1() throws {
-        let key = try Secp256k1PrivateKey()
-        print(key.hex())
-        let pubKey = key.publicKey
-        print(pubKey.hex())
-    }
-    
     /// RSA
     func testRSA1024() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B1024))
@@ -2028,5 +2021,57 @@ final class libp2p_cryptoTests: XCTestCase {
 
     static var allTests = [
         ("testRSA1024", testRSA1024),
+        ("tesED25519", testED25519),
+        ("testSecp256k1", testSecp256k1),
+        ("testRSARawRepresentationRoundTrip", testRSARawRepresentationRoundTrip),
+        ("testEd25519RawRepresentationRoundTrip", testEd25519RawRepresentationRoundTrip),
+        ("testSecP256k1RawRepresentationRoundTrip", testSecP256k1RawRepresentationRoundTrip),
+        ("testRSAMarshaledRoundTrip", testRSAMarshaledRoundTrip),
+        ("testRSAMashallingRoundTrip", testRSAMashallingRoundTrip),
+        ("testED25519MarshallingRoundTrip", testED25519MarshallingRoundTrip),
+        ("testSecp256k1MarshallingRoundTrip", testSecp256k1MarshallingRoundTrip),
+        ("testImportFromMarshalledPublicKey_Manual", testImportFromMarshalledPublicKey_Manual),
+        ("testCreateKeyPairFromMarshalledPublicKey_1024", testCreateKeyPairFromMarshalledPublicKey_1024),
+        ("testCreateKeyPairFromMarshalledPublicKey_2048", testCreateKeyPairFromMarshalledPublicKey_2048),
+        ("testCreateKeyPairFromMarshalledPublicKey_3072", testCreateKeyPairFromMarshalledPublicKey_3072),
+        ("testCreateKeyPairFromMarshalledPublicKey_4096", testCreateKeyPairFromMarshalledPublicKey_4096),
+        ("testImportFromMarshalledPrivateKey_Manual", testImportFromMarshalledPrivateKey_Manual),
+        ("testImportFromMarshalledPrivateKey", testImportFromMarshalledPrivateKey),
+        ("testRSAMessageSignVerify", testRSAMessageSignVerify),
+        ("testED25519MessageSignVerify", testED25519MessageSignVerify),
+        ("testSecp256k1MessageSignVerify", testSecp256k1MessageSignVerify),
+        ("testAESEncryption128", testAESEncryption128),
+        ("testAESEncryption256", testAESEncryption256),
+        ("testAESEncryption256AutoIV", testAESEncryption256AutoIV),
+        ("testAESEncryption256AutoIVDifferent", testAESEncryption256AutoIVDifferent),
+        ("testAESGCMEncryptionRoundTrip", testAESGCMEncryptionRoundTrip),
+        ("testHMAC", testHMAC),
+        ("testHMACKey", testHMACKey),
+        ("testHMACBaseEncoded", testHMACBaseEncoded),
+        ("testHMACVerify", testHMACVerify),
+        ("testPemParsing", testPemParsing),
+        ("testPemParsing_RSA_1024_Public", testPemParsing_RSA_1024_Public),
+        ("testPemParsing_RSA_1024_Public_2", testPemParsing_RSA_1024_Public_2),
+        ("testPemParsing_RSA_2048_Public", testPemParsing_RSA_2048_Public),
+        ("testPemParsing_RSA_3072_Public", testPemParsing_RSA_3072_Public),
+        ("testPemParsing_RSA_4096_Public", testPemParsing_RSA_4096_Public),
+        ("testRSAOpenSSLPemImport", testRSAOpenSSLPemImport),
+        ("testED25519PemImport_Public_Manual", testED25519PemImport_Public_Manual),
+        ("testED25519PemImport_Public", testED25519PemImport_Public),
+        ("testED25519PemImport_Private_Manual", testED25519PemImport_Private_Manual),
+        ("testED25519PemImport_Private", testED25519PemImport_Private),
+        ("testSecp256k1PemImport_Public_Manual", testSecp256k1PemImport_Public_Manual),
+        ("testSecp256k1PemImport_Public", testSecp256k1PemImport_Public),
+        ("testSecp256k1PemImport_Private_Manual", testSecp256k1PemImport_Private_Manual),
+        ("testSecp256k1PemImport_Private", testSecp256k1PemImport_Private),
+        ("testRSAEncryptedPrivateKeyPem2_Manual", testRSAEncryptedPrivateKeyPem2_Manual),
+        ("testRSAEncryptedPrivateKeyPem2", testRSAEncryptedPrivateKeyPem2),
+        ("testRSA_Pem_Parsing_Public", testRSA_Pem_Parsing_Public),
+        ("testRSA_Pem_Parsing_Private", testRSA_Pem_Parsing_Private),
+        ("testEd25519_Pem_Parsing_Public", testEd25519_Pem_Parsing_Public),
+        ("testEd25519_Pem_Parsing_Private", testEd25519_Pem_Parsing_Private),
+        ("testSecp256k1_Pem_Parsing_Public", testSecp256k1_Pem_Parsing_Public),
+        ("testSecp256k1_Pem_Parsing_Private", testSecp256k1_Pem_Parsing_Private),
+        ("testEmbeddedEd25519PublicKey", testEmbeddedEd25519PublicKey)
     ]
 }
