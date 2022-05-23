@@ -12,9 +12,9 @@ import Crypto
 
 extension LibP2PCrypto.Keys {
     public struct KeyPair {
-        let keyType:LibP2PCrypto.Keys.GenericKeyType
-        let publicKey:CommonPublicKey
-        let privateKey:CommonPrivateKey?
+        public let keyType:LibP2PCrypto.Keys.GenericKeyType
+        public let publicKey:CommonPublicKey
+        public let privateKey:CommonPrivateKey?
         
         public struct Attributes {
             public let type:LibP2PCrypto.Keys.KeyPairType
