@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Multibase
 
 public protocol CommonPrivateKey {
     static var keyType:LibP2PCrypto.Keys.GenericKeyType { get }
@@ -34,7 +35,7 @@ public protocol CommonPrivateKey {
     //func exportPEM() throws -> Data
     //func exportJWK() throws -> Data
     //func exportCID() throws -> Data
-    //func marshal() throws -> Data
+    func marshal() throws -> Data
     
     /// Misc
     //func stretch() throws -> Data
@@ -60,7 +61,11 @@ extension CommonPrivateKey {
         try self.derivePublicKey().id(withMultibasePrefix: withMultibasePrefix)
     }
     
-    //public func asString(base:BaseEncoding, withMultibasePrefix:Bool = false) -> String {
-    //    self.data.asString(base: base, withMultibasePrefix: withMultibasePrefix)
-    //}
+    public func asString(base:BaseEncoding, withMultibasePrefix:Bool = false) -> String {
+        self.data.asString(base: base, withMultibasePrefix: withMultibasePrefix)
+    }
+
+    public var data:Data {
+        self.rawRepresentation
+    }
 }

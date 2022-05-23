@@ -175,6 +175,13 @@ struct RSAPrivateKey:CommonPrivateKey {
         return signature
     }
     
+    public func marshal() throws -> Data {
+        var privateKey = PrivateKey()
+        privateKey.type = .rsa
+        privateKey.data = self.rawRepresentation
+        return try privateKey.serializedData()
+    }
+    
 }
 
 extension RSAPublicKey:Equatable {

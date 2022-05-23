@@ -101,4 +101,12 @@ extension Secp256k1PrivateKey:CommonPrivateKey {
         let signature = try sign(message: data.bytes)
         return Data([UInt8(signature.v)] + signature.r + signature.s)
     }
+    
+    public func marshal() throws -> Data {
+        var privateKey = PrivateKey()
+        privateKey.type = .secp256K1
+        privateKey.data = self.rawRepresentation
+        return try privateKey.serializedData()
+    }
+
 }

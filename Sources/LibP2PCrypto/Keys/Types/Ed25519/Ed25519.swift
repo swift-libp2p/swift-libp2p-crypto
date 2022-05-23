@@ -78,6 +78,12 @@ extension Curve25519.Signing.PrivateKey: CommonPrivateKey {
         try self.signature(for: data)
     }
     
+    public func marshal() throws -> Data {
+        var privateKey = PrivateKey()
+        privateKey.type = .ed25519
+        privateKey.data = self.rawRepresentation
+        return try privateKey.serializedData()
+    }
     
 //    public init(pemRSA:String) throws { throw NSError(domain: "EC Key Can't be initialized with an RSA PEM", code: 0, userInfo: nil) }
 //    public init(pemEC:String) throws {

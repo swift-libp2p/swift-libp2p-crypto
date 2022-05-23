@@ -164,6 +164,14 @@ struct RSAPrivateKey:CommonPrivateKey {
         try RSA.sign(message: message, withKey: key)
     }
     
+    public func marshal() throws -> Data {
+        throw NSError(domain: "CryptoSwift based RSA private keys don't support marshaling", code: 0)
+        //var privateKey = PrivateKey()
+        //privateKey.type = .rsa
+        //privateKey.data = self.rawRepresentation
+        //return try privateKey.serializedData()
+    }
+    
 }
 
 extension RSAPublicKey:Equatable {
