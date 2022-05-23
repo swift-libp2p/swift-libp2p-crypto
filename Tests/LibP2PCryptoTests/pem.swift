@@ -315,7 +315,7 @@ struct TestPEMKeys {
     /// 3) Derive the encryption key using PBKDF2 (sha1, salt and itterations)
     /// 4) Use encryption key to instantiate the AES CBC Cipher along with the IV
     /// 5) Decrypt the encrypted octet string
-    /// 6) The decrypted octet string can be ANS1 parsed again for the private key octet string
+    /// 6) The decrypted octet string can be ASN1 parsed again for the private key octet string
     /// 7) This raw data can be used to instantiate a SecKey
     struct RSA_1024_PRIVATE_ENCRYPTED_PAIR {
         /// An unencrypted RSA 1024 Private Key
