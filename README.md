@@ -226,14 +226,14 @@ Let's make this code better together! 🤝
 - [How SwiftyRSA does it](https://github.com/TakeScoop/SwiftyRSA/blob/master/Source/SwiftyRSA.swift#L44)
 - [More PEM Discussion](https://developer.apple.com/forums/thread/85915?answerId=256298022#256298022)
 - [PEM and DER Format](https://tls.mbed.org/kb/cryptography/asn1-key-structures-in-der-and-pem)
-- [ANS.1 Overview](https://www.obj-sys.com/asn1tutorial/node4.html)
+- [ASN.1 Overview](https://www.obj-sys.com/asn1tutorial/node4.html)
 
 ### Notes
 #### Keys and Certs (PEM Format)
 - If the private key is wrapped with
     `-----BEGIN RSA PRIVATE KEY-----`
     or 
-    `-----BEGIN RSA PUBLIC KEY-----`   => RSA Pub/Private Key (Without ANS.1 Header) in the PKCS#1 Format
+    `-----BEGIN RSA PUBLIC KEY-----`   => RSA Pub/Private Key (Without ASN.1 Header) in the PKCS#1 Format
 
     1. Strip the first and last lines
     2. base64 decode the data and the result is the DER Structure RSA key 
@@ -247,8 +247,8 @@ Let's make this code better together! 🤝
 - If the private key is wrapped with 
     `-----BEGIN PRIVATE KEY-----`
     or 
-    `-----BEGIN RSA PUBLIC KEY-----`  => A Pub/Private Key with ANS.1 Header describing the Key Type in the PKCS#8 Format
-    1. The ANS.1 Header contains the Key Type info
+    `-----BEGIN RSA PUBLIC KEY-----`  => A Pub/Private Key with ASN.1 Header describing the Key Type in the PKCS#8 Format
+    1. The ASN.1 Header contains the Key Type info
     2. If RSA, follow the same process above...
     3. Else change the Params passed to `SecKeyCreateWithData()` to match the key type...
     

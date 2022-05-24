@@ -5,19 +5,21 @@
 //  Created by Brandon Toms on 5/1/22.
 //
 //  - TODO: Support JWK https://tools.ietf.org/html/rfc7517
-//  - TODO: Support PEM format 
+//  - TODO: Support PEM format
 
 import Foundation
 import Multibase
-import CryptoSwift
+import Crypto
 
 public enum LibP2PCrypto {
     
     public static func randomBytes(length:Int) throws -> [UInt8] {
-        var data = Array<UInt8>(repeating: 0, count: length)
-        let status = SecRandomCopyBytes(kSecRandomDefault, data.count, &data)
-        if status == errSecSuccess { return data }
-        throw NSError(domain: "Error encountered while generating random bytes: \(status)", code: 0, userInfo: nil)
+        #if (os(macOS) || os(iOS) || os(watchOS) || os(tvOS)) || os(Linux) || os(Android) || os(Windows)
+        var rng = SystemRandomNumberGenerator()
+        return (0..<length).map { _ in rng.next() }
+        #else
+        fatalError("No secure random number generator on this platform.")
+        #endif
     }
     
 }
@@ -146,28 +148,29 @@ public extension Array where Element == UInt8 {
     private func encryptGCM(data:[UInt8], withKey key:Data) throws -> [UInt8] {
         let nonce = try LibP2PCrypto.randomBytes(length: 12)
         
-        // AES - GCM
-        let aesGCM = try AES(key: key.bytes, blockMode: GCM(iv: nonce, mode: .combined), padding: .noPadding)
-    
+        // AES - GCM (CryptoSwift)
+        //let aesGCM = try AES(key: key.bytes, blockMode: GCM(iv: nonce, mode: .combined), padding: .noPadding)
         // Encrypt and prepend nonce.
-        let ciphertext = try aesGCM.encrypt(data)
+        //let ciphertext = try aesGCM.encrypt(data)
+        
+        // AES - GCM (swift-crypto)
+        let aesGCM = try AES.GCM.seal(data, using: SymmetricKey(data: key), nonce: AES.GCM.Nonce(data: nonce))
+        
+        //let ciphertext = aesGCM
 
-        return nonce + ciphertext
+        return aesGCM.combined?.bytes ?? [] //nonce + ciphertext
     }
     
     private func decryptGCM(data:[UInt8], withKey key:Data) throws -> [UInt8] {
         //Strip the nonce off the front of the data
-        let nonce = Array(data.prefix(12))
+        //let nonce = Array(data.prefix(12))
         
-        // AES - GCM
-        let aesGCM = try AES(key: key.bytes, blockMode: GCM(iv: nonce, mode: .combined), padding: .noPadding)
-
+        // AES - GCM (CryptoSwift)
+//        let aesGCM = try AES(key: key.bytes, blockMode: GCM(iv: nonce, mode: .combined), padding: .noPadding)
         // Decrypt the ciphertext
-        return try aesGCM.decrypt(data.dropFirst(12))
+//        return try aesGCM.decrypt(data.dropFirst(12))
+        
+        return try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: SymmetricKey(data: key)).bytes
+        
     }
 }
-
-
-// var pemString = "-----BEGIN RSA PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAl/zjMK4w1XZAnpIqLeTAMW7cEUNIifP3HjmUavvc2+oPG1QjNCfxQM6LulZSl6qRim2JGxbc3yvnbMRJqch6IhJ/ysbTekVSqOjskIRGxq0pg0J8PqF3ZZQK6D7BYHi6iaJUMVV0ISB5LogJouyOWqsZyiEjgPz3jj0HIrh14Q6wPZVMpVbIwQR9nZp5gU5minseCyZfQs3PArgXgnzRPdw7Hb0/NY5OVE2Rz1SFTnda6w12SEu1IsVhVhJz1QteNrwNwJAT6WgZd+xnOZhU3Ei+EQK2SijfEGqmWNt1utJygK/0APy8w7VTol7ygbqfuHevGcg90QEXjxZKCjkXkQIDAQAB\n-----END RSA PUBLIC KEY-----"
-
-

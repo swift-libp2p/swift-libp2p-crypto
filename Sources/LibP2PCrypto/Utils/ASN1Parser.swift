@@ -130,13 +130,17 @@ private extension Data {
 enum Asn1Parser {
     
     /// An ASN1 node
-    enum Node {
+    enum Node:CustomStringConvertible {
         case sequence(nodes: [Node])
         case integer(data: Data)
         case objectIdentifier(data: Data)
         case null
         case bitString(data: Data)
         case octetString(data: Data)
+        
+        var description: String {
+            printNode(self, level: 0)
+        }
     }
     
     enum ParserError: Error {
@@ -179,7 +183,7 @@ enum Asn1Parser {
         if firstByte == 0x02 {
             let length = try scanner.consumeLength()
             let data = try scanner.consume(length: length)
-            print(Int(data.asString(base: .base16), radix: 16) ?? -1)
+            //print(Int(data.asString(base: .base16), radix: 16) ?? -1)
             return .integer(data: data)
         }
         
@@ -188,7 +192,7 @@ enum Asn1Parser {
             let length = try scanner.consumeLength()
             let data = try scanner.consume(length: length)
             //print(String(data: data, encoding: .ascii))
-            print("Object ID: [\(data.map { "\($0)" }.joined(separator: ","))]")
+            //print("Object ID: [\(data.map { "\($0)" }.joined(separator: ","))]")
             return .objectIdentifier(data: data)
         }
         
@@ -446,7 +450,7 @@ enum Asn1ParserECPrivate {
             _ = try scanner.consume(length: 1)
             
             let data = try scanner.consume(length: length - 1)
-            print("Found an EC Curve Bit String: [\(data.map { "\($0)" }.joined(separator: ","))]")
+            //print("Found an EC Curve Bit String: [\(data.map { "\($0)" }.joined(separator: ","))]")
             return .bitString(data: data)
         }
         
@@ -473,4 +477,224 @@ enum Asn1ParserECPrivate {
         }
         return nodes
     }
+}
+
+extension LibP2PCrypto.Keys {
+    
+    // 256 objId -> 2a8648ce3d0301
+    // 384 objId -> 2a8648ce3d0201
+    // 521 objId -> 2a8648ce3d0201
+    public struct ASN1Parts {
+        let isPrivateKey:Bool
+        let keyBits:Data
+        let objectIdentifier:Data
+    }
+    
+    public static func parseASN1(pemData:Data) throws -> ASN1Parts {
+        let asn = try Asn1Parser.parse(data: pemData)
+        
+        var bitString:Data? = nil
+        var objId:Data? = nil
+        var isPrivate:Bool = false
+        if case .sequence(let nodes) = asn {
+            nodes.forEach {
+                switch $0 {
+                case .objectIdentifier(let data):
+                    if data.first == 0x2a {
+                        //print("Got our obj id: \(data.asString(base: .base64))")
+                        objId = data
+                    }
+                case .bitString(let data):
+                    //print("Got our bit string: \(data.asString(base: .base64))")
+                    bitString = data
+                case .sequence(let nodes):
+                    nodes.forEach { n in
+                        switch n {
+                        case .objectIdentifier(let data):
+                            if data.first == 0x2a {
+                                //print("Got our obj id: \(data.asString(base: .base64))")
+                                objId = data
+                            }
+                        case .bitString(let data):
+                            //print("Got our bit string: \(data.asString(base: .base64))")
+                            bitString = data
+                        case .octetString(let data):
+                            //Private Keys trigger
+                            bitString = data
+                            isPrivate = true
+                        default:
+                            return
+                        }
+                    }
+                case .octetString(let data):
+                    //Private Keys trigger
+                    bitString = data
+                    isPrivate = true
+                default:
+                    return
+                }
+            }
+        }
+        
+        guard let id = objId, let bits = bitString else {
+            throw NSError(domain: "Unsupported asn1 format", code: 0, userInfo: nil)
+        }
+        
+        return ASN1Parts(isPrivateKey: isPrivate, keyBits: bits, objectIdentifier: id)
+           
+    }
+    
+    public static func parseASN1ECPrivate(pemData:Data) throws -> Data {
+        let asn = try Asn1ParserECPrivate.parse(data: pemData)
+        
+        var octetString:Data? = nil
+        if case .sequence(let nodes) = asn {
+            nodes.forEach {
+                switch $0 {
+                case .sequence(let nodes):
+                    nodes.forEach { n in
+                        switch n {
+                        case .octetString(let data):
+                            octetString = data
+                        default:
+                            return
+                        }
+                    }
+                case .octetString(let data):
+                    octetString = data
+                default:
+                    return
+                }
+            }
+        } else if case .octetString(let data) = asn {
+            octetString = data
+        }
+        
+        guard let bits = octetString else {
+            throw NSError(domain: "Unsupported asn1 format", code: 0, userInfo: nil)
+        }
+        
+        return bits
+    }
+    
+    /// This method strips the x509 header from a provided ASN.1 DER key.
+    /// If the key doesn't contain a header, the DER data is returned as is.
+    ///
+    /// Supported formats are:
+    ///
+    /// Headerless:
+    /// SEQUENCE
+    ///    INTEGER (1024 or 2048 bit) -- modulo
+    ///    INTEGER -- public exponent
+    ///
+    /// With x509 header:
+    /// SEQUENCE
+    ///    SEQUENCE
+    ///    OBJECT IDENTIFIER 1.2.840.113549.1.1.1
+    ///    NULL
+    ///    BIT STRING
+    ///    SEQUENCE
+    ///    INTEGER (1024 or 2048 bit) -- modulo
+    ///    INTEGER -- public exponent
+    ///
+    /// Example of headerless key:
+    ///https://lapo.it/asn1js/#3082010A0282010100C1A0DFA367FBC2A5FD6ED5A071E02A4B0617E19C6B5AD11BB61192E78D212F10A7620084A3CED660894134D4E475BAD7786FA1D40878683FD1B7A1AD9C0542B7A666457A270159DAC40CE25B2EAE7CCD807D31AE725CA394F90FBB5C5BA500545B99C545A9FE08EFF00A5F23457633E1DB84ED5E908EF748A90F8DFCCAFF319CB0334705EA012AF15AA090D17A9330159C9AFC9275C610BB9B7C61317876DC7386C723885C100F774C19830F475AD1E9A9925F9CA9A69CE0181A214DF2EB75FD13E6A546B8C8ED699E33A8521242B7E42711066AEC22D25DD45D56F94D3170D6F2C25164D2DACED31C73963BA885ADCB706F40866B8266433ED5161DC50E4B3B0203010001
+    ///
+    /// Example of key with X509 header (notice the additional ASN.1 sequence):
+    ///https://lapo.it/asn1js/#30819F300D06092A864886F70D010101050003818D0030818902818100D0674615A252ED3D75D2A3073A0A8A445F3188FD3BEB8BA8584F7299E391BDEC3427F287327414174997D147DD8CA62647427D73C9DA5504E0A3EED5274A1D50A1237D688486FADB8B82061675ABFA5E55B624095DB8790C6DBCAE83D6A8588C9A6635D7CF257ED1EDE18F04217D37908FD0CBB86B2C58D5F762E6207FF7B92D0203010001
+   public static func stripX509HeaderFromDER(keyData: Data) throws -> Data {
+       
+       let node: Asn1Parser.Node
+       do {
+           node = try Asn1Parser.parse(data: keyData)
+       } catch {
+           throw NSError(domain: "asn1ParsingFailed", code: 0, userInfo: nil)
+       }
+       
+       // Ensure the raw data is an ASN1 sequence
+       guard case .sequence(let nodes) = node else {
+           throw NSError(domain: "invalidAsn1RootNode", code: 0, userInfo: nil)
+       }
+       
+       // Detect whether the sequence only has integers, in which case it's a headerless key
+       let onlyHasIntegers = nodes.filter { node -> Bool in
+           if case .integer = node {
+               return false
+           }
+           return true
+       }.isEmpty
+       
+       // Headerless key
+       if onlyHasIntegers {
+           return keyData
+       }
+       
+       // If last element of the sequence is a bit string, return its data
+       if let last = nodes.last, case .bitString(let data) = last {
+           return data
+       }
+       
+       // If last element of the sequence is an octet string, return its data
+       if let last = nodes.last, case .octetString(let data) = last {
+           return data
+       }
+       
+       // Unable to extract bit/octet string or raw integer sequence
+       throw NSError(domain: "invalidAsn1Structure", code: 0, userInfo: nil)
+   }
+}
+
+enum ASN1Encoder {
+    private static func asn1LengthPrefix(_ bytes:[UInt8]) -> [UInt8] {
+        if bytes.count >= 0x80 {
+            var lengthAsBytes = withUnsafeBytes(of: bytes.count.bigEndian, Array<UInt8>.init)
+            while lengthAsBytes.first == 0 { lengthAsBytes.removeFirst() }
+            return [(0x80 + UInt8(lengthAsBytes.count))] + lengthAsBytes
+        } else {
+            return [UInt8(bytes.count)]
+        }
+    }
+    
+    private static func asn1LengthPrefixed(_ bytes:[UInt8]) -> [UInt8] {
+        asn1LengthPrefix(bytes) + bytes
+    }
+    
+    public static func encode(_ node:Asn1Parser.Node) -> [UInt8] {
+        switch node {
+        case .integer(let integer):
+            return [0x02] + asn1LengthPrefixed(integer.bytes)
+        case .bitString(let bits):
+            return [0x03] + asn1LengthPrefixed([0x00] + bits.bytes)
+        case .octetString(let octet):
+            return [0x04] + asn1LengthPrefixed(octet.bytes)
+        case .null:
+            return [0x05, 0x00]
+        case .objectIdentifier(let oid):
+            return [0x06] + asn1LengthPrefixed(oid.bytes)
+        case .sequence(let nodes):
+            return [0x30] + asn1LengthPrefixed( nodes.reduce(into: Array<UInt8>(), { partialResult, node in
+                partialResult += encode(node)
+            }) )
+        }
+    }
+}
+
+fileprivate func printNode(_ node:Asn1Parser.Node, level:Int) -> String {
+    var str:[String] = []
+    let prefix = String(repeating: "\t", count: level)
+    switch node {
+    case .integer(let int):
+        str.append("\(prefix)Integer: \(int.asString(base: .base16))")
+    case .bitString(let bs):
+        str.append("\(prefix)BitString: \(bs.asString(base: .base16))")
+    case .null:
+        str.append("\(prefix)NULL")
+    case .objectIdentifier(let oid):
+        str.append("\(prefix)ObjectID: \(oid.asString(base: .base16))")
+    case .octetString(let os):
+        str.append("\(prefix)OctetString: \(os.asString(base: .base16))")
+    case .sequence(let nodes):
+        nodes.forEach { str.append(printNode($0, level: level + 1)) }
+    }
+    return str.joined(separator: "\n")
 }
