@@ -26,6 +26,7 @@ let package = Package(
         .package(url: "https://github.com/Boilertalk/secp256k1.swift.git", .exact("0.1.6")),
         // 🔑 Hashing (BCrypt, SHA2, HMAC), encryption (AES), public-key (RSA), PEM and DER file handling, and random data generation.
         .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "1.0.0")),
+        .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.5.0")),
         .package(url: "https://github.com/swift-libp2p/swift-multihash.git", .upToNextMajor(from: "0.0.1")),
         // JWT Support
         .package(url: "https://github.com/vapor/jwt-kit.git", .upToNextMajor(from: "4.0.0"))
@@ -43,6 +44,7 @@ let package = Package(
                 .product(name: "RSAPublicKeyImporter", package: "rsa-public-key-importer-exporter"),
                 .product(name: "secp256k1", package: "secp256k1.swift"),
                 .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "CryptoSwift", package: "CryptoSwift"),
                 .product(name: "JWTKit", package: "jwt-kit")
             ],
             resources: [
