@@ -3,6 +3,7 @@
 [![](https://img.shields.io/badge/made%20by-Breth-blue.svg?style=flat-square)](https://breth.app)
 [![](https://img.shields.io/badge/project-multiformats-blue.svg?style=flat-square)](https://github.com/multiformats/multiformats)
 [![Swift Package Manager compatible](https://img.shields.io/badge/SPM-compatible-blue.svg?style=flat-square)](https://github.com/apple/swift-package-manager)
+![Build & Test (macos and linux)](https://github.com/swift-libp2p/swift-libp2p-crypto/actions/workflows/build+test.yml/badge.svg)
 
 > Core LibP2P cryptography API for interacting with various Keys, Hashes and Ciphers 
 
@@ -76,10 +77,6 @@ rsaKeyPair.privateKey       // -> optional(PrivateKey)
 try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))   // RSA w/ Bit Options... 1024, 2048, 3072, 4096 
 try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)             // Ed25519 Elliptic Key
 try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)           // Secp256k1 Key
-
-/// With limited support for other Elliptic Curve key algorithms...
-try LibP2PCrypto.Keys.generateKeyPair(.EC(curve: .P256))    // EC Keys w/ curve options... P256, P384, P521
-try LibP2PCrypto.Keys.generateKeyPair(.ECDSA(curve: .P256)) // ECDSA Keys w/ curve options... P256, P384, P521
 
 
 /// Importing Marshalled Keys 
