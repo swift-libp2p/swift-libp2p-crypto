@@ -7,6 +7,7 @@
 
 import Foundation
 import Crypto
+//import PEM
 
 extension Curve25519.Signing.PublicKey:CommonPublicKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
@@ -128,3 +129,49 @@ extension Curve25519.Signing.PrivateKey:Equatable {
         lhs.rawRepresentation == rhs.rawRepresentation
     }
 }
+
+extension Curve25519.Signing.PublicKey:DERCodable {
+    public static var primaryObjectIdentifier: Array<UInt8> { [0x2B, 0x65, 0x70] } 
+    public static var secondaryObjectIdentifier: Array<UInt8>? { nil }
+    
+    public init(publicDER: Array<UInt8>) throws {
+        try self.init(rawRepresentation: publicDER)
+    }
+    
+    public init(privateDER: Array<UInt8>) throws {
+        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+    }
+    
+    public func publicKeyDER() throws -> Array<UInt8> {
+        self.rawRepresentation.bytes
+    }
+    
+    public func privateKeyDER() throws -> Array<UInt8> {
+        throw NSError(domain: "Public Key doesn't have private DER representation", code: 0)
+    }
+}
+
+extension Curve25519.Signing.PrivateKey:DERCodable {
+    public static var primaryObjectIdentifier: Array<UInt8> { [0x2B, 0x65, 0x70] }
+    public static var secondaryObjectIdentifier: Array<UInt8>? { nil }
+    
+    public init(publicDER: Array<UInt8>) throws {
+        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+    }
+    
+    public init(privateDER: Array<UInt8>) throws {
+        guard case .octetString(let rawData) = try ASN1.Decoder.decode(data: Data(privateDER)) else {
+            throw PEM.Error.invalidParameters
+        }
+        try self.init(rawRepresentation: rawData)
+    }
+    
+    public func publicKeyDER() throws -> Array<UInt8> {
+        try self.publicKey.publicKeyDER()
+    }
+    
+    public func privateKeyDER() throws -> Array<UInt8> {
+        self.rawRepresentation.bytes
+    }
+}
+
