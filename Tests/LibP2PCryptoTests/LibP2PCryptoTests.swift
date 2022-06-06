@@ -5,6 +5,12 @@ import Crypto
 import CryptoSwift
 import Multihash
 
+
+/// Secp - https://techdocs.akamai.com/iot-token-access-control/docs/generate-ecdsa-keys
+/// JWT - https://techdocs.akamai.com/iot-token-access-control/docs/generate-jwt-ecdsa-keys
+/// Fixtures - http://cryptomanager.com/tv.html
+/// RSA (Sign+Verify) - https://cryptobook.nakov.com/digital-signatures/rsa-sign-verify-examples
+/// PEM+DER (PKCS1&8) - https://tls.mbed.org/kb/cryptography/asn1-key-structures-in-der-and-pem
 final class libp2p_cryptoTests: XCTestCase {
     
     /// RSA
@@ -571,8 +577,179 @@ final class libp2p_cryptoTests: XCTestCase {
 
     /// RSA Object Identifier --> 2a 86 48 86 f7 0d 01 01 01 (bit length independent, pub/priv key independent)
     /// ECDSA P384 --> 2a 86 48 ce 3d 02 01
-    func testPemParsing() throws {
-
+//    func testPemParsing() throws {
+//
+////        let pem = """
+////        -----BEGIN PUBLIC KEY-----
+////        MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDcZ/r0nvJyHUUstIB5BqCUJ1CC
+////        Cd1nzle4bEpPQJ/S0Wn7mV2FDAeh+UcbVhZu9n+5zypYNjeZKapPqBLoT8eCK51y
+////        Kpzeb8LuEm3P8PK4xN18XBrIF1GprN8IIgSdK9f5SwnemutcURrY+PlWnvj7N5s/
+////        03RlJA3/NHVXpPW/VQIDAQAB
+////        -----END PUBLIC KEY-----
+////        """
+//
+//        let pem = """
+//        -----BEGIN PRIVATE KEY-----
+//        MIIG/wIBADANBgkqhkiG9w0BAQEFAASCBukwggblAgEAAoIBgQDp0Whyqa8KmdvK
+//        0MsQGJEBzDAEHAZc0C6cr0rkb6Xwo+yB5kjZBRDORk0UXtYGE1pYt4JhUTmMzcWO
+//        v2xTIsdbVMQlNtput2U8kIqS1cSTkX5HxOJtCiIzntMzuR/bGPSOexkyFQ8nCUqb
+//        ROS7cln/ixprra2KMAKldCApN3ue2jo/JI1gyoS8sekhOASAa0ufMPpC+f70sc75
+//        Y53VLnGBNM43iM/2lsK+GI2a13d6rRy86CEM/ygnh/EDlyNDxo+SQmy6GmSv/lmR
+//        xgWQE2dIfK504KIxFTOphPAQAr9AsmcNnCQLhbz7YTsBz8WcytHGQ0Z5pnBQJ9AV
+//        CX9E6DFHetvs0CNLVw1iEO06QStzHulmNEI/3P8I1TIxViuESJxSu3pSNwG1bSJZ
+//        +Qee24vvlz/slBzK5gZWHvdm46v7vl5z7SA+whncEtjrswd8vkJk9fI/YTUbgOC0
+//        HWMdc2t/LTZDZ+LUSZ/b2n5trvdJSsOKTjEfuf0wICC08pUUk8MCAwEAAQKCAYEA
+//        ywve+DQCneIezHGk5cVvp2/6ApeTruXalJZlIxsRr3eq2uNwP4X2oirKpPX2RjBo
+//        NMKnpnsyzuOiu+Pf3hJFrTpfWzHXXm5Eq+OZcwnQO5YNY6XGO4qhSNKT9ka9Mzbo
+//        qRKdPrCrB+s5rryVJXKYVSInP3sDSQ2IPsYpZ6GW6Mv56PuFCpjTzElzejV7M0n5
+//        0bRmn+MZVMVUR54KYiaCywFgUzmr3yfs1cfcsKqMRywt2J58lRy/chTLZ6LILQMv
+//        4V01neVJiRkTmUfIWvc1ENIFM9QJlky9AvA5ASvwTTRz8yOnxoOXE/y4OVyOePjT
+//        cz9eumu9N5dPuUIMmsYlXmRNaeGZPD9bIgKY5zOlfhlfZSuOLNH6EHBNr6JAgfwL
+//        pdP43sbg2SSNKpBZ0iSMvpyTpbigbe3OyhnFH/TyhcC2Wdf62S9/FRsvjlRPbakW
+//        YhKAA2kmJoydcUDO5ccEga8b7NxCdhRiczbiU2cj70pMIuOhDlGAznyxsYbtyxaB
+//        AoHBAPy6Cbt6y1AmuId/HYfvms6i8B+/frD1CKyn+sUDkPf81xSHV7RcNrJi1S1c
+//        V55I0y96HulsR+GmcAW1DF3qivWkdsd/b4mVkizd/zJm3/Dm8p8QOnNTtdWvYoEB
+//        VzfAhBGaR/xflSLxZh2WE8ZHQ3IcRCXV9ZFgJ7PMeTprBJXzl0lTptvrHyo9QK1v
+//        obLrL/KuXWS0ql1uSnJr1vtDI5uW8WU4GDENeU5b/CJHpKpjVxlGg+7pmLknxlBl
+//        oBnZnQKBwQDs2Ky29qZ69qnPWowKceMJ53Z6uoUeSffRZ7xuBjowpkylasEROjuL
+//        nyAihIYB7fd7R74CnRVYLI+O2qXfNKJ8HN+TgcWv8LudkRcnZDSvoyPEJAPyZGfr
+//        olRCXD3caqtarlZO7vXSAl09C6HcL2KZ8FuPIEsuO0Aw25nESMg9eVMaIC6s2eSU
+//        NUt6xfZw1JC0c+f0LrGuFSjxT2Dr5WKND9ageI6afuauMuosjrrOMl2g0dMcSnVz
+//        KrtYa7Wi1N8CgcBFnuJreUplDCWtfgEen40f+5b2yAQYr4fyOFxGxdK73jVJ/HbW
+//        wsh2n+9mDZg9jIZQ/+1gFGpA6V7W06dSf/hD70ihcKPDXSbloUpaEikC7jxMQWY4
+//        uwjOkwAp1bq3Kxu21a+bAKHO/H1LDTrpVlxoJQ1I9wYtRDXrvBpxU2XyASbeFmNT
+//        FhSByFn27Ve4OD3/NrWXtoVwM5/ioX6ZvUcj55McdTWE3ddbFNACiYX9QlyOI/TY
+//        bhWafDCPmU9fj6kCgcEAjyQEfi9jPj2FM0RODqH1zS6OdG31tfCOTYicYQJyeKSI
+//        /hAezwKaqi9phHMDancfcupQ89Nr6vZDbNrIFLYC3W+1z7hGeabMPNZLYAs3rE60
+//        dv4tRHlaNRbORazp1iTBmvRyRRI2js3O++3jzOb2eILDUyT5St+UU/LkY7R5EG4a
+//        w1df3idx9gCftXufDWHqcqT6MqFl0QgIzo5izS68+PPxitpRlR3M3Mr4rCU20Rev
+//        blphdF+rzAavYyj1hYuRAoHBANmxwbq+QqsJ19SmeGMvfhXj+T7fNZQFh2F0xwb2
+//        rMlf4Ejsnx97KpCLUkoydqAs2q0Ws9Nkx2VEVx5KfUD7fWhgbpdnEPnQkfeXv9sD
+//        vZTuAoqInN1+vj1TME6EKR/6D4OtQygSNpecv23EuqEvyXWqRVsRt9Qd2B0H4k7h
+//        gnjREs10u7zyqBIZH7KYVgyh27WxLr859ap8cKAH6Fb+UOPtZo3sUeeume60aebn
+//        4pMwXeXP+LO8NIfRXV8mgrm86g==
+//        -----END PRIVATE KEY-----
+//        """
+//
+////        /// EC P256 Public Key
+////        let pem = """
+////        -----BEGIN PUBLIC KEY-----
+////        MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEb4nB0k8CBVnKCHVHkxuXAkSlZuO5
+////        Nsev1rzcRv5QHiJuWUKomFGadQlMSGwoDOHEDdW3ujcA6t0ADteHw6KrZg==
+////        -----END PUBLIC KEY-----
+////        """
+//
+////        /// EC P384 Public Key
+////        let pem = """
+////        -----BEGIN PUBLIC KEY-----
+////        MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEBwY0l7mq7hSBEZRld5ISWfSoFsYN3wwM
+////        hdD3cMU95DmYXzbqVHB4dCfsy7bexm4h9c0zs4CyTPzy3DV3vfmv1akQJIQv7l08
+////        lx/YXNeGXTN4Gr9r4rwA5GvRl1p6plPL
+////        -----END PUBLIC KEY-----
+////        """
+//
+////        /// EC P521 Public Key
+////        let pem = """
+////        -----BEGIN PUBLIC KEY-----
+////        MIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAp3v1UQWvSyQnkAUEBu+x/7ZrPtNJ
+////        SCUk9kMvuZMyGP1idwvspALuJjzrSFFlXObjlOjxucSbWhTYF/o3nc0XzpAA3dxA
+////        BYiMqH9vrVePoJMpv+DMdkUiUJ/WqHSOu9bJEi1h4fdqh5HHx4QZJY/iX/59VAi1
+////        uSbAhALvbdGFbVpkcOs=
+////        -----END PUBLIC KEY-----
+////        """
+//
+//        /// EC P256 Private Key
+////        let pem = """
+////        -----BEGIN PRIVATE KEY-----
+////        MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgZjQLlzempZx7YF1F
+////        +MK1HWZTNgLcC1MAufb/2/YZYk6hRANCAAQwgn0PfkIHiZ/K+3zA//CoDqU2PqDc
+////        aA3U5R68jmlZQITvMyBlMJl9Mjh0biIe88dAfRKeUm9FVMD2ErJ/006V
+////        -----END PRIVATE KEY-----
+////        """
+//
+//        /// PEMP384PKCS8
+////        let pem = """
+////        -----BEGIN PRIVATE KEY-----
+////        MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDB7ERKhMR+mvz1NQ+oL
+////        i6ZJMACOcwbUetWcNnB4Mnx3j4XuhpkkHEW8E1+rXyjZ3UmhZANiAASYH+emlyXM
+////        kBSFJl0BiopDVuIIR47M4pLl00YNnuu/Rp5VHeVAHrP67i2Q92u5fk34eOSwQvkO
+////        VvktWsgtzAomIam4SHqE9bhvrHy6kW6QzxlERHTL+YkXEX8c6t8VOxk=
+////        -----END PRIVATE KEY-----
+////        """
+//
+//        let chunks = pem.split(separator: "\n")
+//        guard chunks.count > 3,
+//              let f = chunks.first, f.hasPrefix("-----BEGIN"),
+//              let l = chunks.last, l.hasSuffix("-----") else {
+//            throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
+//        }
+//
+//        //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
+//        let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
+//        //print(raw.data)
+//
+//        //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
+//
+//        let asn = try Asn1Parser.parse(data: raw.data)
+//        //let asn = try Asn1Parser.parse(data: key)
+//
+//        print("*****")
+//        print(asn)
+//        print("*****")
+//
+//        var bitString:Data? = nil
+//        var oct:Data? = nil
+//        if case .sequence(let nodes) = asn {
+//            nodes.forEach {
+//                switch $0 {
+//                case .objectIdentifier(let data):
+//                    print("Got our obj id: \(data.asString(base: .base64))")
+//                    print(String(data: data, encoding: .utf8) ?? "NIL")
+//                case .bitString(let data):
+//                    print("Got our bit string: \(data.asString(base: .base64))")
+//                    bitString = data
+//                case .sequence(let nodes):
+//                    nodes.forEach { n in
+//                        switch n {
+//                        case .objectIdentifier(let data):
+//                            print("Got our obj id: \(data.asString(base: .base16))")
+//                            print(data.bytes.map { "\($0)"}.joined(separator: ",") )
+//                        case .octetString(let data):
+//                            oct = data
+//                            //oct = raw.data
+//                        default:
+//                            print(n)
+//                        }
+//                    }
+//                case .octetString(let data):
+//                    //bitString = data
+//                    oct = data
+//                    //oct = raw.data
+//                default:
+//                    print($0)
+//                }
+//            }
+//        }
+//
+//        if let bits = bitString {
+//            print("Trying to Init RSA from bitString")
+//            let sk = try RSAPrivateKey(rawRepresentation: bits)
+//            //let sk = try LibP2PCrypto.Keys.secKeyFrom(data: bits, isPrivateKey: true, keyType: .EC(curve: .P256))
+//            print(sk)
+//        } else if let oct = oct {
+//            print("Trying to Init RSA from OctetString")
+//            let sk = try RSAPrivateKey(rawRepresentation: oct)
+//            //print(ec.bytes.map { "\($0)"}.joined(separator: ",") )
+////            var ec2 = ec.bytes
+////            ec2.insert(0, at: 0)
+////            let sk = try LibP2PCrypto.Keys.secKeyFrom(data: Data(ec2), isPrivateKey: true, keyType: .EC(curve: .P256))
+//            print(sk)
+//        }
+//    }
+    
+//    // - MARK: PEM Decoding
+//    func testPemParsing_RSA_1024_Public() throws {
+//
 //        let pem = """
 //        -----BEGIN PUBLIC KEY-----
 //        MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDcZ/r0nvJyHUUstIB5BqCUJ1CC
@@ -581,263 +758,92 @@ final class libp2p_cryptoTests: XCTestCase {
 //        03RlJA3/NHVXpPW/VQIDAQAB
 //        -----END PUBLIC KEY-----
 //        """
-
-        let pem = """
-        -----BEGIN PRIVATE KEY-----
-        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
-        4pMwXeXP+LO8NIfRXV8mgrm86g==
-        -----END PRIVATE KEY-----
-        """
-
-//        /// EC P256 Public Key
+//
+//        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
+//
+//        print(keyPair)
+//        print(keyPair.attributes() ?? "NIL")
+//
+//        XCTAssert(keyPair.keyType == .rsa)
+//        XCTAssertEqual(keyPair.attributes()?.size, 1024)
+//        XCTAssertNil(keyPair.privateKey)
+//    }
+//
+//    func testPemParsing_RSA_1024_Public_2() throws {
 //        let pem = """
-//        -----BEGIN PUBLIC KEY-----
-//        MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEb4nB0k8CBVnKCHVHkxuXAkSlZuO5
-//        Nsev1rzcRv5QHiJuWUKomFGadQlMSGwoDOHEDdW3ujcA6t0ADteHw6KrZg==
-//        -----END PUBLIC KEY-----
+//        -----BEGIN RSA PUBLIC KEY-----
+//        MIGJAoGBANxn+vSe8nIdRSy0gHkGoJQnUIIJ3WfOV7hsSk9An9LRafuZXY
+//        UMB6H5RxtWFm72f7nPKlg2N5kpqk+oEuhPx4IrnXIqnN5vwu4Sbc/w8rjE
+//        3XxcGsgXUams3wgiBJ0r1/lLCd6a61xRGtj4+Vae+Ps3mz/TdGUkDf80dV
+//        ek9b9VAgMBAAE=
+//        -----END RSA PUBLIC KEY-----
 //        """
-
-//        /// EC P384 Public Key
-//        let pem = """
-//        -----BEGIN PUBLIC KEY-----
-//        MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEBwY0l7mq7hSBEZRld5ISWfSoFsYN3wwM
-//        hdD3cMU95DmYXzbqVHB4dCfsy7bexm4h9c0zs4CyTPzy3DV3vfmv1akQJIQv7l08
-//        lx/YXNeGXTN4Gr9r4rwA5GvRl1p6plPL
-//        -----END PUBLIC KEY-----
-//        """
-
-//        /// EC P521 Public Key
-//        let pem = """
-//        -----BEGIN PUBLIC KEY-----
-//        MIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQAp3v1UQWvSyQnkAUEBu+x/7ZrPtNJ
-//        SCUk9kMvuZMyGP1idwvspALuJjzrSFFlXObjlOjxucSbWhTYF/o3nc0XzpAA3dxA
-//        BYiMqH9vrVePoJMpv+DMdkUiUJ/WqHSOu9bJEi1h4fdqh5HHx4QZJY/iX/59VAi1
-//        uSbAhALvbdGFbVpkcOs=
-//        -----END PUBLIC KEY-----
-//        """
-
-        /// EC P256 Private Key
-//        let pem = """
-//        -----BEGIN PRIVATE KEY-----
-//        MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgZjQLlzempZx7YF1F
-//        +MK1HWZTNgLcC1MAufb/2/YZYk6hRANCAAQwgn0PfkIHiZ/K+3zA//CoDqU2PqDc
-//        aA3U5R68jmlZQITvMyBlMJl9Mjh0biIe88dAfRKeUm9FVMD2ErJ/006V
-//        -----END PRIVATE KEY-----
-//        """
-
-        /// PEMP384PKCS8
-//        let pem = """
-//        -----BEGIN PRIVATE KEY-----
-//        MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDB7ERKhMR+mvz1NQ+oL
-//        i6ZJMACOcwbUetWcNnB4Mnx3j4XuhpkkHEW8E1+rXyjZ3UmhZANiAASYH+emlyXM
-//        kBSFJl0BiopDVuIIR47M4pLl00YNnuu/Rp5VHeVAHrP67i2Q92u5fk34eOSwQvkO
-//        VvktWsgtzAomIam4SHqE9bhvrHy6kW6QzxlERHTL+YkXEX8c6t8VOxk=
-//        -----END PRIVATE KEY-----
-//        """
-
-        let chunks = pem.split(separator: "\n")
-        guard chunks.count > 3,
-              let f = chunks.first, f.hasPrefix("-----BEGIN"),
-              let l = chunks.last, l.hasSuffix("-----") else {
-            throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
-        }
-
-        //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
-        let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-        //print(raw.data)
-
-        //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
-
-        let asn = try Asn1Parser.parse(data: raw.data)
-        //let asn = try Asn1Parser.parse(data: key)
-
-        print("*****")
-        print(asn)
-        print("*****")
-
-        var bitString:Data? = nil
-        var oct:Data? = nil
-        if case .sequence(let nodes) = asn {
-            nodes.forEach {
-                switch $0 {
-                case .objectIdentifier(let data):
-                    print("Got our obj id: \(data.asString(base: .base64))")
-                    print(String(data: data, encoding: .utf8) ?? "NIL")
-                case .bitString(let data):
-                    print("Got our bit string: \(data.asString(base: .base64))")
-                    bitString = data
-                case .sequence(let nodes):
-                    nodes.forEach { n in
-                        switch n {
-                        case .objectIdentifier(let data):
-                            print("Got our obj id: \(data.asString(base: .base16))")
-                            print(data.bytes.map { "\($0)"}.joined(separator: ",") )
-                        case .octetString(let data):
-                            oct = data
-                            //oct = raw.data
-                        default:
-                            print(n)
-                        }
-                    }
-                case .octetString(let data):
-                    //bitString = data
-                    oct = data
-                    //oct = raw.data
-                default:
-                    print($0)
-                }
-            }
-        }
-
-        if let bits = bitString {
-            print("Trying to Init RSA from bitString")
-            let sk = try RSAPrivateKey(rawRepresentation: bits)
-            //let sk = try LibP2PCrypto.Keys.secKeyFrom(data: bits, isPrivateKey: true, keyType: .EC(curve: .P256))
-            print(sk)
-        } else if let oct = oct {
-            print("Trying to Init RSA from OctetString")
-            let sk = try RSAPrivateKey(rawRepresentation: oct)
-            //print(ec.bytes.map { "\($0)"}.joined(separator: ",") )
-//            var ec2 = ec.bytes
-//            ec2.insert(0, at: 0)
-//            let sk = try LibP2PCrypto.Keys.secKeyFrom(data: Data(ec2), isPrivateKey: true, keyType: .EC(curve: .P256))
-            print(sk)
-        }
-    }
-    
-    // - MARK: PEM Decoding
-    func testPemParsing_RSA_1024_Public() throws {
-
-        let pem = """
-        -----BEGIN PUBLIC KEY-----
-        MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDcZ/r0nvJyHUUstIB5BqCUJ1CC
-        Cd1nzle4bEpPQJ/S0Wn7mV2FDAeh+UcbVhZu9n+5zypYNjeZKapPqBLoT8eCK51y
-        Kpzeb8LuEm3P8PK4xN18XBrIF1GprN8IIgSdK9f5SwnemutcURrY+PlWnvj7N5s/
-        03RlJA3/NHVXpPW/VQIDAQAB
-        -----END PUBLIC KEY-----
-        """
-
-        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
-
-        print(keyPair)
-        print(keyPair.attributes() ?? "NIL")
-
-        XCTAssert(keyPair.keyType == .rsa)
-        XCTAssertEqual(keyPair.attributes()?.size, 1024)
-        XCTAssertNil(keyPair.privateKey)
-    }
-
-    func testPemParsing_RSA_1024_Public_2() throws {
-        let pem = """
-        -----BEGIN RSA PUBLIC KEY-----
-        MIGJAoGBANxn+vSe8nIdRSy0gHkGoJQnUIIJ3WfOV7hsSk9An9LRafuZXY
-        UMB6H5RxtWFm72f7nPKlg2N5kpqk+oEuhPx4IrnXIqnN5vwu4Sbc/w8rjE
-        3XxcGsgXUams3wgiBJ0r1/lLCd6a61xRGtj4+Vae+Ps3mz/TdGUkDf80dV
-        ek9b9VAgMBAAE=
-        -----END RSA PUBLIC KEY-----
-        """
-
-        /// Import DER directly
-        let key = try LibP2PCrypto.Keys.importPublicDER(pem)
-
-        /// Let the parsePem method determine that it's a DER file and handle it accordingly
-        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
-
-        print(key)
-        print(keyPair)
-
-        XCTAssertEqual(key.publicKey.data, keyPair.publicKey.data)
-        XCTAssert(keyPair.keyType == .rsa)
-        XCTAssertEqual(keyPair.attributes()?.size, 1024)
-        XCTAssertNil(keyPair.privateKey)
-    }
-
-    func testPemParsing_RSA_2048_Public() throws {
-
-        /// Import PEM directly
-        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_2048_PUBLIC)
-
-        /// Let the parsePem method determine the format and handle it accordingly
-        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_2048_PUBLIC)
-
-        print(key)
-        print(keyPair)
-
-        XCTAssertEqual(key.rawRepresentation, keyPair.publicKey.data)
-        XCTAssert(keyPair.keyType == .rsa)
-        XCTAssertEqual(keyPair.attributes()?.size, 2048)
-        XCTAssertNil(keyPair.privateKey)
-    }
-
-    func testPemParsing_RSA_3072_Public() throws {
-
-        /// Import PEM directly
-        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_3072_PUBLIC)
-
-        /// Let the parsePem method determine the format and handle it accordingly
-        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_3072_PUBLIC)
-
-        print(key)
-        print(keyPair)
-
-        XCTAssertEqual(key.rawRepresentation, keyPair.publicKey.data)
-        XCTAssert(keyPair.keyType == .rsa)
-        XCTAssertEqual(keyPair.attributes()?.size, 3072)
-        XCTAssertNil(keyPair.privateKey)
-    }
-
-    func testPemParsing_RSA_4096_Public() throws {
-
-        /// Import PEM directly
-        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_4096_PUBLIC)
-
-        /// Let the parsePem method determine the format and handle it accordingly
-        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_4096_PUBLIC)
-
-        print(key)
-        print(keyPair)
-
-        XCTAssertEqual(key.rawRepresentation, keyPair.publicKey.data)
-        XCTAssert(keyPair.keyType == .rsa)
-        XCTAssertEqual(keyPair.attributes()?.size, 4096)
-        XCTAssertNil(keyPair.privateKey)
-    }
+//
+//        /// Import DER directly
+//        let key = try LibP2PCrypto.Keys.importPublicDER(pem)
+//
+//        /// Let the parsePem method determine that it's a DER file and handle it accordingly
+//        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
+//
+//        print(key)
+//        print(keyPair)
+//
+//        XCTAssertEqual(key.publicKey.data, keyPair.publicKey.data)
+//        XCTAssert(keyPair.keyType == .rsa)
+//        XCTAssertEqual(keyPair.attributes()?.size, 1024)
+//        XCTAssertNil(keyPair.privateKey)
+//    }
+//
+//    func testPemParsing_RSA_2048_Public() throws {
+//
+//        /// Import PEM directly
+//        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_2048_PUBLIC)
+//
+//        /// Let the parsePem method determine the format and handle it accordingly
+//        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_2048_PUBLIC)
+//
+//        print(key)
+//        print(keyPair)
+//
+//        XCTAssertEqual(key.rawRepresentation, keyPair.publicKey.data)
+//        XCTAssert(keyPair.keyType == .rsa)
+//        XCTAssertEqual(keyPair.attributes()?.size, 2048)
+//        XCTAssertNil(keyPair.privateKey)
+//    }
+//
+//    func testPemParsing_RSA_3072_Public() throws {
+//
+//        /// Import PEM directly
+//        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_3072_PUBLIC)
+//
+//        /// Let the parsePem method determine the format and handle it accordingly
+//        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_3072_PUBLIC)
+//
+//        print(key)
+//        print(keyPair)
+//
+//        XCTAssertEqual(key.rawRepresentation, keyPair.publicKey.data)
+//        XCTAssert(keyPair.keyType == .rsa)
+//        XCTAssertEqual(keyPair.attributes()?.size, 3072)
+//        XCTAssertNil(keyPair.privateKey)
+//    }
+//
+//    func testPemParsing_RSA_4096_Public() throws {
+//
+//        /// Import PEM directly
+//        let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_4096_PUBLIC)
+//
+//        /// Let the parsePem method determine the format and handle it accordingly
+//        let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_4096_PUBLIC)
+//
+//        print(key)
+//        print(keyPair)
+//
+//        XCTAssertEqual(key.rawRepresentation, keyPair.publicKey.data)
+//        XCTAssert(keyPair.keyType == .rsa)
+//        XCTAssertEqual(keyPair.attributes()?.size, 4096)
+//        XCTAssertNil(keyPair.privateKey)
+//    }
 
 //    func testPemParsing_EC_P256_Public() throws {
 //        /// EC P256 Public Key
@@ -887,258 +893,258 @@ final class libp2p_cryptoTests: XCTestCase {
 
 
     ///[42,134,72,134,247,13,1,1,1]
-    func testRSAOpenSSLPemImport() throws {
-
-        /// Generated with
-        /// openssl genpkey -algorithm RSA
-        ///   -pkeyopt rsa_keygen_bits:3072
-        ///   -pkeyopt rsa_keygen_pubexp:65537
-        let pem = """
-        -----BEGIN PRIVATE KEY-----
-        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
-        4pMwXeXP+LO8NIfRXV8mgrm86g==
-        -----END PRIVATE KEY-----
-        """
-
-        /// Import PEM directly
-        let key = try LibP2PCrypto.Keys.importPrivatePem(pem)
-
-        /// Let the parsePem method determine the format and handle it accordingly
-        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
-
-        print(key)
-        print(keyPair)
-
-        XCTAssertEqual(key.rawRepresentation, keyPair.privateKey?.rawRepresentation)
-        XCTAssertEqual(try key.derivePublicKey().rawRepresentation, keyPair.publicKey.data)
-        XCTAssert(keyPair.keyType == .rsa)
-        XCTAssertEqual(keyPair.attributes()?.size, 3072)
-        XCTAssertNotNil(keyPair.privateKey)
-    }
-
-    // Manual PEM import process
-    func testED25519PemImport_Public_Manual() throws {
-        let pem = """
-        -----BEGIN PUBLIC KEY-----
-        MCowBQYDK2VwAyEACM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=
-        -----END PUBLIC KEY-----
-        """
-
-        let data = try pemToData(pem)
-
-        let asn = try Asn1Parser.parse(data: data)
-
-        print(asn)
-
-        guard case .sequence(let top) = asn, case .bitString(let pubKeyData) = top.last else {
-            return XCTFail("Failed to extract our PubKey bit string")
-        }
-
-        let pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: pubKeyData.bytes)
-
-        print(pubKey)
-
-        print(pubKey.rawRepresentation.asString(base: .base64Pad))
-
-        /// Ensure that we reached the same results using both methods
-        XCTAssertEqual(pubKey.rawRepresentation, try LibP2PCrypto.Keys.parsePem(pem).publicKey.data)
-    }
-
-    func testED25519PemImport_Public() throws {
-        let pem = """
-        -----BEGIN PUBLIC KEY-----
-        MCowBQYDK2VwAyEACM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=
-        -----END PUBLIC KEY-----
-        """
-
-        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
-
-        print(keyPair)
-        XCTAssert(keyPair.keyType == .ed25519)
-        XCTAssertNil(keyPair.privateKey)
-    }
-
-
-    /// This document defines what that is for Ed25519 private keys:
-    /// https://tools.ietf.org/html/draft-ietf-curdle-pkix-10
-    ///
-    /// What it says is that inside the OCTET STRING is another OCTET STRING for the private key data. The ASN.1 tag for OCTET STRING is 0x04, and the length of that string is 32 bytes (0x20 in hex).
-    /// So in the above string the leading 0420 is the OCTET STRING tag and length. The remaining 32 bytes are the key itself.
-    func testED25519PemImport_Private_Manual() throws {
-        let pem = """
-        -----BEGIN PRIVATE KEY-----
-        MC4CAQAwBQYDK2VwBCIEIOkK9EOHRqD5QueUrMZbia55UWpokoFpWco4r2GnRVZ+
-        -----END PRIVATE KEY-----
-        """
-
-        let data = try pemToData(pem)
-
-        let asn = try Asn1ParserECPrivate.parse(data: data)
-
-        print(asn)
-
-//        sequence(nodes: [
-//            libp2p_crypto.Asn1Parser.Node.integer(data: 1 bytes),
-//            libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-//                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 3 bytes)]
-//            ),
-//            libp2p_crypto.Asn1Parser.Node.octetString(data: 34 bytes) <- This is actually another octetString
-//        ])
-
-        guard case .sequence(let top) = asn, case .octetString(var privKeyData) = top.last else {
-            return XCTFail("Failed to extract our PrivKey bit string")
-        }
-
-        while privKeyData.count > 32 {
-            privKeyData.removeFirst()
-        }
-
-        print(privKeyData.count)
-
-        let privKey = try Curve25519.Signing.PrivateKey(rawRepresentation: privKeyData.bytes)
-
-        print(privKey)
-
-        XCTAssertEqual("CM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=", privKey.publicKey.rawRepresentation.asString(base: .base64Pad))
-
-    }
-
-    func testED25519PemImport_Private() throws {
-        let pem = """
-        -----BEGIN PRIVATE KEY-----
-        MC4CAQAwBQYDK2VwBCIEIOkK9EOHRqD5QueUrMZbia55UWpokoFpWco4r2GnRVZ+
-        -----END PRIVATE KEY-----
-        """
-
-        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
-
-        print(keyPair)
-        XCTAssert(keyPair.keyType == .ed25519)
-        XCTAssertNotNil(keyPair.privateKey)
-        XCTAssertEqual(keyPair.publicKey.asString(base: .base64Pad), "CM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=")
-    }
-
-
-    func testSecp256k1PemImport_Public_Manual() throws {
-        let pem = """
-        -----BEGIN PUBLIC KEY-----
-        MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzw
-        xDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
-        -----END PUBLIC KEY-----
-        """
-
-        let data = try pemToData(pem)
-
-        let asn = try Asn1ParserECPrivate.parse(data: data)
-
-        print(asn)
-
-//        sequence(nodes: [
-//            libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-//                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 7 bytes),  :id-ecPublicKey
-//                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 5 bytes)   :secp256k1
-//            ]),
-//            libp2p_crypto.Asn1Parser.Node.bitString(data: 65 bytes)
-//        ])
-
-        guard case .sequence(let top) = asn, case .bitString(let pubKeyData) = top.last else {
-            return XCTFail("Failed to extract our Public Key bit/octet string")
-        }
-
-        let pubKey = try Secp256k1PublicKey(pubKeyData.bytes)
-
-        print(pubKey)
-
-        print(pubKey.rawPublicKey.asString(base: .base64Pad))
-    }
-
-    func testSecp256k1PemImport_Public() throws {
-        let pem = """
-        -----BEGIN PUBLIC KEY-----
-        MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzw
-        xDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
-        -----END PUBLIC KEY-----
-        """
-
-        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
-
-        print(keyPair)
-        XCTAssert(keyPair.keyType == .secp256k1)
-        XCTAssertNil(keyPair.privateKey)
-        print(keyPair.attributes() ?? "NIL")
-    }
-
-    func testSecp256k1PemImport_Private_Manual() throws {
-        let pem = """
-        -----BEGIN EC PRIVATE KEY-----
-        MHQCAQEEIJmbpwD3mZhlEtiGzmgropJ/nSewc8UPyBE9wib742saoAcGBSuBBAAK
-        oUQDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwf
-        X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
-        -----END EC PRIVATE KEY-----
-        """
-
-        let data = try pemToData(pem)
-
-        let asn = try Asn1ParserECPrivate.parse(data: data)
-
-        print(asn)
-
-//        sequence(nodes: [
-//            libp2p_crypto.Asn1ParserECPrivate.Node.integer(data: 1 bytes),
-//            libp2p_crypto.Asn1ParserECPrivate.Node.octetString(data: 32 bytes),      // private key data
-//            libp2p_crypto.Asn1ParserECPrivate.Node.objectIdentifier(data: 7 bytes),  :secp256k1
-//            libp2p_crypto.Asn1ParserECPrivate.Node.bitString(data: 67 bytes)
-//        ])
-
-        guard case .sequence(let top) = asn, case .octetString(let privKeyData) = top[1] else {
-            return XCTFail("Failed to extract our PrivKey bit/octet string")
-        }
-
-        let privKey = try Secp256k1PrivateKey(privKeyData.bytes)
-
-        print(privKey)
-
-        /// Assert that we can derive the public from the private key
-        XCTAssertEqual("IgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==", privKey.publicKey.rawPublicKey.asString(base: .base64Pad))
-
-    }
-
+//    func testRSAOpenSSLPemImport() throws {
+//
+//        /// Generated with
+//        /// openssl genpkey -algorithm RSA
+//        ///   -pkeyopt rsa_keygen_bits:3072
+//        ///   -pkeyopt rsa_keygen_pubexp:65537
+//        let pem = """
+//        -----BEGIN PRIVATE KEY-----
+//        MIIG/wIBADANBgkqhkiG9w0BAQEFAASCBukwggblAgEAAoIBgQDp0Whyqa8KmdvK
+//        0MsQGJEBzDAEHAZc0C6cr0rkb6Xwo+yB5kjZBRDORk0UXtYGE1pYt4JhUTmMzcWO
+//        v2xTIsdbVMQlNtput2U8kIqS1cSTkX5HxOJtCiIzntMzuR/bGPSOexkyFQ8nCUqb
+//        ROS7cln/ixprra2KMAKldCApN3ue2jo/JI1gyoS8sekhOASAa0ufMPpC+f70sc75
+//        Y53VLnGBNM43iM/2lsK+GI2a13d6rRy86CEM/ygnh/EDlyNDxo+SQmy6GmSv/lmR
+//        xgWQE2dIfK504KIxFTOphPAQAr9AsmcNnCQLhbz7YTsBz8WcytHGQ0Z5pnBQJ9AV
+//        CX9E6DFHetvs0CNLVw1iEO06QStzHulmNEI/3P8I1TIxViuESJxSu3pSNwG1bSJZ
+//        +Qee24vvlz/slBzK5gZWHvdm46v7vl5z7SA+whncEtjrswd8vkJk9fI/YTUbgOC0
+//        HWMdc2t/LTZDZ+LUSZ/b2n5trvdJSsOKTjEfuf0wICC08pUUk8MCAwEAAQKCAYEA
+//        ywve+DQCneIezHGk5cVvp2/6ApeTruXalJZlIxsRr3eq2uNwP4X2oirKpPX2RjBo
+//        NMKnpnsyzuOiu+Pf3hJFrTpfWzHXXm5Eq+OZcwnQO5YNY6XGO4qhSNKT9ka9Mzbo
+//        qRKdPrCrB+s5rryVJXKYVSInP3sDSQ2IPsYpZ6GW6Mv56PuFCpjTzElzejV7M0n5
+//        0bRmn+MZVMVUR54KYiaCywFgUzmr3yfs1cfcsKqMRywt2J58lRy/chTLZ6LILQMv
+//        4V01neVJiRkTmUfIWvc1ENIFM9QJlky9AvA5ASvwTTRz8yOnxoOXE/y4OVyOePjT
+//        cz9eumu9N5dPuUIMmsYlXmRNaeGZPD9bIgKY5zOlfhlfZSuOLNH6EHBNr6JAgfwL
+//        pdP43sbg2SSNKpBZ0iSMvpyTpbigbe3OyhnFH/TyhcC2Wdf62S9/FRsvjlRPbakW
+//        YhKAA2kmJoydcUDO5ccEga8b7NxCdhRiczbiU2cj70pMIuOhDlGAznyxsYbtyxaB
+//        AoHBAPy6Cbt6y1AmuId/HYfvms6i8B+/frD1CKyn+sUDkPf81xSHV7RcNrJi1S1c
+//        V55I0y96HulsR+GmcAW1DF3qivWkdsd/b4mVkizd/zJm3/Dm8p8QOnNTtdWvYoEB
+//        VzfAhBGaR/xflSLxZh2WE8ZHQ3IcRCXV9ZFgJ7PMeTprBJXzl0lTptvrHyo9QK1v
+//        obLrL/KuXWS0ql1uSnJr1vtDI5uW8WU4GDENeU5b/CJHpKpjVxlGg+7pmLknxlBl
+//        oBnZnQKBwQDs2Ky29qZ69qnPWowKceMJ53Z6uoUeSffRZ7xuBjowpkylasEROjuL
+//        nyAihIYB7fd7R74CnRVYLI+O2qXfNKJ8HN+TgcWv8LudkRcnZDSvoyPEJAPyZGfr
+//        olRCXD3caqtarlZO7vXSAl09C6HcL2KZ8FuPIEsuO0Aw25nESMg9eVMaIC6s2eSU
+//        NUt6xfZw1JC0c+f0LrGuFSjxT2Dr5WKND9ageI6afuauMuosjrrOMl2g0dMcSnVz
+//        KrtYa7Wi1N8CgcBFnuJreUplDCWtfgEen40f+5b2yAQYr4fyOFxGxdK73jVJ/HbW
+//        wsh2n+9mDZg9jIZQ/+1gFGpA6V7W06dSf/hD70ihcKPDXSbloUpaEikC7jxMQWY4
+//        uwjOkwAp1bq3Kxu21a+bAKHO/H1LDTrpVlxoJQ1I9wYtRDXrvBpxU2XyASbeFmNT
+//        FhSByFn27Ve4OD3/NrWXtoVwM5/ioX6ZvUcj55McdTWE3ddbFNACiYX9QlyOI/TY
+//        bhWafDCPmU9fj6kCgcEAjyQEfi9jPj2FM0RODqH1zS6OdG31tfCOTYicYQJyeKSI
+//        /hAezwKaqi9phHMDancfcupQ89Nr6vZDbNrIFLYC3W+1z7hGeabMPNZLYAs3rE60
+//        dv4tRHlaNRbORazp1iTBmvRyRRI2js3O++3jzOb2eILDUyT5St+UU/LkY7R5EG4a
+//        w1df3idx9gCftXufDWHqcqT6MqFl0QgIzo5izS68+PPxitpRlR3M3Mr4rCU20Rev
+//        blphdF+rzAavYyj1hYuRAoHBANmxwbq+QqsJ19SmeGMvfhXj+T7fNZQFh2F0xwb2
+//        rMlf4Ejsnx97KpCLUkoydqAs2q0Ws9Nkx2VEVx5KfUD7fWhgbpdnEPnQkfeXv9sD
+//        vZTuAoqInN1+vj1TME6EKR/6D4OtQygSNpecv23EuqEvyXWqRVsRt9Qd2B0H4k7h
+//        gnjREs10u7zyqBIZH7KYVgyh27WxLr859ap8cKAH6Fb+UOPtZo3sUeeume60aebn
+//        4pMwXeXP+LO8NIfRXV8mgrm86g==
+//        -----END PRIVATE KEY-----
+//        """
+//
+//        /// Import PEM directly
+//        let key = try LibP2PCrypto.Keys.importPrivatePem(pem)
+//
+//        /// Let the parsePem method determine the format and handle it accordingly
+//        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
+//
+//        print(key)
+//        print(keyPair)
+//
+//        XCTAssertEqual(key.rawRepresentation, keyPair.privateKey?.rawRepresentation)
+//        XCTAssertEqual(try key.derivePublicKey().rawRepresentation, keyPair.publicKey.data)
+//        XCTAssert(keyPair.keyType == .rsa)
+//        XCTAssertEqual(keyPair.attributes()?.size, 3072)
+//        XCTAssertNotNil(keyPair.privateKey)
+//    }
+//
+//    // Manual PEM import process
+//    func testED25519PemImport_Public_Manual() throws {
+//        let pem = """
+//        -----BEGIN PUBLIC KEY-----
+//        MCowBQYDK2VwAyEACM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=
+//        -----END PUBLIC KEY-----
+//        """
+//
+//        let data = try pemToData(pem)
+//
+//        let asn = try Asn1Parser.parse(data: data)
+//
+//        print(asn)
+//
+//        guard case .sequence(let top) = asn, case .bitString(let pubKeyData) = top.last else {
+//            return XCTFail("Failed to extract our PubKey bit string")
+//        }
+//
+//        let pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: pubKeyData.bytes)
+//
+//        print(pubKey)
+//
+//        print(pubKey.rawRepresentation.asString(base: .base64Pad))
+//
+//        /// Ensure that we reached the same results using both methods
+//        XCTAssertEqual(pubKey.rawRepresentation, try LibP2PCrypto.Keys.parsePem(pem).publicKey.data)
+//    }
+//
+//    func testED25519PemImport_Public() throws {
+//        let pem = """
+//        -----BEGIN PUBLIC KEY-----
+//        MCowBQYDK2VwAyEACM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=
+//        -----END PUBLIC KEY-----
+//        """
+//
+//        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
+//
+//        print(keyPair)
+//        XCTAssert(keyPair.keyType == .ed25519)
+//        XCTAssertNil(keyPair.privateKey)
+//    }
+//
+//
+//    /// This document defines what that is for Ed25519 private keys:
+//    /// https://tools.ietf.org/html/draft-ietf-curdle-pkix-10
+//    ///
+//    /// What it says is that inside the OCTET STRING is another OCTET STRING for the private key data. The ASN.1 tag for OCTET STRING is 0x04, and the length of that string is 32 bytes (0x20 in hex).
+//    /// So in the above string the leading 0420 is the OCTET STRING tag and length. The remaining 32 bytes are the key itself.
+//    func testED25519PemImport_Private_Manual() throws {
+//        let pem = """
+//        -----BEGIN PRIVATE KEY-----
+//        MC4CAQAwBQYDK2VwBCIEIOkK9EOHRqD5QueUrMZbia55UWpokoFpWco4r2GnRVZ+
+//        -----END PRIVATE KEY-----
+//        """
+//
+//        let data = try pemToData(pem)
+//
+//        let asn = try Asn1ParserECPrivate.parse(data: data)
+//
+//        print(asn)
+//
+////        sequence(nodes: [
+////            libp2p_crypto.Asn1Parser.Node.integer(data: 1 bytes),
+////            libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+////                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 3 bytes)]
+////            ),
+////            libp2p_crypto.Asn1Parser.Node.octetString(data: 34 bytes) <- This is actually another octetString
+////        ])
+//
+//        guard case .sequence(let top) = asn, case .octetString(var privKeyData) = top.last else {
+//            return XCTFail("Failed to extract our PrivKey bit string")
+//        }
+//
+//        while privKeyData.count > 32 {
+//            privKeyData.removeFirst()
+//        }
+//
+//        print(privKeyData.count)
+//
+//        let privKey = try Curve25519.Signing.PrivateKey(rawRepresentation: privKeyData.bytes)
+//
+//        print(privKey)
+//
+//        XCTAssertEqual("CM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=", privKey.publicKey.rawRepresentation.asString(base: .base64Pad))
+//
+//    }
+//
+//    func testED25519PemImport_Private() throws {
+//        let pem = """
+//        -----BEGIN PRIVATE KEY-----
+//        MC4CAQAwBQYDK2VwBCIEIOkK9EOHRqD5QueUrMZbia55UWpokoFpWco4r2GnRVZ+
+//        -----END PRIVATE KEY-----
+//        """
+//
+//        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
+//
+//        print(keyPair)
+//        XCTAssert(keyPair.keyType == .ed25519)
+//        XCTAssertNotNil(keyPair.privateKey)
+//        XCTAssertEqual(keyPair.publicKey.asString(base: .base64Pad), "CM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=")
+//    }
+//
+//
+//    func testSecp256k1PemImport_Public_Manual() throws {
+//        let pem = """
+//        -----BEGIN PUBLIC KEY-----
+//        MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzw
+//        xDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
+//        -----END PUBLIC KEY-----
+//        """
+//
+//        let data = try pemToData(pem)
+//
+//        let asn = try Asn1ParserECPrivate.parse(data: data)
+//
+//        print(asn)
+//
+////        sequence(nodes: [
+////            libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+////                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 7 bytes),  :id-ecPublicKey
+////                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 5 bytes)   :secp256k1
+////            ]),
+////            libp2p_crypto.Asn1Parser.Node.bitString(data: 65 bytes)
+////        ])
+//
+//        guard case .sequence(let top) = asn, case .bitString(let pubKeyData) = top.last else {
+//            return XCTFail("Failed to extract our Public Key bit/octet string")
+//        }
+//
+//        let pubKey = try Secp256k1PublicKey(pubKeyData.bytes)
+//
+//        print(pubKey)
+//
+//        print(pubKey.rawPublicKey.asString(base: .base64Pad))
+//    }
+//
+//    func testSecp256k1PemImport_Public() throws {
+//        let pem = """
+//        -----BEGIN PUBLIC KEY-----
+//        MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzw
+//        xDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
+//        -----END PUBLIC KEY-----
+//        """
+//
+//        let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
+//
+//        print(keyPair)
+//        XCTAssert(keyPair.keyType == .secp256k1)
+//        XCTAssertNil(keyPair.privateKey)
+//        print(keyPair.attributes() ?? "NIL")
+//    }
+//
+//    func testSecp256k1PemImport_Private_Manual() throws {
+//        let pem = """
+//        -----BEGIN EC PRIVATE KEY-----
+//        MHQCAQEEIJmbpwD3mZhlEtiGzmgropJ/nSewc8UPyBE9wib742saoAcGBSuBBAAK
+//        oUQDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwf
+//        X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
+//        -----END EC PRIVATE KEY-----
+//        """
+//
+//        let data = try pemToData(pem)
+//
+//        let asn = try Asn1ParserECPrivate.parse(data: data)
+//
+//        print(asn)
+//
+////        sequence(nodes: [
+////            libp2p_crypto.Asn1ParserECPrivate.Node.integer(data: 1 bytes),
+////            libp2p_crypto.Asn1ParserECPrivate.Node.octetString(data: 32 bytes),      // private key data
+////            libp2p_crypto.Asn1ParserECPrivate.Node.objectIdentifier(data: 7 bytes),  :secp256k1
+////            libp2p_crypto.Asn1ParserECPrivate.Node.bitString(data: 67 bytes)
+////        ])
+//
+//        guard case .sequence(let top) = asn, case .octetString(let privKeyData) = top[1] else {
+//            return XCTFail("Failed to extract our PrivKey bit/octet string")
+//        }
+//
+//        let privKey = try Secp256k1PrivateKey(privKeyData.bytes)
+//
+//        print(privKey)
+//
+//        /// Assert that we can derive the public from the private key
+//        XCTAssertEqual("IgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==", privKey.publicKey.rawPublicKey.asString(base: .base64Pad))
+//
+//    }
+//
     func testSecp256k1PemImport_Private() throws {
         let pem = """
         -----BEGIN EC PRIVATE KEY-----
@@ -1365,475 +1371,476 @@ final class libp2p_cryptoTests: XCTestCase {
     /// 5) Decrypt the encrypted octet string
     /// 6) The decrypted octet string can be ASN1 parsed again for the private key octet string
     /// 7) This raw data can be used to instantiate a SecKey
-    func testRSAEncryptedPrivateKeyPem2_Manual() throws {
-
-        // Generated with
-        // openssl genpkey -algorithm RSA
-        //   -pkeyopt rsa_keygen_bits:1024
-        //   -pkeyopt rsa_keygen_pubexp:65537
-        //   -out foo.pem
-        let unencryptedPem = TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.UNENCRYPTED
-
-        // Encrypted with
-        // openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
-        let encryptedPem = TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED
-
-        let asn = try Asn1Parser.parse(data: pemToData(encryptedPem))
-
-        print(asn)
-
-//        sequence(nodes: [
-//            libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-//                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes), //[42,134,72,134,247,13,1,5,13]
-//                libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-//                    libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-//                        libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes),      //PBKDF2 //[42,134,72,134,247,13,1,5,12]
-//                        libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-//                            libp2p_crypto.Asn1Parser.Node.octetString(data: 8 bytes),       //SALT
-//                            libp2p_crypto.Asn1Parser.Node.integer(data: 2 bytes)            //ITTERATIONS
-//                        ])
-//                    ]),
-//                    libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-//                        libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes),      //des-ede3-cbc [96,134,72,1,101,3,4,1,2]
-//                        libp2p_crypto.Asn1Parser.Node.octetString(data: 16 bytes)           //IV
-//                    ])
-//                ])
-//            ]),
-//            libp2p_crypto.Asn1Parser.Node.octetString(data: 640 bytes)
-//        ])
-
-        var saltData:Data? = nil
-        var ivData:Data? = nil
-        var itterationsData:Int? = nil
-        var ciphertextData:Data? = nil
-
-        if case .sequence(let top) = asn {
-            if case .sequence(let top1) = top.first {
-                if case .sequence(let top2) = top1.last {
-                    if case .sequence(let top3) = top2.first {
-                        if case .sequence(let top4) = top3.last {
-                            if case .octetString(let salt) = top4.first {
-                                print("Found the salt: \(salt.asString(base: .base16))")
-                                saltData = salt
-                            }
-                            if case .integer(let int) = top4.last {
-                                print("Found the itterations: \(int.asString(base: .base16))")
-                                itterationsData = Int(int.asString(base: .base16), radix: 16)
-                            }
-                        }
-                    }
-                    if case .sequence(let bottom3) = top2.last {
-                        if case .octetString(let iv) = bottom3.last {
-                            print("Found the IV: \(iv.asString(base: .base16))")
-                            ivData = iv
-                        }
-                    }
-                }
-            }
-            if case .octetString(let cipherText) = top.last {
-                print("Found the ciphertext: \(cipherText.count)")
-                ciphertextData = cipherText
-            }
-        }
-
-        // Ensure we have everything we need to proceed...
-        guard let salt = saltData, let iv = ivData, let itterations = itterationsData, let ciphertext = ciphertextData else {
-            return XCTFail("Failed to parse our pcks#8 key")
-        }
-
-        // Attempt to derive the aes encryption key from the password and salt
-        // PBKDF2-SHA1
-        guard let key = PBKDF2.SHA1(password: "mypassword", salt: salt, keyByteCount: 16, rounds: itterations) else {
-            return XCTFail("Failed to derive key from password and salt")
-        }
-        
-        // This also works, but it is incredibly slow...
-//        let key2 = try PKCS5.PBKDF2(
-//            password: Array("mypassword".utf8),
-//            salt: salt.bytes,
-//            iterations: itterations,
-//            keyLength: 16, /* 16 == AES-128, 32 == AES-256 */
-//            variant: .sha256
-//        ).calculate()
-
-        // These should be the same
-        print("Key 1 -> \(key.asString(base: .base16))")
-        //print("Key 2 -> \(key2.asString(base: .base16))")
-
-        //Create our CBC AES Cipher
-        let aes = try AES(key: key.bytes, blockMode: CBC(iv: iv.bytes), padding: .noPadding)
-
-        // Try GCM
-        //let aes = try AES(key: key.bytes, blockMode: GCM(iv: iv.bytes, mode: .detached), padding: .noPadding)
-
-        let decryptedKey = try aes.decrypt(ciphertext.bytes)
-
-        print(decryptedKey.asString(base: .base64))
-
-        let deASN = try Asn1Parser.parse(data: Data(decryptedKey))
-        print(deASN)
-        print("-----")
-        let unASN = try Asn1Parser.parse(data: pemToData(unencryptedPem))
-        print(unASN)
-
-        /// sequence(nodes: [
-        ///     libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-        ///         libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes),   // [42,134,72,134,247,13,1,1,1] => RSA Private Key
-        ///         libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-        ///             libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-        ///                 libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes),
-        ///                 libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-        ///                     libp2p_crypto.Asn1Parser.Node.octetString(data: 8 bytes),
-        ///                     libp2p_crypto.Asn1Parser.Node.integer(data: 2 bytes)
-        ///                 ])
-        ///             ]),
-        ///             libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-        ///                 libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes),
-        ///                 libp2p_crypto.Asn1Parser.Node.octetString(data: 16 bytes)
-        ///             ])
-        ///         ]),
-        ///         libp2p_crypto.Asn1Parser.Node.octetString(data: 640 bytes)
-        ///     ])
-        /// ])
-
-        var unencRawPrivateKeyData:Data? = nil
-        if case .sequence(let top) = unASN {
-            if case .octetString(let d) = top.last {
-                print("Found our unenc octetString")
-                unencRawPrivateKeyData = d
-            }
-        }
-
-        var decRawPrivateKeyData:Data? = nil
-        if case .sequence(let top) = deASN {
-            if case .octetString(let d) = top.last {
-                print("Found our dec octetString")
-                decRawPrivateKeyData = d
-            }
-        }
-
-        guard let uRawPrivKeyData = unencRawPrivateKeyData else {
-            return XCTFail("Failed to parse our unencrypted private pem key...")
-        }
-
-        guard let dRawPrivKeyData = decRawPrivateKeyData else {
-            return XCTFail("Failed to parse our decrypted private pem key...")
-        }
-
-        print(uRawPrivKeyData.asString(base: .base64))
-        print(dRawPrivKeyData.asString(base: .base64))
-
-        print(dRawPrivKeyData.count)
-        print(uRawPrivKeyData.count)
-
-        let og = try RSAPrivateKey(rawRepresentation: uRawPrivKeyData)
-        let de = try RSAPrivateKey(rawRepresentation: dRawPrivKeyData)
-
-        print(og)
-
-        print(de)
-
-        XCTAssertEqual(uRawPrivKeyData, dRawPrivKeyData)
-        XCTAssertEqual(og, de)
-
-
-        //XCTAssertEqual(uRawPrivKeyData.bytes, decryptedKey, "Not Equal")
-
-    }
-    
-    func testRSAEncryptedPrivateKeyPem2() throws {
-
-        // Generated with
-        // openssl genpkey -algorithm RSA
-        //   -pkeyopt rsa_keygen_bits:1024
-        //   -pkeyopt rsa_keygen_pubexp:65537
-        //   -out foo.pem
-        let unencryptedPem = TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.UNENCRYPTED
-
-        // Encrypted with
-        // openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
-        let encryptedPem = TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED
-
-        let fromDecrypted = try LibP2PCrypto.Keys.parsePem(unencryptedPem)
-        let fromEncrypted = try LibP2PCrypto.Keys.parseEncryptedPem(encryptedPem, password: "mypassword")
-
-        XCTAssertNotNil(fromDecrypted.privateKey)
-        XCTAssertNotNil(fromEncrypted.privateKey)
-
-        XCTAssertTrue(fromDecrypted.keyType == .rsa)
-        XCTAssertTrue(fromEncrypted.keyType == .rsa)
-
-        XCTAssertEqual(fromDecrypted.privateKey?.rawRepresentation, fromEncrypted.privateKey?.rawRepresentation)
-        XCTAssertEqual(fromDecrypted.publicKey.data, fromEncrypted.publicKey.data)
-
-        let attributes = fromEncrypted.attributes()
-        XCTAssertEqual(attributes!.size, 1024)
-        XCTAssertTrue(attributes!.isPrivate)
-    }
-    
-    private func pemToData(_ str:String) throws -> Data {
-        let chunks = str.split(separator: "\n")
-        guard chunks.count > 2,
-              let f = chunks.first, f.hasPrefix("-----BEGIN"),
-              let l = chunks.last, l.hasSuffix("-----") else {
-            throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
-        }
-
-        return try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64).data
-    }
+//    func testRSAEncryptedPrivateKeyPem2_Manual() throws {
 //
-//    /*
+//        // Generated with
+//        // openssl genpkey -algorithm RSA
+//        //   -pkeyopt rsa_keygen_bits:1024
+//        //   -pkeyopt rsa_keygen_pubexp:65537
+//        //   -out foo.pem
+//        let unencryptedPem = TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.UNENCRYPTED
 //
-//     /**
-//        * Attempts to decrypt a base64 encoded PrivateKey string
-//        * with the given password. The privateKey must have been exported
-//        * using the same password and underlying cipher (aes-gcm)
-//        *
-//        * @param {string} privateKey A base64 encoded encrypted key
-//        * @param {string} password
-//        * @returns {Promise<Uint8Array>} The private key protobuf
-//        */
-//       import: async function (privateKey, password) {
-//         const base64 = multibase.names.base64
-//         const encryptedKey = base64.decode(privateKey)
-//         const cipher = ciphers.create()
-//         return await cipher.decrypt(encryptedKey, password)
-//       }
+//        // Encrypted with
+//        // openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
+//        let encryptedPem = TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED
 //
-//     function create ({
-//       algorithmTagLength = 16,
-//       nonceLength = 12,
-//       keyLength = 16,
-//       digest = 'sha256',
-//       saltLength = 16,
-//       iterations = 32767
-//     } = {}) {
-//       const algorithm = 'aes-128-gcm'
+//        let asn = try Asn1Parser.parse(data: pemToData(encryptedPem))
 //
-//     /**
-//        * Decrypts the given cipher text with the provided key. The `key` should
-//        * be a cryptographically safe key and not a plaintext password. To use
-//        * a plaintext password, use `decrypt`. The options used to create
-//        * this decryption cipher must be the same as those used to create
-//        * the encryption cipher.
-//        *
-//        * @private
-//        * @param {Uint8Array} ciphertextAndNonce The data to decrypt
-//        * @param {Uint8Array} key
-//        * @returns {Promise<Uint8Array>}
-//        */
-//       async function decryptWithKey (ciphertextAndNonce, key) { // eslint-disable-line require-await
-//         // Create Uint8Arrays of nonce, ciphertext and tag.
-//         const nonce = ciphertextAndNonce.slice(0, nonceLength)
-//         const ciphertext = ciphertextAndNonce.slice(nonceLength, ciphertextAndNonce.length - algorithmTagLength)
-//         const tag = ciphertextAndNonce.slice(ciphertext.length + nonceLength)
+//        print(asn)
 //
-//         // Create the cipher instance.
-//         const cipher = crypto.createDecipheriv(algorithm, key, nonce)
+////        sequence(nodes: [
+////            libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+////                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes), //[42,134,72,134,247,13,1,5,13]
+////                libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+////                    libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+////                        libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes),      //PBKDF2 //[42,134,72,134,247,13,1,5,12]
+////                        libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+////                            libp2p_crypto.Asn1Parser.Node.octetString(data: 8 bytes),       //SALT
+////                            libp2p_crypto.Asn1Parser.Node.integer(data: 2 bytes)            //ITTERATIONS
+////                        ])
+////                    ]),
+////                    libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+////                        libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes),      //des-ede3-cbc [96,134,72,1,101,3,4,1,2]
+////                        libp2p_crypto.Asn1Parser.Node.octetString(data: 16 bytes)           //IV
+////                    ])
+////                ])
+////            ]),
+////            libp2p_crypto.Asn1Parser.Node.octetString(data: 640 bytes)
+////        ])
 //
-//         // Decrypt and return result.
-//         cipher.setAuthTag(tag)
-//         return uint8ArrayConcat([cipher.update(ciphertext), cipher.final()])
-//       }
+//        var saltData:Data? = nil
+//        var ivData:Data? = nil
+//        var itterationsData:Int? = nil
+//        var ciphertextData:Data? = nil
 //
-//       /**
-//        * Uses the provided password to derive a pbkdf2 key. The key
-//        * will then be used to decrypt the data. The options used to create
-//        * this decryption cipher must be the same as those used to create
-//        * the encryption cipher.
-//        *
-//        * @param {Uint8Array} data The data to decrypt
-//        * @param {string|Uint8Array} password A plain password
-//        */
-//       async function decrypt (data, password) { // eslint-disable-line require-await
-//         // Create Uint8Arrays of salt and ciphertextAndNonce.
-//         const salt = data.slice(0, saltLength)
-//         const ciphertextAndNonce = data.slice(saltLength)
+//        if case .sequence(let top) = asn {
+//            if case .sequence(let top1) = top.first {
+//                if case .sequence(let top2) = top1.last {
+//                    if case .sequence(let top3) = top2.first {
+//                        if case .sequence(let top4) = top3.last {
+//                            if case .octetString(let salt) = top4.first {
+//                                print("Found the salt: \(salt.asString(base: .base16))")
+//                                saltData = salt
+//                            }
+//                            if case .integer(let int) = top4.last {
+//                                print("Found the itterations: \(int.asString(base: .base16))")
+//                                itterationsData = Int(int.asString(base: .base16), radix: 16)
+//                            }
+//                        }
+//                    }
+//                    if case .sequence(let bottom3) = top2.last {
+//                        if case .octetString(let iv) = bottom3.last {
+//                            print("Found the IV: \(iv.asString(base: .base16))")
+//                            ivData = iv
+//                        }
+//                    }
+//                }
+//            }
+//            if case .octetString(let cipherText) = top.last {
+//                print("Found the ciphertext: \(cipherText.count)")
+//                ciphertextData = cipherText
+//            }
+//        }
 //
-//         if (typeof password === 'string' || password instanceof String) {
-//           password = uint8ArrayFromString(password)
-//         }
+//        // Ensure we have everything we need to proceed...
+//        guard let salt = saltData, let iv = ivData, let itterations = itterationsData, let ciphertext = ciphertextData else {
+//            return XCTFail("Failed to parse our pcks#8 key")
+//        }
 //
-//         // Derive the key using PBKDF2.
-//         const key = crypto.pbkdf2Sync(password, salt, iterations, keyLength, digest)
+//        // Attempt to derive the aes encryption key from the password and salt
+//        // PBKDF2-SHA1
+//        guard let key = PBKDF2.SHA1(password: "mypassword", salt: salt, keyByteCount: 16, rounds: itterations) else {
+//            return XCTFail("Failed to derive key from password and salt")
+//        }
 //
-//         // Decrypt and return result.
-//         return decryptWithKey(ciphertextAndNonce, key)
-//       }
-//     */
+//        // This also works, but it is incredibly slow...
+////        let key2 = try PKCS5.PBKDF2(
+////            password: Array("mypassword".utf8),
+////            salt: salt.bytes,
+////            iterations: itterations,
+////            keyLength: 16, /* 16 == AES-128, 32 == AES-256 */
+////            variant: .sha256
+////        ).calculate()
+//
+//        // These should be the same
+//        print("Key 1 -> \(key.asString(base: .base16))")
+//        //print("Key 2 -> \(key2.asString(base: .base16))")
+//
+//        //Create our CBC AES Cipher
+//        let aes = try AES(key: key.bytes, blockMode: CBC(iv: iv.bytes), padding: .noPadding)
+//
+//        // Try GCM
+//        //let aes = try AES(key: key.bytes, blockMode: GCM(iv: iv.bytes, mode: .detached), padding: .noPadding)
+//
+//        let decryptedKey = try aes.decrypt(ciphertext.bytes)
+//
+//        print(decryptedKey.asString(base: .base64))
+//
+//        let deASN = try Asn1Parser.parse(data: Data(decryptedKey))
+//        print(deASN)
+//        print("-----")
+//        let unASN = try Asn1Parser.parse(data: pemToData(unencryptedPem))
+//        print(unASN)
+//
+//        /// sequence(nodes: [
+//        ///     libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+//        ///         libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes),   // [42,134,72,134,247,13,1,1,1] => RSA Private Key
+//        ///         libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+//        ///             libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+//        ///                 libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes),
+//        ///                 libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+//        ///                     libp2p_crypto.Asn1Parser.Node.octetString(data: 8 bytes),
+//        ///                     libp2p_crypto.Asn1Parser.Node.integer(data: 2 bytes)
+//        ///                 ])
+//        ///             ]),
+//        ///             libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
+//        ///                 libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 9 bytes),
+//        ///                 libp2p_crypto.Asn1Parser.Node.octetString(data: 16 bytes)
+//        ///             ])
+//        ///         ]),
+//        ///         libp2p_crypto.Asn1Parser.Node.octetString(data: 640 bytes)
+//        ///     ])
+//        /// ])
+//
+//        var unencRawPrivateKeyData:Data? = nil
+//        if case .sequence(let top) = unASN {
+//            if case .octetString(let d) = top.last {
+//                print("Found our unenc octetString")
+//                unencRawPrivateKeyData = d
+//            }
+//        }
+//
+//        var decRawPrivateKeyData:Data? = nil
+//        if case .sequence(let top) = deASN {
+//            if case .octetString(let d) = top.last {
+//                print("Found our dec octetString")
+//                decRawPrivateKeyData = d
+//            }
+//        }
+//
+//        guard let uRawPrivKeyData = unencRawPrivateKeyData else {
+//            return XCTFail("Failed to parse our unencrypted private pem key...")
+//        }
+//
+//        guard let dRawPrivKeyData = decRawPrivateKeyData else {
+//            return XCTFail("Failed to parse our decrypted private pem key...")
+//        }
+//
+//        print(uRawPrivKeyData.asString(base: .base64))
+//        print(dRawPrivKeyData.asString(base: .base64))
+//
+//        print(dRawPrivKeyData.count)
+//        print(uRawPrivKeyData.count)
+//
+//        let og = try RSAPrivateKey(rawRepresentation: uRawPrivKeyData)
+//        let de = try RSAPrivateKey(rawRepresentation: dRawPrivKeyData)
+//
+//        print(og)
+//
+//        print(de)
+//
+//        XCTAssertEqual(uRawPrivKeyData, dRawPrivKeyData)
+//        XCTAssertEqual(og, de)
 //
 //
-//    /// Private Key
-//    /// Raw Bytes: [1, 187, 116, 255, 157, 152, 71, 218, 87, 128, 62, 200, 148, 52, 164, 109, 237, 133, 89, 216, 240, 207, 80, 244, 60, 41, 32, 117, 184, 2, 231, 7, 9, 237, 110, 180, 86, 120, 103, 133, 84, 215, 104, 137, 101, 171, 127, 154, 54, 153, 229, 201, 46, 20, 1, 221, 211, 59, 129, 102, 129, 5, 76, 249, 30, 182]
-//    /// Bytes: 66
-//    /// ---
-//    /// Public Key
-//    /// Raw Bytes: [0, 110, 196, 197, 185, 248, 73, 76, 67, 3, 127, 38, 67, 168, 163, 6, 20, 223, 146, 233, 198, 22, 77, 105, 120, 172, 14, 6, 95, 144, 206, 161, 48, 16, 46, 29, 26, 53, 177, 60, 132, 212, 146, 37, 203, 104, 104, 81, 129, 246, 149, 222, 98, 0, 249, 7, 134, 50, 83, 122, 75, 74, 242, 216, 234, 152, 0, 196, 255, 251, 57, 249, 20, 79, 95, 72, 156, 153, 174, 189, 153, 145, 253, 72, 69, 57, 114, 180, 179, 100, 173, 183, 100, 235, 84, 42, 66, 116, 93, 139, 64, 190, 225, 15, 90, 159, 178, 212, 204, 25, 174, 159, 36, 177, 45, 227, 230, 147, 191, 167, 141, 103, 47, 96, 183, 159, 143, 89, 155, 144, 199, 38]
-//    /// Bytes: 132
-//    /// ---
-//    func testECRawRep() throws {
-//        let key = P521.Signing.PrivateKey()
+//        //XCTAssertEqual(uRawPrivKeyData.bytes, decryptedKey, "Not Equal")
 //
-//        let rawPrivKey = key.rawRepresentation
-//        let rawPubKey = key.publicKey.rawRepresentation
-//
-//        //print(key.x963Representation.asString(base: .base64))
-//        print("Private Key")
-//        print("Raw Bytes: \(rawPrivKey.bytes)")
-//        print("Bytes: \(rawPrivKey.bytes.count)")
-//        print("---")
-//        //print(rawRep.asString(base: .base64))
-//        print("Public Key")
-//        print("Raw Bytes: \(rawPubKey.bytes)")
-//        print("Bytes: \(rawPubKey.bytes.count)")
-//        print("---")
-//
-//        let importedKey = try P521.Signing.PrivateKey(rawRepresentation: rawPrivKey)
-//
-//        print(importedKey)
 //    }
 //
-//    func testImportEncryptedPemKey() throws {
-//        /*
-//         * Generated with
-//         * openssl genpkey -algorithm RSA
-//         *   -pkeyopt rsa_keygen_bits:1024
-//         *   -pkeyopt rsa_keygen_pubexp:65537
-//         *   -out foo.pem
-//         * openssl pkcs8 -in foo.pem -topk8 -v2 des3 -passout pass:mypassword
-//         */
-//        let pem = """
-//        -----BEGIN ENCRYPTED PRIVATE KEY-----
-//        MIICxjBABgkqhkiG9w0BBQ0wMzAbBgkqhkiG9w0BBQwwDgQISznrfHd+D58CAggA
-//        MBQGCCqGSIb3DQMHBAhx0DnnUvDiHASCAoCceplm+Cmwlgvn4hNsv6e4c/S1iA7w
-//        2hU7Jt8JgRCIMWjP2FthXOAFLa2fD4g3qncYXcDAFBXNyoh25OgOwstO14YkxhDi
-//        wG4TeppGUt9IlyyCol6Z4WhQs1TGm5OcD5xDta+zBXsBnlgmKLD5ZXPEYB+3v/Dg
-//        SvM4sQz6NgkVHN52hchERsnknwSOghiK9mIBH0RZU5LgzlDy2VoBCiEPVdZ7m4F2
-//        dft5e82zFS58vwDeNN/0r7fC54TyJf/8k3q94+4Hp0mseZ67LR39cvnEKuDuFROm
-//        kLPLekWt5R2NGdunSQlA79BkrNB1ADruO8hQOOHMO9Y3/gNPWLKk+qrfHcUni+w3
-//        Ofq+rdfakHRb8D6PUmsp3wQj6fSOwOyq3S50VwP4P02gKcZ1om1RvEzTbVMyL3sh
-//        hZcVB3vViu3DO2/56wo29lPVTpj9bSYjw/CO5jNpPBab0B/Gv7JAR0z4Q8gn6OPy
-//        qf+ddyW4Kcb6QUtMrYepghDthOiS3YJV/zCNdL3gTtVs5Ku9QwQ8FeM0/5oJZPlC
-//        TxGuOFEJnYRWqIdByCP8mp/qXS5alSR4uoYQSd7vZG4vkhkPNSAwux/qK1IWfqiW
-//        3XlZzrbD//9IzFVqGRs4nRIFq85ULK0zAR57HEKIwGyn2brEJzrxpV6xsHBp+m4w
-//        6r0+PtwuWA0NauTCUzJ1biUdH8t0TgBL6YLaMjlrfU7JstH3TpcZzhJzsjfy0+zV
-//        NT2TO3kSzXpQ5M2VjOoHPm2fqxD/js+ThDB3QLi4+C7HqakfiTY1lYzXl9/vayt6
-//        DUD29r9pYL9ErB9tYko2rat54EY7k7Ts6S5jf+8G7Zz234We1APhvqaG
-//        -----END ENCRYPTED PRIVATE KEY-----
-//        """
+//    func testRSAEncryptedPrivateKeyPem2() throws {
 //
-//        let chunks = pem.split(separator: "\n")
-//        guard chunks.count > 3,
+//        // Generated with
+//        // openssl genpkey -algorithm RSA
+//        //   -pkeyopt rsa_keygen_bits:1024
+//        //   -pkeyopt rsa_keygen_pubexp:65537
+//        //   -out foo.pem
+//        let unencryptedPem = TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.UNENCRYPTED
+//
+//        // Encrypted with
+//        // openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
+//        let encryptedPem = TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED
+//
+//        let fromDecrypted = try LibP2PCrypto.Keys.parsePem(unencryptedPem)
+//        let fromEncrypted = try LibP2PCrypto.Keys.parseEncryptedPem(encryptedPem, password: "mypassword")
+//
+//        XCTAssertNotNil(fromDecrypted.privateKey)
+//        XCTAssertNotNil(fromEncrypted.privateKey)
+//
+//        XCTAssertTrue(fromDecrypted.keyType == .rsa)
+//        XCTAssertTrue(fromEncrypted.keyType == .rsa)
+//
+//        XCTAssertEqual(fromDecrypted.privateKey?.rawRepresentation, fromEncrypted.privateKey?.rawRepresentation)
+//        XCTAssertEqual(fromDecrypted.publicKey.data, fromEncrypted.publicKey.data)
+//
+//        let attributes = fromEncrypted.attributes()
+//        XCTAssertEqual(attributes!.size, 1024)
+//        XCTAssertTrue(attributes!.isPrivate)
+//    }
+//
+//    private func pemToData(_ str:String) throws -> Data {
+//        let chunks = str.split(separator: "\n")
+//        guard chunks.count > 2,
 //              let f = chunks.first, f.hasPrefix("-----BEGIN"),
 //              let l = chunks.last, l.hasSuffix("-----") else {
 //            throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
 //        }
 //
-//        let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-//
-//        let asn = try Asn1Parser.parse(data: raw.data)
-//
-//        var bitString:Data? = nil
-//        var oct:Data? = nil
-//        if case .sequence(let nodes) = asn {
-//            nodes.forEach {
-//                switch $0 {
-//                case .objectIdentifier(let data):
-//                    print("Got our obj id: \(data.asString(base: .base64))")
-//                    print(String(data: data, encoding: .utf8) ?? "NIL")
-//                case .bitString(let data):
-//                    print("Got our bit string: \(data.asString(base: .base64))")
-//                    bitString = data
-//                case .sequence(let nodes):
-//                    nodes.forEach { n in
-//                        switch n {
-//                        case .objectIdentifier(let data):
-//                            print("Got our obj id: \(data.asString(base: .base16))")
-//                            print(data.bytes.map { "\($0)"}.joined(separator: ",") )
-//                        case .octetString(let data):
-//                            oct = data
-//                            //oct = raw.data
-//                        default:
-//                            print(n)
-//                        }
-//                    }
-//                case .octetString(let data):
-//                    //bitString = data
-//                    oct = data
-//                    //oct = raw.data
-//                default:
-//                    print($0)
-//                }
-//            }
-//        }
-//
-//        if let bits = bitString {
-//            print("Trying to Init Encrypted RSA Key from bitString")
-//            let sk = try RSAPrivate(rawRepresentation: bits)
-//            print(sk)
-//        } else if let oct = oct {
-//            print("Trying to Init Encrypted EC Key from octetString")
-//            let sk = try RSAPrivate(rawRepresentation: oct)
-//            print(sk)
-//        }
-//
+//        return try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64).data
 //    }
-
-////    func testSimplePEMP384SEC1PrivateKey() throws {
-////        let pemPrivateKey = """
-////        -----BEGIN EC PRIVATE KEY-----
-////        MIGkAgEBBDDrN+qjvW7TqcXrKlTFbSP8AdbsIdqvRAgWHlaBicP7dkx+HKQidSiS
-////        B2RLWyjSrs6gBwYFK4EEACKhZANiAAQrRiaztGpInYo1XqMnNokWY6g1TcgMuzgq
-////        Ug6LzFQbCAqCrcnM9+c9Z4/63dC06ulL/KbLQgThjSiqRzgbzvmOvB0OzlpX1weK
-////        usFrF4Pi0B9pKPmVCAlSzaxVEmRsbmw=
-////        -----END EC PRIVATE KEY-----
+////
+////    /*
+////
+////     /**
+////        * Attempts to decrypt a base64 encoded PrivateKey string
+////        * with the given password. The privateKey must have been exported
+////        * using the same password and underlying cipher (aes-gcm)
+////        *
+////        * @param {string} privateKey A base64 encoded encrypted key
+////        * @param {string} password
+////        * @returns {Promise<Uint8Array>} The private key protobuf
+////        */
+////       import: async function (privateKey, password) {
+////         const base64 = multibase.names.base64
+////         const encryptedKey = base64.decode(privateKey)
+////         const cipher = ciphers.create()
+////         return await cipher.decrypt(encryptedKey, password)
+////       }
+////
+////     function create ({
+////       algorithmTagLength = 16,
+////       nonceLength = 12,
+////       keyLength = 16,
+////       digest = 'sha256',
+////       saltLength = 16,
+////       iterations = 32767
+////     } = {}) {
+////       const algorithm = 'aes-128-gcm'
+////
+////     /**
+////        * Decrypts the given cipher text with the provided key. The `key` should
+////        * be a cryptographically safe key and not a plaintext password. To use
+////        * a plaintext password, use `decrypt`. The options used to create
+////        * this decryption cipher must be the same as those used to create
+////        * the encryption cipher.
+////        *
+////        * @private
+////        * @param {Uint8Array} ciphertextAndNonce The data to decrypt
+////        * @param {Uint8Array} key
+////        * @returns {Promise<Uint8Array>}
+////        */
+////       async function decryptWithKey (ciphertextAndNonce, key) { // eslint-disable-line require-await
+////         // Create Uint8Arrays of nonce, ciphertext and tag.
+////         const nonce = ciphertextAndNonce.slice(0, nonceLength)
+////         const ciphertext = ciphertextAndNonce.slice(nonceLength, ciphertextAndNonce.length - algorithmTagLength)
+////         const tag = ciphertextAndNonce.slice(ciphertext.length + nonceLength)
+////
+////         // Create the cipher instance.
+////         const cipher = crypto.createDecipheriv(algorithm, key, nonce)
+////
+////         // Decrypt and return result.
+////         cipher.setAuthTag(tag)
+////         return uint8ArrayConcat([cipher.update(ciphertext), cipher.final()])
+////       }
+////
+////       /**
+////        * Uses the provided password to derive a pbkdf2 key. The key
+////        * will then be used to decrypt the data. The options used to create
+////        * this decryption cipher must be the same as those used to create
+////        * the encryption cipher.
+////        *
+////        * @param {Uint8Array} data The data to decrypt
+////        * @param {string|Uint8Array} password A plain password
+////        */
+////       async function decrypt (data, password) { // eslint-disable-line require-await
+////         // Create Uint8Arrays of salt and ciphertextAndNonce.
+////         const salt = data.slice(0, saltLength)
+////         const ciphertextAndNonce = data.slice(saltLength)
+////
+////         if (typeof password === 'string' || password instanceof String) {
+////           password = uint8ArrayFromString(password)
+////         }
+////
+////         // Derive the key using PBKDF2.
+////         const key = crypto.pbkdf2Sync(password, salt, iterations, keyLength, digest)
+////
+////         // Decrypt and return result.
+////         return decryptWithKey(ciphertextAndNonce, key)
+////       }
+////     */
+////
+////
+////    /// Private Key
+////    /// Raw Bytes: [1, 187, 116, 255, 157, 152, 71, 218, 87, 128, 62, 200, 148, 52, 164, 109, 237, 133, 89, 216, 240, 207, 80, 244, 60, 41, 32, 117, 184, 2, 231, 7, 9, 237, 110, 180, 86, 120, 103, 133, 84, 215, 104, 137, 101, 171, 127, 154, 54, 153, 229, 201, 46, 20, 1, 221, 211, 59, 129, 102, 129, 5, 76, 249, 30, 182]
+////    /// Bytes: 66
+////    /// ---
+////    /// Public Key
+////    /// Raw Bytes: [0, 110, 196, 197, 185, 248, 73, 76, 67, 3, 127, 38, 67, 168, 163, 6, 20, 223, 146, 233, 198, 22, 77, 105, 120, 172, 14, 6, 95, 144, 206, 161, 48, 16, 46, 29, 26, 53, 177, 60, 132, 212, 146, 37, 203, 104, 104, 81, 129, 246, 149, 222, 98, 0, 249, 7, 134, 50, 83, 122, 75, 74, 242, 216, 234, 152, 0, 196, 255, 251, 57, 249, 20, 79, 95, 72, 156, 153, 174, 189, 153, 145, 253, 72, 69, 57, 114, 180, 179, 100, 173, 183, 100, 235, 84, 42, 66, 116, 93, 139, 64, 190, 225, 15, 90, 159, 178, 212, 204, 25, 174, 159, 36, 177, 45, 227, 230, 147, 191, 167, 141, 103, 47, 96, 183, 159, 143, 89, 155, 144, 199, 38]
+////    /// Bytes: 132
+////    /// ---
+////    func testECRawRep() throws {
+////        let key = P521.Signing.PrivateKey()
+////
+////        let rawPrivKey = key.rawRepresentation
+////        let rawPubKey = key.publicKey.rawRepresentation
+////
+////        //print(key.x963Representation.asString(base: .base64))
+////        print("Private Key")
+////        print("Raw Bytes: \(rawPrivKey.bytes)")
+////        print("Bytes: \(rawPrivKey.bytes.count)")
+////        print("---")
+////        //print(rawRep.asString(base: .base64))
+////        print("Public Key")
+////        print("Raw Bytes: \(rawPubKey.bytes)")
+////        print("Bytes: \(rawPubKey.bytes.count)")
+////        print("---")
+////
+////        let importedKey = try P521.Signing.PrivateKey(rawRepresentation: rawPrivKey)
+////
+////        print(importedKey)
+////    }
+////
+////    func testImportEncryptedPemKey() throws {
+////        /*
+////         * Generated with
+////         * openssl genpkey -algorithm RSA
+////         *   -pkeyopt rsa_keygen_bits:1024
+////         *   -pkeyopt rsa_keygen_pubexp:65537
+////         *   -out foo.pem
+////         * openssl pkcs8 -in foo.pem -topk8 -v2 des3 -passout pass:mypassword
+////         */
+////        let pem = """
+////        -----BEGIN ENCRYPTED PRIVATE KEY-----
+////        MIICxjBABgkqhkiG9w0BBQ0wMzAbBgkqhkiG9w0BBQwwDgQISznrfHd+D58CAggA
+////        MBQGCCqGSIb3DQMHBAhx0DnnUvDiHASCAoCceplm+Cmwlgvn4hNsv6e4c/S1iA7w
+////        2hU7Jt8JgRCIMWjP2FthXOAFLa2fD4g3qncYXcDAFBXNyoh25OgOwstO14YkxhDi
+////        wG4TeppGUt9IlyyCol6Z4WhQs1TGm5OcD5xDta+zBXsBnlgmKLD5ZXPEYB+3v/Dg
+////        SvM4sQz6NgkVHN52hchERsnknwSOghiK9mIBH0RZU5LgzlDy2VoBCiEPVdZ7m4F2
+////        dft5e82zFS58vwDeNN/0r7fC54TyJf/8k3q94+4Hp0mseZ67LR39cvnEKuDuFROm
+////        kLPLekWt5R2NGdunSQlA79BkrNB1ADruO8hQOOHMO9Y3/gNPWLKk+qrfHcUni+w3
+////        Ofq+rdfakHRb8D6PUmsp3wQj6fSOwOyq3S50VwP4P02gKcZ1om1RvEzTbVMyL3sh
+////        hZcVB3vViu3DO2/56wo29lPVTpj9bSYjw/CO5jNpPBab0B/Gv7JAR0z4Q8gn6OPy
+////        qf+ddyW4Kcb6QUtMrYepghDthOiS3YJV/zCNdL3gTtVs5Ku9QwQ8FeM0/5oJZPlC
+////        TxGuOFEJnYRWqIdByCP8mp/qXS5alSR4uoYQSd7vZG4vkhkPNSAwux/qK1IWfqiW
+////        3XlZzrbD//9IzFVqGRs4nRIFq85ULK0zAR57HEKIwGyn2brEJzrxpV6xsHBp+m4w
+////        6r0+PtwuWA0NauTCUzJ1biUdH8t0TgBL6YLaMjlrfU7JstH3TpcZzhJzsjfy0+zV
+////        NT2TO3kSzXpQ5M2VjOoHPm2fqxD/js+ThDB3QLi4+C7HqakfiTY1lYzXl9/vayt6
+////        DUD29r9pYL9ErB9tYko2rat54EY7k7Ts6S5jf+8G7Zz234We1APhvqaG
+////        -----END ENCRYPTED PRIVATE KEY-----
 ////        """
 ////
-////        // Test the working private keys.
-////        let signingKey = try orFail { try P384.Signing.PrivateKey(pemRepresentation: pemPrivateKey) }
-////        let keyAgreementKey = try orFail { try P384.KeyAgreement.PrivateKey(pemRepresentation: pemPrivateKey) }
-////        XCTAssertEqual(signingKey.rawRepresentation, keyAgreementKey.rawRepresentation)
-////
-////        // Now the non-matching private keys.
-////        XCTAssertThrowsError(try P256.Signing.PrivateKey(pemRepresentation: pemPrivateKey))
-////        XCTAssertThrowsError(try P256.KeyAgreement.PrivateKey(pemRepresentation: pemPrivateKey))
-////        XCTAssertThrowsError(try P521.Signing.PrivateKey(pemRepresentation: pemPrivateKey))
-////        XCTAssertThrowsError(try P521.KeyAgreement.PrivateKey(pemRepresentation: pemPrivateKey))
-////
-////        // Now the public keys, which all fail.
-////        XCTAssertThrowsError(try P256.Signing.PublicKey(pemRepresentation: pemPrivateKey)) { error in
-////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
-////        }
-////        XCTAssertThrowsError(try P256.KeyAgreement.PublicKey(pemRepresentation: pemPrivateKey)) { error in
-////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
-////        }
-////        XCTAssertThrowsError(try P384.Signing.PublicKey(pemRepresentation: pemPrivateKey)) { error in
-////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
-////        }
-////        XCTAssertThrowsError(try P384.KeyAgreement.PublicKey(pemRepresentation: pemPrivateKey)) { error in
-////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
-////        }
-////        XCTAssertThrowsError(try P521.Signing.PublicKey(pemRepresentation: pemPrivateKey)) { error in
-////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
-////        }
-////        XCTAssertThrowsError(try P521.KeyAgreement.PublicKey(pemRepresentation: pemPrivateKey)) { error in
-////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
+////        let chunks = pem.split(separator: "\n")
+////        guard chunks.count > 3,
+////              let f = chunks.first, f.hasPrefix("-----BEGIN"),
+////              let l = chunks.last, l.hasSuffix("-----") else {
+////            throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
 ////        }
 ////
-////        // We can't reserialize the SEC1 keys, we don't emit them.
+////        let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
+////
+////        let asn = try Asn1Parser.parse(data: raw.data)
+////
+////        var bitString:Data? = nil
+////        var oct:Data? = nil
+////        if case .sequence(let nodes) = asn {
+////            nodes.forEach {
+////                switch $0 {
+////                case .objectIdentifier(let data):
+////                    print("Got our obj id: \(data.asString(base: .base64))")
+////                    print(String(data: data, encoding: .utf8) ?? "NIL")
+////                case .bitString(let data):
+////                    print("Got our bit string: \(data.asString(base: .base64))")
+////                    bitString = data
+////                case .sequence(let nodes):
+////                    nodes.forEach { n in
+////                        switch n {
+////                        case .objectIdentifier(let data):
+////                            print("Got our obj id: \(data.asString(base: .base16))")
+////                            print(data.bytes.map { "\($0)"}.joined(separator: ",") )
+////                        case .octetString(let data):
+////                            oct = data
+////                            //oct = raw.data
+////                        default:
+////                            print(n)
+////                        }
+////                    }
+////                case .octetString(let data):
+////                    //bitString = data
+////                    oct = data
+////                    //oct = raw.data
+////                default:
+////                    print($0)
+////                }
+////            }
+////        }
+////
+////        if let bits = bitString {
+////            print("Trying to Init Encrypted RSA Key from bitString")
+////            let sk = try RSAPrivate(rawRepresentation: bits)
+////            print(sk)
+////        } else if let oct = oct {
+////            print("Trying to Init Encrypted EC Key from octetString")
+////            let sk = try RSAPrivate(rawRepresentation: oct)
+////            print(sk)
+////        }
+////
 ////    }
-
-
+//
+//////    func testSimplePEMP384SEC1PrivateKey() throws {
+//////        let pemPrivateKey = """
+//////        -----BEGIN EC PRIVATE KEY-----
+//////        MIGkAgEBBDDrN+qjvW7TqcXrKlTFbSP8AdbsIdqvRAgWHlaBicP7dkx+HKQidSiS
+//////        B2RLWyjSrs6gBwYFK4EEACKhZANiAAQrRiaztGpInYo1XqMnNokWY6g1TcgMuzgq
+//////        Ug6LzFQbCAqCrcnM9+c9Z4/63dC06ulL/KbLQgThjSiqRzgbzvmOvB0OzlpX1weK
+//////        usFrF4Pi0B9pKPmVCAlSzaxVEmRsbmw=
+//////        -----END EC PRIVATE KEY-----
+//////        """
+//////
+//////        // Test the working private keys.
+//////        let signingKey = try orFail { try P384.Signing.PrivateKey(pemRepresentation: pemPrivateKey) }
+//////        let keyAgreementKey = try orFail { try P384.KeyAgreement.PrivateKey(pemRepresentation: pemPrivateKey) }
+//////        XCTAssertEqual(signingKey.rawRepresentation, keyAgreementKey.rawRepresentation)
+//////
+//////        // Now the non-matching private keys.
+//////        XCTAssertThrowsError(try P256.Signing.PrivateKey(pemRepresentation: pemPrivateKey))
+//////        XCTAssertThrowsError(try P256.KeyAgreement.PrivateKey(pemRepresentation: pemPrivateKey))
+//////        XCTAssertThrowsError(try P521.Signing.PrivateKey(pemRepresentation: pemPrivateKey))
+//////        XCTAssertThrowsError(try P521.KeyAgreement.PrivateKey(pemRepresentation: pemPrivateKey))
+//////
+//////        // Now the public keys, which all fail.
+//////        XCTAssertThrowsError(try P256.Signing.PublicKey(pemRepresentation: pemPrivateKey)) { error in
+//////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
+//////        }
+//////        XCTAssertThrowsError(try P256.KeyAgreement.PublicKey(pemRepresentation: pemPrivateKey)) { error in
+//////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
+//////        }
+//////        XCTAssertThrowsError(try P384.Signing.PublicKey(pemRepresentation: pemPrivateKey)) { error in
+//////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
+//////        }
+//////        XCTAssertThrowsError(try P384.KeyAgreement.PublicKey(pemRepresentation: pemPrivateKey)) { error in
+//////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
+//////        }
+//////        XCTAssertThrowsError(try P521.Signing.PublicKey(pemRepresentation: pemPrivateKey)) { error in
+//////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
+//////        }
+//////        XCTAssertThrowsError(try P521.KeyAgreement.PublicKey(pemRepresentation: pemPrivateKey)) { error in
+//////            XCTAssertEqual(error as? CryptoKitASN1Error, .invalidPEMDocument)
+//////        }
+//////
+//////        // We can't reserialize the SEC1 keys, we don't emit them.
+//////    }
+//
+//
     func testRSA_Pem_Parsing_Public() throws {
-        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_1024_PUBLIC)
+        //let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_1024_PUBLIC)
+        let rsaPublic = try RSAPublicKey(pem: TestPEMKeys.RSA_1024_PUBLIC, asType: RSAPublicKey.self)
 
-        print(parsed)
+        print(rsaPublic)
     }
-
+    
     func testRSA_Pem_Parsing_Private() throws {
-        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_1024_PRIVATE)
+        let rsaPrivate = try RSAPrivateKey(pem: TestPEMKeys.RSA_1024_PRIVATE, asType: RSAPrivateKey.self)
 
-        print(parsed)
+        print(rsaPrivate)
     }
 
 //    func testEC_Pem_Parsing_Public() throws {
@@ -1849,27 +1856,158 @@ final class libp2p_cryptoTests: XCTestCase {
 //    }
 
     func testEd25519_Pem_Parsing_Public() throws {
-        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.Ed25519_KeyPair.PUBLIC)
+        //let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.Ed25519_KeyPair.PUBLIC)
 
-        print(parsed)
+        //print(parsed)
+        
+        let ed25519Public = try Curve25519.Signing.PublicKey(pem: TestPEMKeys.Ed25519_KeyPair.PUBLIC, asType: Curve25519.Signing.PublicKey.self)
+        
+        print(ed25519Public)
+        
+        let ed25519Private = try Curve25519.Signing.PrivateKey(pem: TestPEMKeys.Ed25519_KeyPair.PRIVATE, asType: Curve25519.Signing.PrivateKey.self)
+
+        print(ed25519Private)
+        
+        XCTAssertEqual(ed25519Private.publicKey, ed25519Public)
     }
 
-    func testEd25519_Pem_Parsing_Private() throws {
-        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.Ed25519_KeyPair.PRIVATE)
-
-        print(parsed)
+//    func testEd25519_Pem_Parsing_Private() throws {
+//        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.Ed25519_KeyPair.PRIVATE)
+//
+//        print(parsed)
+//    }
+//
+    func testASN1Decoding() throws {
+            
+        let data = Data(hex: "88e51176c4ad9ae98c80cd9cdbd4e553111d371ad09ecf153de334b15d3c")
+        
+        let asn = try ASN1.Decoder.decode(data: data)
+        
+        print(asn)
+        
     }
-
+    
+    /// openssl ecparam -genkey -name secp256k1 -out ec_key.pem -param_enc explicit
+    /// Create Secp256k1 Key: `openssl ecparam -name secp256k1 -genkey -noout -out ec-secp256k1-priv-key.pem`
+    /// Create Public PEM from Private PEM: `openssl ec -in ec-secp256k1-priv-key.pem -pubout > ec-secp256k1-pub-key.pem`
     func testSecp256k1_Pem_Parsing_Public() throws {
-        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.SECP256k1_KeyPair.PUBLIC)
+        //let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.SECP256k1_KeyPair.PUBLIC)
 
+        //print(parsed)
+        
+        //2a8648ce3d0201
+        //2b8104000a
+        //let secp256k1Public = try Secp256k1PublicKey(pem: TestPEMKeys.SECP256k1_KeyPair.PUBLIC, asType: Secp256k1PublicKey.self)
+        
+        //print(secp256k1Public)
+        
+        //let secp256k1Private = try Secp256k1PrivateKey(pem: TestPEMKeys.SECP256k1_KeyPair.PRIVATE, asType: Secp256k1PrivateKey.self)
+
+        //print(secp256k1Private)
+
+//        XCTAssertEqual(secp256k1Private.publicKey, secp256k1Public)
+        
+        ///   0:d=0  hl=3 l= 162 cons: SEQUENCE
+        ///   3:d=1  hl=2 l=   1 prim:  INTEGER           :01
+        ///   6:d=1  hl=2 l=  44 cons:  SEQUENCE
+        ///   8:d=2  hl=2 l=   7 prim:   OBJECT            :prime-field
+        ///  17:d=2  hl=2 l=  33 prim:   INTEGER           :FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+        ///  52:d=1  hl=2 l=   6 cons:  SEQUENCE
+        ///  54:d=2  hl=2 l=   1 prim:   OCTET STRING      [HEX DUMP]:00
+        ///  57:d=2  hl=2 l=   1 prim:   OCTET STRING      [HEX DUMP]:07
+        ///  60:d=1  hl=2 l=  65 prim:  OCTET STRING      [HEX DUMP]:0479BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
+        /// 127:d=1  hl=2 l=  33 prim:  INTEGER           :FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+        /// 162:d=1  hl=2 l=   1 prim:  INTEGER           :01
+        let ecPEM = """
+        -----BEGIN EC PRIVATE KEY-----
+        MIIBEwIBAQQgiOURdsStmumMgM2c29TlUxEdNxrQns8VPeM0sV08MtKggaUwgaIC
+        AQEwLAYHKoZIzj0BAQIhAP////////////////////////////////////7///wv
+        MAYEAQAEAQcEQQR5vmZ++dy7rFWgYpXOhwsHApv82y3OKNlZ8oFbFvgXmEg62ncm
+        o8RlXaT7/A4RCKj9F7RIpoVUGZxH0I/7ENS4AiEA/////////////////////rqu
+        3OavSKA7v9JejNA2QUECAQGhRANCAASDsnwEULWLn8HV8iobNGNAdze/SbwbehJ3
+        l+gvkHpYQ2tMD9d4NTMDKFTxPUN+w0ktADgGaPhd2flQ2dNL7nFT
+        -----END EC PRIVATE KEY-----
+        """
+        let ecPEM2 = """
+        -----BEGIN EC PRIVATE KEY-----
+        MHQCAQEEIFTQEjBp0zAIiafoD6+xwBS/kAvc4qq0BVZ1QTk//EguoAcGBSuBBAAK
+        oUQDQgAEmLNqAvsnenwfMz8+U5MUGb4zwhfxVBjRqn7Bqa/CCVPtsqSMfhzaE30u
+        OQlpl7VjL/jrZYpUv8aPRfTBSn396w==
+        -----END EC PRIVATE KEY-----
+        """
+        
+        let ecParams = """
+        -----BEGIN EC PARAMETERS-----
+        BgUrgQQACg==
+        -----END EC PARAMETERS-----
+        """
+        
+        let ecPEMPrivate = """
+        -----BEGIN EC PRIVATE KEY-----
+        MHQCAQEEINMfarC/mmrd3GKaOfl+7iXffsdg4MqMa4HY5wkBDilooAcGBSuBBAAK
+        oUQDQgAEJ9kHLQX2sVEh14Duq23w5af30636vUx93jVsMIDhONwwuQc2N7mv4/oY
+        8oB3EPTRyh+o+6J+9qXI1VaJjvSr5Q==
+        -----END EC PRIVATE KEY-----
+        """
+        let ecPEMPublic = """
+        -----BEGIN PUBLIC KEY-----
+        MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEJ9kHLQX2sVEh14Duq23w5af30636vUx9
+        3jVsMIDhONwwuQc2N7mv4/oY8oB3EPTRyh+o+6J+9qXI1VaJjvSr5Q==
+        -----END PUBLIC KEY-----
+        """
+        
+        let pemBase64String = ecPEM2.split(separator: "\n").dropFirst().dropLast().joined()
+        let pemData = Data(base64Encoded: pemBase64String)!
+        
+        print(pemData.toHexString())
+        
+        //30820113
+        //  020101
+        //  042088e51176c4ad9ae98c80cd9cdbd4e553111d371ad09ecf153de334b15d3c32d2a081a53081a2
+        //  020101
+        //  302c06072a8648ce3d0101022100fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
+        //  3006
+        //    040100
+        //    040107
+        //  04410479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8
+        //  022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0//364141
+        //  020101
+        //  a144
+        //    0342
+        //      00
+        //      0483b27c0450b58b9fc1d5f22a1b3463407737bf49bc1b7a127797e82f907a58436b4c0fd7783533032854f13d437ec3492d00380668f85dd9f950d9d34bee7153
+        
+        
+        //3074
+        //  020101
+        //  042054d0123069d3300889a7e80fafb1c014bf900bdce2aab405567541393ffc
+        //482ea00706052b8104000aa1440342000498b36a02fb277a7c1f333f3e53931419be33c217f15418d1aa7ec1a9afc20953edb2a48c7e1cda137d2e39096997b5632ff8eb658a54bfc68f45f4c14a7dfdeb
+        
+        let parsed = try ASN1.Decoder.decode(data: pemData)
+        
         print(parsed)
+        
+//        if case .octetString(let rawData) = parsed {
+//            let edPrivate = try Curve25519.Signing.PrivateKey(rawRepresentation: rawData)
+//            print(edPrivate)
+//        }
     }
+    
+//
+//    func testSecp256k1_Pem_Parsing_Private() throws {
+//        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.SECP256k1_KeyPair.PRIVATE)
+//
+//        print(parsed)
+//    }
+    
+    func testImportSecp256k1PEM() throws {
+        let secp256k1Public = try Secp256k1PublicKey(pem: TestPEMKeys.SECP256k1_KeyPair.PUBLIC, asType: Secp256k1PublicKey.self)
+        
+        print(secp256k1Public)
+        
+        let secp256k1Private = try Secp256k1PrivateKey(pem: TestPEMKeys.SECP256k1_KeyPair.PRIVATE, asType: Secp256k1PrivateKey.self)
 
-    func testSecp256k1_Pem_Parsing_Private() throws {
-        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.SECP256k1_KeyPair.PRIVATE)
-
-        print(parsed)
+        print(secp256k1Private)
     }
     
     /// -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -2049,29 +2187,29 @@ final class libp2p_cryptoTests: XCTestCase {
         ("testHMACKey", testHMACKey),
         ("testHMACBaseEncoded", testHMACBaseEncoded),
         ("testHMACVerify", testHMACVerify),
-        ("testPemParsing", testPemParsing),
-        ("testPemParsing_RSA_1024_Public", testPemParsing_RSA_1024_Public),
-        ("testPemParsing_RSA_1024_Public_2", testPemParsing_RSA_1024_Public_2),
-        ("testPemParsing_RSA_2048_Public", testPemParsing_RSA_2048_Public),
-        ("testPemParsing_RSA_3072_Public", testPemParsing_RSA_3072_Public),
-        ("testPemParsing_RSA_4096_Public", testPemParsing_RSA_4096_Public),
-        ("testRSAOpenSSLPemImport", testRSAOpenSSLPemImport),
-        ("testED25519PemImport_Public_Manual", testED25519PemImport_Public_Manual),
-        ("testED25519PemImport_Public", testED25519PemImport_Public),
-        ("testED25519PemImport_Private_Manual", testED25519PemImport_Private_Manual),
-        ("testED25519PemImport_Private", testED25519PemImport_Private),
-        ("testSecp256k1PemImport_Public_Manual", testSecp256k1PemImport_Public_Manual),
-        ("testSecp256k1PemImport_Public", testSecp256k1PemImport_Public),
-        ("testSecp256k1PemImport_Private_Manual", testSecp256k1PemImport_Private_Manual),
-        ("testSecp256k1PemImport_Private", testSecp256k1PemImport_Private),
-        ("testRSAEncryptedPrivateKeyPem2_Manual", testRSAEncryptedPrivateKeyPem2_Manual),
-        ("testRSAEncryptedPrivateKeyPem2", testRSAEncryptedPrivateKeyPem2),
-        ("testRSA_Pem_Parsing_Public", testRSA_Pem_Parsing_Public),
-        ("testRSA_Pem_Parsing_Private", testRSA_Pem_Parsing_Private),
-        ("testEd25519_Pem_Parsing_Public", testEd25519_Pem_Parsing_Public),
-        ("testEd25519_Pem_Parsing_Private", testEd25519_Pem_Parsing_Private),
-        ("testSecp256k1_Pem_Parsing_Public", testSecp256k1_Pem_Parsing_Public),
-        ("testSecp256k1_Pem_Parsing_Private", testSecp256k1_Pem_Parsing_Private),
+        //("testPemParsing", testPemParsing),
+        //("testPemParsing_RSA_1024_Public", testPemParsing_RSA_1024_Public),
+        //("testPemParsing_RSA_1024_Public_2", testPemParsing_RSA_1024_Public_2),
+        //("testPemParsing_RSA_2048_Public", testPemParsing_RSA_2048_Public),
+        //("testPemParsing_RSA_3072_Public", testPemParsing_RSA_3072_Public),
+        //("testPemParsing_RSA_4096_Public", testPemParsing_RSA_4096_Public),
+        //("testRSAOpenSSLPemImport", testRSAOpenSSLPemImport),
+        //("testED25519PemImport_Public_Manual", testED25519PemImport_Public_Manual),
+        //("testED25519PemImport_Public", testED25519PemImport_Public),
+        //("testED25519PemImport_Private_Manual", testED25519PemImport_Private_Manual),
+        //("testED25519PemImport_Private", testED25519PemImport_Private),
+        //("testSecp256k1PemImport_Public_Manual", testSecp256k1PemImport_Public_Manual),
+        //("testSecp256k1PemImport_Public", testSecp256k1PemImport_Public),
+        //("testSecp256k1PemImport_Private_Manual", testSecp256k1PemImport_Private_Manual),
+        //("testSecp256k1PemImport_Private", testSecp256k1PemImport_Private),
+        //("testRSAEncryptedPrivateKeyPem2_Manual", testRSAEncryptedPrivateKeyPem2_Manual),
+        //("testRSAEncryptedPrivateKeyPem2", testRSAEncryptedPrivateKeyPem2),
+        //("testRSA_Pem_Parsing_Public", testRSA_Pem_Parsing_Public),
+        //("testRSA_Pem_Parsing_Private", testRSA_Pem_Parsing_Private),
+        //("testEd25519_Pem_Parsing_Public", testEd25519_Pem_Parsing_Public),
+        //("testEd25519_Pem_Parsing_Private", testEd25519_Pem_Parsing_Private),
+        //("testSecp256k1_Pem_Parsing_Public", testSecp256k1_Pem_Parsing_Public),
+        //("testSecp256k1_Pem_Parsing_Private", testSecp256k1_Pem_Parsing_Private),
         ("testEmbeddedEd25519PublicKey", testEmbeddedEd25519PublicKey)
     ]
 }
