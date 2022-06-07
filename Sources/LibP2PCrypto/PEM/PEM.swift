@@ -74,6 +74,7 @@ struct PEM {
       case [0x42, 0x45, 0x47, 0x49, 0x4e, 0x20, 0x45, 0x4e, 0x43, 0x52, 0x59, 0x50, 0x54, 0x45, 0x44, 0x20, 0x50, 0x52, 0x49, 0x56, 0x41, 0x54, 0x45, 0x20, 0x4b, 0x45, 0x59]:
         self = .encryptedPrivateKey
 
+      //"BEGIN EC PRIVATE KEY"
       case [0x42, 0x45, 0x47, 0x49, 0x4e, 0x20, 0x45, 0x43, 0x20, 0x50, 0x52, 0x49, 0x56, 0x41, 0x54, 0x45, 0x20, 0x4b, 0x45, 0x59]:
         self = .ecPrivateKey
       
@@ -123,7 +124,7 @@ struct PEM {
   /// Converts UTF8 Encoding of PEM file into a PEMType and the base64 decoded key data
   /// - Parameter data: The `UTF8` encoding of the PEM file
   /// - Returns: A tuple containing the PEMType, and the actual base64 decoded PEM data (with the headers and footers removed).
-  internal static func pemToData(_ data:Array<UInt8>) throws -> (type: PEMType, bytes: Array<UInt8>) {
+  internal static func pemToData(_ data:Array<UInt8>) throws -> (type: PEMType, bytes: Array<UInt8>, objectIdentifiers:[Array<UInt8>]) {
     let fiveDashes = ArraySlice<UInt8>(repeating: 0x2D, count: 5) // "-----".bytes.toHexString()
     let chunks = data.split(separator: 0x0a) // 0x0a == "\n" `new line` char
     guard chunks.count > 2 else { throw PEM.Error.invalidPEMFormat("expected at least 3 chunks, a header, body and footer, but got \(chunks.count)") }
@@ -152,10 +153,35 @@ struct PEM {
     guard let base64 = String(data: Data(chunks[1..<chunks.count-1].joined()), encoding: .utf8) else { throw Error.invalidPEMFormat("Unable to join chunked body data") }
     guard let pemData = Data(base64Encoded: base64) else { throw Error.invalidPEMFormat("Body of PEM isn't valid base64 encoded") }
   
+    let asn1 = try ASN1.Decoder.decode(data: pemData)
+      
     // return the PEMType and PEM Data (without header & footer)
-    return (type: pemType, bytes: pemData.bytes)
+      return (type: pemType, bytes: pemData.bytes, objectIdentifiers: objIdsInSequence(asn1).map { $0.bytes })
   }
     
+    /// Traverses a Node tree and returns all instances of objectIds
+    internal static func objIdsInSequence(_ node:ASN1.Node) -> [Data] {
+        if case .objectIdentifier(let id) = node { return [id] }
+        else if case .sequence(let nodes) = node {
+            return objIdsInSequence(nodes)
+        }
+        return []
+    }
+    
+    /// Traverses a Node tree and returns all instances of objectIds
+    internal static func objIdsInSequence(_ nodes:[ASN1.Node]) -> [Data] {
+        var objs:[Data] = []
+
+        nodes.forEach {
+            if case .objectIdentifier(let id) = $0 { objs.append(id) }
+            else if case .sequence(let nodes) = $0 {
+                return objs.append(contentsOf: objIdsInSequence(nodes) )
+            }
+        }
+
+        return objs
+    }
+
   /// Decodes an ASN1 formatted Public Key into it's raw DER representation
   /// - Parameters:
   ///   - pem: The ASN1 encoded Public Key representation
@@ -423,6 +449,7 @@ extension PEM {
   internal enum CipherAlgorithm {
     case aes_128_cbc(iv:[UInt8])
     case aes_256_cbc(iv:[UInt8])
+    //case des3(iv: [UInt8])
   
     init(objID:[UInt8], iv:[UInt8]) throws {
       switch objID {
@@ -430,6 +457,8 @@ extension PEM {
         self = .aes_128_cbc(iv: iv)
       case [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x2a]: // aes-256-cbc
         self = .aes_256_cbc(iv: iv)
+      //case [42, 134, 72, 134, 247, 13, 3, 7]:
+      //  self = .des3(iv: iv)
       default:
         throw Error.unsupportedCipherAlgorithm(objID)
       }
