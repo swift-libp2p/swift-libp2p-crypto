@@ -9,8 +9,8 @@
 import Foundation
 import Multibase
 import Security
-import RSAPublicKeyImporter
-import RSAPublicKeyExporter
+//import RSAPublicKeyImporter
+//import RSAPublicKeyExporter
 
 struct RSAPublicKey:CommonPublicKey {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
@@ -39,11 +39,29 @@ struct RSAPublicKey:CommonPublicKey {
     }
     
     init(marshaledData data: Data) throws {
-        try self.init(rawRepresentation: try RSAPublicKeyImporter().fromSubjectPublicKeyInfo(data))
+        let asn = try ASN1.Decoder.decode(data: data)
+        guard case .sequence(let nodes) = asn else { throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0) }
+        guard case .sequence(let subjectInfo) = nodes[0] else { throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0) }
+        guard case .objectIdentifier(let objID) = subjectInfo.first else { throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0) }
+        guard objID.bytes == RSAPublicKey.primaryObjectIdentifier else { throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0) }
+        guard case .bitString(let bits) = nodes[1] else { throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0) }
+        try self.init(rawRepresentation: bits)
+        
+        //try self.init(rawRepresentation: try RSAPublicKeyImporter().fromSubjectPublicKeyInfo(data))
     }
     
     var rawRepresentation: Data {
-        try! RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.key.rawRepresentation())
+        let asnNodes:ASN1.Node = try! .sequence(nodes: [
+            .sequence(nodes: [
+                .objectIdentifier(data: Data(RSAPublicKey.primaryObjectIdentifier)),
+                .null
+            ]),
+            .bitString(data: self.key.rawRepresentation())
+        ])
+        
+        return Data(ASN1.Encoder.encode(asnNodes))
+        
+        //try! RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.key.rawRepresentation())
         //try! self.key.rawRepresentation()
     }
     
@@ -216,35 +234,9 @@ internal extension SecKey {
             return cfdata as Data
         } else { throw NSError(domain: "RawKeyError: \(error.debugDescription)", code: 0, userInfo: nil) }
     }
-}
-
-internal extension SecKey {
-    
-    /// Gets the ID of the key.
-    ///
-    /// The key id is the base58 encoding of the SHA-256 multihash of its public key.
-    /// The public key is a protobuf encoding containing a type and the DER encoding
-    /// of the PKCS SubjectPublicKeyInfo.
-//    func id(keyType: LibP2PCrypto.Keys.KeyPairType, withMultibasePrefix:Bool = true) throws -> String {
-//
-//        guard let pubKey = SecKeyCopyPublicKey(self) else {
-//            throw NSError(domain: "Public Key Extraction Error", code: 0, userInfo: nil)
-//        }
-//
-//        /// The key id is the base58 encoding of the SHA-256 multihash of its public key.
-//        /// The public key is a protobuf encoding containing a type and the DER encoding
-//        /// of the PKCS SubjectPublicKeyInfo.
-//        let marshaledPubKey = try LibP2PCrypto.Keys.marshalPublicKey(pubKey, keyType: keyType)
-//        let mh = try Multihash(raw: marshaledPubKey, hashedWith: .sha2_256)
-//        return withMultibasePrefix ? mh.asMultibase(.base58btc) : mh.asString(base: .base58btc)
-//    }
     
     var attributes:CFDictionary? {
         return SecKeyCopyAttributes(self)
-    }
-    
-    func subjectKeyInfo() throws -> Data {
-        return try RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.rawRepresentation())
     }
 }
 
