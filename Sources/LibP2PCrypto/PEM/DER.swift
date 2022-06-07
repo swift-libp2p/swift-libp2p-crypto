@@ -30,16 +30,25 @@ public extension DERDecodable {
   ///   - password: A password to use to decrypt an encrypted PEM file
   ///   - asType: The underlying DERDecodable Key Type (ex: RSA.self)
   init<Key:DERDecodable>(pem: String, password: String? = nil, asType:Key.Type = Key.self) throws {
-      try self.init(pem: Data(pem.utf8), password: password, asType: Key.self)
+      try self.init(pem: pem.bytes, password: password, asType: Key.self)
   }
-  
+    
   /// Instantiates a DERDecodable Key from ut8 decoded PEM data
   /// - Parameters:
   ///   - pem: The PEM file to import
   ///   - password: A password to use to decrypt an encrypted PEM file
   ///   - asType: The underlying DERDecodable Key Type (ex: RSA.self)
   init<Key:DERDecodable>(pem: Data, password: String? = nil, asType:Key.Type = Key.self) throws {
-    let (type, bytes) = try PEM.pemToData(pem.bytes)
+      try self.init(pem: pem.bytes, password: password, asType: Key.self)
+  }
+  
+  /// Instantiates a DERDecodable Key from ut8 decoded PEM bytes
+  /// - Parameters:
+  ///   - pem: The PEM file to import
+  ///   - password: A password to use to decrypt an encrypted PEM file
+  ///   - asType: The underlying DERDecodable Key Type (ex: RSA.self)
+  init<Key:DERDecodable>(pem: Array<UInt8>, password: String? = nil, asType:Key.Type = Key.self) throws {
+    let (type, bytes, _) = try PEM.pemToData(pem)
           
     if password != nil {
       guard type == .encryptedPrivateKey else { throw PEM.Error.invalidParameters }
