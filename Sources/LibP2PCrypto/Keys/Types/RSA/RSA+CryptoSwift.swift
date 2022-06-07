@@ -23,7 +23,7 @@ struct RSAPublicKey:CommonPublicKey {
     }
     
     init(rawRepresentation raw: Data) throws {
-        let asn1 = try Asn1Parser.parse(data: raw)
+        let asn1 = try ASN1.Decoder.decode(data: raw)
         
         guard case .sequence(let params) = asn1 else { throw NSError(domain: "Invalid ASN1 Encoding -> \(asn1)", code: 0) }
         
@@ -33,7 +33,7 @@ struct RSAPublicKey:CommonPublicKey {
             guard oid.bytes == RSAPublicKey.RSA_OBJECT_IDENTIFIER else { throw NSError(domain: "Invalid ASN1 Encoding -> ObjectID != Public RSA Key ID", code: 0) }
             guard case .bitString(let bits) = params.last else { throw NSError(domain: "Invalid ASN1 Encoding -> No BitString", code: 0) }
             
-            guard case .sequence(let params2) = try Asn1Parser.parse(data: bits) else { throw NSError(domain: "Invalid ASN1 Encoding -> No PubKey Sequence", code: 0) }
+            guard case .sequence(let params2) = try ASN1.Decoder.decode(data: bits) else { throw NSError(domain: "Invalid ASN1 Encoding -> No PubKey Sequence", code: 0) }
             guard case .integer(let n) = params2.first else { throw NSError(domain: "Invalid ASN1 Encoding -> No Modulus", code: 0) }
             guard case .integer(let e) = params2.last else { throw NSError(domain: "Invalid ASN1 Encoding -> No Public Exponent", code: 0) }
             
@@ -56,21 +56,21 @@ struct RSAPublicKey:CommonPublicKey {
     /// We return the ASN1 Encoded DER Representation of the public key because that's what the rewRepresentation of RSA SecKey return
     var rawRepresentation: Data {
         let mod = key.n.serialize()
-        let pubkeyAsnNode:Asn1Parser.Node =
+        let pubkeyAsnNode:ASN1.Node =
             .sequence(nodes: [
                 .integer(data: Data(CryptoSwift.RSA.zeroPad(n: mod.bytes, to: mod.count + 1))),
                 .integer(data: key.e.serialize())
             ])
         
-        let asnNodes:Asn1Parser.Node = .sequence(nodes: [
+        let asnNodes:ASN1.Node = .sequence(nodes: [
             .sequence(nodes: [
                 .objectIdentifier(data: Data(RSAPublicKey.RSA_OBJECT_IDENTIFIER)),
                 .null
             ]),
-            .bitString(data: Data(ASN1Encoder.encode(pubkeyAsnNode)))
+            .bitString(data: Data(ASN1.Encoder.encode(pubkeyAsnNode)))
         ])
         
-        return Data(ASN1Encoder.encode(asnNodes))
+        return Data(ASN1.Encoder.encode(asnNodes))
     }
     
     func encrypt(data: Data) throws -> Data {
@@ -124,7 +124,7 @@ struct RSAPrivateKey:CommonPrivateKey {
     
     /// Expects the ASN1 Encoding of the DER formatted RSA Private Key
     init(rawRepresentation raw: Data) throws {
-        guard case .sequence(let params) = try Asn1Parser.parse(data: raw) else { throw NSError(domain: "Invalid ASN1 Encoding -> No PrivKey Sequence", code: 0) }
+        guard case .sequence(let params) = try ASN1.Decoder.decode(data: raw) else { throw NSError(domain: "Invalid ASN1 Encoding -> No PrivKey Sequence", code: 0) }
         // We check for 4 here because internally we can only marshal the first 4 integers at the moment...
         guard params.count == 4 || params.count == 9 else { throw NSError(domain: "Invalid ASN1 Encoding -> Invalid Private RSA param count. Expected 9 got \(params.count)", code: 0) }
         guard case .integer(let n) = params[1] else { throw NSError(domain: "Invalid ASN1 Encoding -> PrivKey No Modulus", code: 0) }
@@ -141,14 +141,14 @@ struct RSAPrivateKey:CommonPrivateKey {
     var rawRepresentation: Data {
         guard let d = key.d else { /*throw NSError(domain: "Not a valid private RSA Key", code: 0)*/ return Data() }
         let mod = key.n.serialize()
-        let privkeyAsnNode:Asn1Parser.Node =
+        let privkeyAsnNode:ASN1.Node =
             .sequence(nodes: [
                 .integer(data: Data( Array<UInt8>(arrayLiteral: 0x00) )),
                 .integer(data: Data(CryptoSwift.RSA.zeroPad(n: mod.bytes, to: mod.count + 1))),
                 .integer(data: key.e.serialize()),
                 .integer(data: d.serialize())
             ])
-        return Data(ASN1Encoder.encode(privkeyAsnNode))
+        return Data(ASN1.Encoder.encode(privkeyAsnNode))
     }
     
     func derivePublicKey() throws -> CommonPublicKey {
@@ -272,7 +272,7 @@ extension CryptoSwift.RSA {
         
         /// 2. Encode the algorithm ID for the hash function and the hash value into an ASN.1 value of type DigestInfo
         /// PKCS#1_15 DER Structure (OID == sha256WithRSAEncryption)
-        let asn:Asn1Parser.Node = .sequence(nodes: [
+        let asn:ASN1.Node = .sequence(nodes: [
             .sequence(nodes: [
                 .objectIdentifier(data: Data(Array<UInt8>(arrayLiteral: 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01))),
                 .null
@@ -280,7 +280,7 @@ extension CryptoSwift.RSA {
             .octetString(data: Data(hashedMessage))
         ])
         
-        let t = ASN1Encoder.encode(asn)
+        let t = ASN1.Encoder.encode(asn)
                 
         /// 3.  If emLen < tLen + 11, output "intended encoded message lengthtoo short" and stop
         if modLength < t.count + 11 { throw NSError(domain: "intended encoded message length too short", code: 0) }
