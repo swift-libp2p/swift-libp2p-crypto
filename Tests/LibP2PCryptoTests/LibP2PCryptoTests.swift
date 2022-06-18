@@ -636,8 +636,27 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssert(keyPair.keyType == .rsa)
         XCTAssertEqual(keyPair.attributes()?.size, 1024)
         XCTAssertNil(keyPair.privateKey)
+        
+        XCTAssertEqual(try keyPair.exportPublicPEMString(), pem)
     }
+    
+    func testPemParsing_RSA_1024_Private() throws {
 
+        let pem = TestPEMKeys.RSA_1024_PRIVATE
+
+        //let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
+        
+        print(keyPair)
+        print(keyPair.attributes() ?? "NIL")
+
+        XCTAssert(keyPair.keyType == .rsa)
+        XCTAssertEqual(keyPair.attributes()?.size, 1024)
+        XCTAssertNotNil(keyPair.privateKey)
+        
+        XCTAssertEqual(try keyPair.exportPrivatePEMString(), pem)
+    }
+    
     func testPemParsing_RSA_1024_Public_2() throws {
         let pem = """
         -----BEGIN RSA PUBLIC KEY-----
@@ -830,6 +849,8 @@ final class libp2p_cryptoTests: XCTestCase {
         print(keyPair)
         XCTAssert(keyPair.keyType == .ed25519)
         XCTAssertNil(keyPair.privateKey)
+        
+        XCTAssertEqual(try keyPair.exportPublicPEMString(), pem)
     }
 
 
@@ -890,8 +911,9 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssert(keyPair.keyType == .ed25519)
         XCTAssertNotNil(keyPair.privateKey)
         XCTAssertEqual(keyPair.publicKey.asString(base: .base64Pad), "CM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=")
+        
+        XCTAssertEqual(try keyPair.exportPrivatePEMString(), pem)
     }
-
 
     func testSecp256k1PemImport_Public_Manual() throws {
         let pem = """
@@ -941,8 +963,10 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssert(keyPair.keyType == .secp256k1)
         XCTAssertNil(keyPair.privateKey)
         print(keyPair.attributes() ?? "NIL")
+        
+        XCTAssertEqual(try keyPair.exportPublicPEMString(), pem)
     }
-
+    
     func testSecp256k1PemImport_Private_Manual() throws {
         let pem = """
         -----BEGIN EC PRIVATE KEY-----
@@ -987,7 +1011,7 @@ final class libp2p_cryptoTests: XCTestCase {
         X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
         -----END EC PRIVATE KEY-----
         """
-
+        
         let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
 
         print(keyPair)
@@ -996,6 +1020,49 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssertEqual(keyPair.privateKey?.rawRepresentation.asString(base: .base64Pad), "mZunAPeZmGUS2IbOaCuikn+dJ7BzxQ/IET3CJvvjaxo=")
         /// Assert that we can derive the public from the private key
         XCTAssertEqual(keyPair.publicKey.asString(base: .base64Pad), "IgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==")
+        
+        print(try keyPair.exportPrivatePEM().asString(base: .base16))
+        
+        XCTAssertEqual(try keyPair.exportPrivatePEMString(), pem)
+    }
+    
+    func testTempSecp() throws {
+        let pemOG = """
+        -----BEGIN EC PRIVATE KEY-----
+        MHQCAQEEIJmbpwD3mZhlEtiGzmgropJ/nSewc8UPyBE9wib742saoAcGBSuBBAAK
+        oUQDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwf
+        X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
+        -----END EC PRIVATE KEY-----
+        """
+        /// Sequence:
+        ///     Integer: 01
+        ///     OctetString: 999ba700f799986512d886ce682ba2927f9d27b073c50fc8113dc226fbe36b1a
+        ///     ObjectID: 06052b8104000a
+        ///     BitString: 4200042200beb1c3052d405d7773a5328769e926c46811ab1f2cf0c437af8ec6d4d603a1763bbe15065a00bc1f5fb5e6b0784a145358a554b419784c333cc57f52ddef
+        
+        let pemRECON = """
+        -----BEGIN EC PRIVATE KEY-----
+        MHQCAQEEIJmbpwD3mZhlEtiGzmgropJ/nSewc8UPyBE9wib742saoAcGBSuBBAAK
+        oUQAQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwf
+        X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
+        -----END EC PRIVATE KEY-----
+        """
+        /// Sequence:
+        ///     Integer: 01
+        ///     OctetString: 999ba700f799986512d886ce682ba2927f9d27b073c50fc8113dc226fbe36b1a
+        ///     ObjectID: 06052b8104000a
+        ///     BitString: 4200042200beb1c3052d405d7773a5328769e926c46811ab1f2cf0c437af8ec6d4d603a1763bbe15065a00bc1f5fb5e6b0784a145358a554b419784c333cc57f52ddef
+        
+        
+        let chunks = pemOG.bytes.split(separator: 0x0a)
+        let base64 = String(data: Data(chunks[1..<chunks.count-1].joined()), encoding: .utf8)!
+        let pemData = Data(base64Encoded: base64)!
+      
+        let asn = try ASN1.Decoder.decode(data: pemData)
+        
+        //let asn = try ASN1.Decoder.decode(data: BaseEncoding.decode(pem).data)
+        
+        print(asn)
     }
 
 
@@ -1069,6 +1136,218 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssertThrowsError(try LibP2PCrypto.Keys.KeyPair(pem: pem, password: "mypassword"))
     }
     
+    func testRSAEncryptedPrivateKeyPemExportManual() throws {
+        /*
+        * Generated with
+        * openssl genpkey -algorithm RSA
+        *   -pkeyopt rsa_keygen_bits:1024
+        *   -pkeyopt rsa_keygen_pubexp:65537
+        *   -out foo.pem
+        * openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
+        */
+        let pem = """
+        -----BEGIN ENCRYPTED PRIVATE KEY-----
+        MIICzzBJBgkqhkiG9w0BBQ0wPDAbBgkqhkiG9w0BBQwwDgQIP5QK2RfqUl4CAggA
+        MB0GCWCGSAFlAwQBAgQQj3OyM9gnW2dd/eRHkxjGrgSCAoCpM5GZB0v27cxzZsGc
+        O4/xqgwB0c/bSJ6QogtYU2KVoc7ZNQ5q9jtzn3I4ONvneOkpm9arzYz0FWnJi2C3
+        BPiF0D1NkfvjvMLv56bwiG2A1oBECacyAb2pXYeJY7SdtYKvcbgs3jx65uCm6TF2
+        BylteH+n1ewTQN9DLfASp1n81Ajq9lQGaK03SN2MUtcAPp7N9gnxJrlmDGeqlPRs
+        KpQYRcot+kE6Ew8a5jAr7mAxwpqvr3SM4dMvADZmRQsM4Uc/9+YMUdI52DG87EWc
+        0OUB+fnQ8jw4DZgOE9KKM5/QTWc3aEw/dzXr/YJsrv01oLazhqVHnEMG0Nfr0+DP
+        q+qac1AsCsOb71VxaRlRZcVEkEfAq3gidSPD93qmlDrCnmLYTilcLanXUepda7ez
+        qhjkHtpwBLN5xRZxOn3oUuLGjk8VRwfmFX+RIMYCyihjdmbEDYpNUVkQVYFGi/F/
+        1hxOyl9yhGdL0hb9pKHH10GGIgoqo4jSTLlb4ennihGMHCjehAjLdx/GKJkOWShy
+        V9hj8rAuYnRNb+tUW7ChXm1nLq14x9x1tX0ciVVn3ap/NoMkbFTr8M3pJ4bQlpAn
+        wCT2erYqwQtgSpOJcrFeph9TjIrNRVE7Zlmr7vayJrB/8/oPssVdhf82TXkna4fB
+        PcmO0YWLa117rfdeNM/Duy0ThSdTl39Qd+4FxqRZiHjbt+l0iSa/nOjTv1TZ/QqF
+        wqrO6EtcM45fbFJ1Y79o2ptC2D6MB4HKJq9WCt064/8zQCVx3XPbb3X8Z5o/6koy
+        ePGbz+UtSb9xczvqpRCOiFLh2MG1dUgWuHazjOtUcVWvilKnkjCMzZ9s1qG0sUDj
+        nPyn
+        -----END ENCRYPTED PRIVATE KEY-----
+        """
+        
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: "mypassword")
+        
+        XCTAssertEqual(keyPair.keyType, .rsa)
+        XCTAssertEqual(keyPair.hasPrivateKey, true)
+        
+        /// Now lets try and reverse the process and export the encrypted private key...
+        
+        // Salt: [63, 148, 10, 217, 23, 234, 82, 94]
+        // Iterations: 2048
+        // Password: mypassword
+        // Cipher IV: 128 - [143, 115, 178, 51, 216, 39, 91, 103, 93, 253, 228, 71, 147, 24, 198, 174]
+        
+        let cipher = PEM.CipherAlgorithm.aes_128_cbc(iv: [143, 115, 178, 51, 216, 39, 91, 103, 93, 253, 228, 71, 147, 24, 198, 174])
+        
+        let pbkdf = PEM.PBKDFAlgorithm.pbkdf2(salt: [63, 148, 10, 217, 23, 234, 82, 94], iterations: 2048)
+        
+        // Generate Encryption Key from Password (confirmed key is same)
+        let key = try pbkdf.deriveKey(password: "mypassword", ofLength: cipher.desiredKeyLength)
+        
+        let pemData:ASN1.Node = .sequence(nodes: [
+            .integer(data: Data(hex: "0x00")),
+            .sequence(nodes: [
+                .objectIdentifier(data: Data(hex: "2a864886f70d010101")),
+                .null
+            ]),
+            .octetString(data: Data(hex: "3082025d02010002818100cac3f636b7733cf98fbe26aad1a6578f9889995e87b820bb729b798f5178311eb1145b9b05a8384193c7b594d03ff626b3b94f79220bbd2ad6f4e688d6d8afd3744a34afcd484809c35bdf31b9b8d2e0ebac5671f9e6eae68766c6803b074c53f663b5f689e9505d672724904a7d6ab4d1fc31cda4a169206f8f772339c9716f02030100010281807b726b084d101fe3609c48365f858271ae50b7cb519dcc6fd30acd2b705258b572e20e1387922f0dddc70cca192f97d16042461c5d9a000580f1811976945e16ad180666399cbe2e42d6a2c07a77fc8aaad950dedeec5d6576eb8fb07bb70989d273dc22e892b3df04982ba6d597ef8238b84fed5b84e493512554e43723f1c1024100f24805a6fcf6f4324f6248d6646538474c790d4111dbb2b816972a0164ea94fc3a209afe5b38d8c7ee1661610e94727669fe3261b4c112fc5c6629477e380687024100d63f23ad2abd389127009bee7bd872acdfb85b3b53d0029bcb2afc11895a8f0b6273d331d85ed39ac1b9d61afa1d72227b6dea3cec7ff78a9e277e9c3d460fd9024100bc2c8e1f4d782cdfea6226ba454d8c716c06d4f186024203d29fe3a3239342d5c7fbcd05e329facd05b1623eb4c93d41953f363846e0727388fc5bf1482a117f0240543566f1664e0f50c612b037514826f299d05d537942d5f3a42c55fd128e9c90adf6b678ee017f8c613e88cffba4dd3a7e671a5d2ddbb251328e756e358b37290241008acc81787457ab32ae0a939e13805651da3403b9ae46b7d31f1580b3fb7ca4ba109ac9b624e24d6c5ca5765c0ea09c00173eebabc283e29b25a281744dcbbbd6"))
+        ])
+        
+        // Encrypt Plaintext
+        let ciphertext = try cipher.encrypt(bytes: ASN1.Encoder.encode(pemData), withKey: key)
+        
+        // Ensure the ciphertext is the same...
+        XCTAssertEqual(Data(ciphertext), Data(hex: "a9339199074bf6edcc7366c19c3b8ff1aa0c01d1cfdb489e90a20b58536295a1ced9350e6af63b739f723838dbe778e9299bd6abcd8cf41569c98b60b704f885d03d4d91fbe3bcc2efe7a6f0886d80d6804409a73201bda95d878963b49db582af71b82cde3c7ae6e0a6e9317607296d787fa7d5ec1340df432df012a759fcd408eaf6540668ad3748dd8c52d7003e9ecdf609f126b9660c67aa94f46c2a941845ca2dfa413a130f1ae6302bee6031c29aafaf748ce1d32f003666450b0ce1473ff7e60c51d239d831bcec459cd0e501f9f9d0f23c380d980e13d28a339fd04d6737684c3f7735ebfd826caefd35a0b6b386a5479c4306d0d7ebd3e0cfabea9a73502c0ac39bef557169195165c5449047c0ab78227523c3f77aa6943ac29e62d84e295c2da9d751ea5d6bb7b3aa18e41eda7004b379c516713a7de852e2c68e4f154707e6157f9120c602ca28637666c40d8a4d5159105581468bf17fd61c4eca5f7284674bd216fda4a1c7d74186220a2aa388d24cb95be1e9e78a118c1c28de8408cb771fc628990e59287257d863f2b02e62744d6feb545bb0a15e6d672ead78c7dc75b57d1c895567ddaa7f3683246c54ebf0cde92786d0969027c024f67ab62ac10b604a938972b15ea61f538c8acd45513b6659abeef6b226b07ff3fa0fb2c55d85ff364d79276b87c13dc98ed1858b6b5d7badf75e34cfc3bb2d13852753977f5077ee05c6a4598878dbb7e9748926bf9ce8d3bf54d9fd0a85c2aacee84b5c338e5f6c527563bf68da9b42d83e8c0781ca26af560add3ae3ff33402571dd73db6f75fc679a3fea4a3278f19bcfe52d49bf71733beaa5108e8852e1d8c1b5754816b876b38ceb547155af8a52a792308ccd9f6cd6a1b4b140e39cfca7"))
+        
+        //print(pbkdf.iterations.bytes(totalBytes: 2))
+        
+//        print("*** DER ***")
+//        //print(try ASN1.Decoder.decode(data: Data(keyPair.privateKey!.exportPrivateKeyPEM(withHeaderAndFooter: false))))
+//        print("***********")
+//
+        // Encode Encrypted PEM (including pbkdf and cipher algos used)
+        let nodes:ASN1.Node = .sequence(nodes: [
+            .sequence(nodes: [
+                .objectIdentifier(data: Data(hex: "2a864886f70d01050d")),
+                .sequence(nodes: [
+                    .sequence(nodes: [
+                        .objectIdentifier(data: Data(pbkdf.objectIdentifier)),
+                        .sequence(nodes: [
+                            .octetString(data: Data(pbkdf.salt)),
+                            .integer(data: Data( pbkdf.iterations.bytes(totalBytes: 2) ))
+                        ])
+                    ]),
+                    .sequence(nodes: [
+                        .objectIdentifier(data: Data(cipher.objectIdentifier)),
+                        .octetString(data: Data(cipher.iv))
+                    ])
+                ])
+            ]),
+            .octetString(data: Data(ciphertext))
+        ])
+
+        let encoded = ASN1.Encoder.encode(nodes)
+        
+        //print(encoded.asString(base: .base16))
+        
+        // Ensure the raw ASN data is equivalent
+        XCTAssertEqual(Data(encoded).asString(base: .base16), "308202cf304906092a864886f70d01050d303c301b06092a864886f70d01050c300e04083f940ad917ea525e02020800301d060960864801650304010204108f73b233d8275b675dfde4479318c6ae04820280a9339199074bf6edcc7366c19c3b8ff1aa0c01d1cfdb489e90a20b58536295a1ced9350e6af63b739f723838dbe778e9299bd6abcd8cf41569c98b60b704f885d03d4d91fbe3bcc2efe7a6f0886d80d6804409a73201bda95d878963b49db582af71b82cde3c7ae6e0a6e9317607296d787fa7d5ec1340df432df012a759fcd408eaf6540668ad3748dd8c52d7003e9ecdf609f126b9660c67aa94f46c2a941845ca2dfa413a130f1ae6302bee6031c29aafaf748ce1d32f003666450b0ce1473ff7e60c51d239d831bcec459cd0e501f9f9d0f23c380d980e13d28a339fd04d6737684c3f7735ebfd826caefd35a0b6b386a5479c4306d0d7ebd3e0cfabea9a73502c0ac39bef557169195165c5449047c0ab78227523c3f77aa6943ac29e62d84e295c2da9d751ea5d6bb7b3aa18e41eda7004b379c516713a7de852e2c68e4f154707e6157f9120c602ca28637666c40d8a4d5159105581468bf17fd61c4eca5f7284674bd216fda4a1c7d74186220a2aa388d24cb95be1e9e78a118c1c28de8408cb771fc628990e59287257d863f2b02e62744d6feb545bb0a15e6d672ead78c7dc75b57d1c895567ddaa7f3683246c54ebf0cde92786d0969027c024f67ab62ac10b604a938972b15ea61f538c8acd45513b6659abeef6b226b07ff3fa0fb2c55d85ff364d79276b87c13dc98ed1858b6b5d7badf75e34cfc3bb2d13852753977f5077ee05c6a4598878dbb7e9748926bf9ce8d3bf54d9fd0a85c2aacee84b5c338e5f6c527563bf68da9b42d83e8c0781ca26af560add3ae3ff33402571dd73db6f75fc679a3fea4a3278f19bcfe52d49bf71733beaa5108e8852e1d8c1b5754816b876b38ceb547155af8a52a792308ccd9f6cd6a1b4b140e39cfca7")
+        
+        let exportedPEM = "-----BEGIN ENCRYPTED PRIVATE KEY-----\n" +  encoded.toBase64().split(intoChunksOfLength: 64).joined(separator: "\n") + "\n-----END ENCRYPTED PRIVATE KEY-----"
+        
+        XCTAssertEqual(exportedPEM, pem)
+    }
+    
+    func testRSAEncryptedPrivateKeyPemExport() throws {
+        /*
+        * Generated with
+        * openssl genpkey -algorithm RSA
+        *   -pkeyopt rsa_keygen_bits:1024
+        *   -pkeyopt rsa_keygen_pubexp:65537
+        *   -out foo.pem
+        * openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
+        */
+        let pem = """
+        -----BEGIN ENCRYPTED PRIVATE KEY-----
+        MIICzzBJBgkqhkiG9w0BBQ0wPDAbBgkqhkiG9w0BBQwwDgQIP5QK2RfqUl4CAggA
+        MB0GCWCGSAFlAwQBAgQQj3OyM9gnW2dd/eRHkxjGrgSCAoCpM5GZB0v27cxzZsGc
+        O4/xqgwB0c/bSJ6QogtYU2KVoc7ZNQ5q9jtzn3I4ONvneOkpm9arzYz0FWnJi2C3
+        BPiF0D1NkfvjvMLv56bwiG2A1oBECacyAb2pXYeJY7SdtYKvcbgs3jx65uCm6TF2
+        BylteH+n1ewTQN9DLfASp1n81Ajq9lQGaK03SN2MUtcAPp7N9gnxJrlmDGeqlPRs
+        KpQYRcot+kE6Ew8a5jAr7mAxwpqvr3SM4dMvADZmRQsM4Uc/9+YMUdI52DG87EWc
+        0OUB+fnQ8jw4DZgOE9KKM5/QTWc3aEw/dzXr/YJsrv01oLazhqVHnEMG0Nfr0+DP
+        q+qac1AsCsOb71VxaRlRZcVEkEfAq3gidSPD93qmlDrCnmLYTilcLanXUepda7ez
+        qhjkHtpwBLN5xRZxOn3oUuLGjk8VRwfmFX+RIMYCyihjdmbEDYpNUVkQVYFGi/F/
+        1hxOyl9yhGdL0hb9pKHH10GGIgoqo4jSTLlb4ennihGMHCjehAjLdx/GKJkOWShy
+        V9hj8rAuYnRNb+tUW7ChXm1nLq14x9x1tX0ciVVn3ap/NoMkbFTr8M3pJ4bQlpAn
+        wCT2erYqwQtgSpOJcrFeph9TjIrNRVE7Zlmr7vayJrB/8/oPssVdhf82TXkna4fB
+        PcmO0YWLa117rfdeNM/Duy0ThSdTl39Qd+4FxqRZiHjbt+l0iSa/nOjTv1TZ/QqF
+        wqrO6EtcM45fbFJ1Y79o2ptC2D6MB4HKJq9WCt064/8zQCVx3XPbb3X8Z5o/6koy
+        ePGbz+UtSb9xczvqpRCOiFLh2MG1dUgWuHazjOtUcVWvilKnkjCMzZ9s1qG0sUDj
+        nPyn
+        -----END ENCRYPTED PRIVATE KEY-----
+        """
+        
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: "mypassword")
+        
+        XCTAssertEqual(keyPair.keyType, .rsa)
+        XCTAssertEqual(keyPair.hasPrivateKey, true)
+        
+        XCTAssertThrowsError(try LibP2PCrypto.Keys.KeyPair(pem: pem, password: "wrongpassword"))
+        
+        /// Now lets try and reverse the process and export the encrypted private key...
+        
+        // Salt: [63, 148, 10, 217, 23, 234, 82, 94]
+        // Iterations: 2048
+        // Password: mypassword
+        // Cipher IV: 128 - [143, 115, 178, 51, 216, 39, 91, 103, 93, 253, 228, 71, 147, 24, 198, 174]
+        
+        let cipher = PEM.CipherAlgorithm.aes_128_cbc(iv: [143, 115, 178, 51, 216, 39, 91, 103, 93, 253, 228, 71, 147, 24, 198, 174])
+        
+        let pbkdf = PEM.PBKDFAlgorithm.pbkdf2(salt: [63, 148, 10, 217, 23, 234, 82, 94], iterations: 2048)
+        
+        let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(withPassword: "mypassword", usingPBKDF: pbkdf, andCipher: cipher)
+        
+        XCTAssertEqual(exportedPEM, pem)
+        
+        let differentPassword = try keyPair.exportEncryptedPrivatePEMString(withPassword: "wrongpassword", usingPBKDF: pbkdf, andCipher: cipher)
+        
+        XCTAssertNotEqual(differentPassword, pem)
+        XCTAssertEqual(differentPassword.count, pem.count)
+    }
+    
+    func testRSAEncryptedPrivateKeyPemExport2() throws {
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED, password: "mypassword")
+        
+        XCTAssertEqual(keyPair.keyType, .rsa)
+        XCTAssertEqual(keyPair.hasPrivateKey, true)
+        
+        XCTAssertThrowsError(try LibP2PCrypto.Keys.KeyPair(pem: TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED, password: "wrongpassword"))
+        
+        /// Now lets try and reverse the process and export the encrypted private key...
+        
+        // Salt: [227, 211, 237, 63, 238, 242, 38, 104]
+        // Iterations: 2048
+        // Password: mypassword
+        // Cipher IV: 128 - [99, 63, 232, 90, 218, 184, 170, 21, 143, 54, 176, 16, 136, 237, 226, 231]
+        
+        let cipher = PEM.CipherAlgorithm.aes_128_cbc(iv: [99, 63, 232, 90, 218, 184, 170, 21, 143, 54, 176, 16, 136, 237, 226, 231])
+        
+        let pbkdf = PEM.PBKDFAlgorithm.pbkdf2(salt: [227, 211, 237, 63, 238, 242, 38, 104], iterations: 2048)
+        
+        let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(withPassword: "mypassword", usingPBKDF: pbkdf, andCipher: cipher)
+        
+        XCTAssertEqual(exportedPEM, TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED)
+                
+        //let differentPassword = try keyPair.exportEncryptedPrivatePEMString(withPassword: "wrongpassword", usingPBKDF: pbkdf, andCipher: cipher)
+        
+        //XCTAssertNotEqual(differentPassword, TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED)
+        //XCTAssertEqual(differentPassword.count, TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED.count)
+    }
+    
+    func testRSAEncryptedPrivateKeyPemRoundTrip() throws {
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.RSA(bits: .B2048))
+        
+        XCTAssertEqual(keyPair.keyType, .rsa)
+        XCTAssertEqual(keyPair.hasPrivateKey, true)
+        
+        let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(withPassword: "mypassword")
+        
+        
+        let recoveredKey = try LibP2PCrypto.Keys.KeyPair(pem: exportedPEM, password: "mypassword")
+        
+        XCTAssertEqual(recoveredKey.keyType, .rsa)
+        XCTAssertEqual(recoveredKey.hasPrivateKey, true)
+        
+        XCTAssertEqual(keyPair.privateKey?.rawRepresentation, recoveredKey.privateKey?.rawRepresentation)
+        XCTAssertEqual(keyPair.publicKey.rawRepresentation, recoveredKey.publicKey.rawRepresentation)
+        XCTAssertEqual(try keyPair.id(), try recoveredKey.id())
+        //let differentPassword = try keyPair.exportEncryptedPrivatePEMString(withPassword: "wrongpassword", usingPBKDF: pbkdf, andCipher: cipher)
+        
+        //XCTAssertNotEqual(differentPassword, TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED)
+        //XCTAssertEqual(differentPassword.count, TestPEMKeys.RSA_1024_PRIVATE_ENCRYPTED_PAIR.ENCRYPTED.count)
+    }
     
     // - MARK: Encrypted PEM Imports
     
@@ -1739,6 +2018,10 @@ final class libp2p_cryptoTests: XCTestCase {
         ("testSecp256k1PemImport_Private_Manual", testSecp256k1PemImport_Private_Manual),
         ("testSecp256k1PemImport_Private", testSecp256k1PemImport_Private),
         //("testRSAEncryptedPrivateKeyPem2_Manual", testRSAEncryptedPrivateKeyPem2_Manual),
+        ("testImportEncryptedPemKey", testImportEncryptedPemKey),
+        ("testRSAEncryptedPrivateKeyPemExportManual", testRSAEncryptedPrivateKeyPemExportManual),
+        ("testRSAEncryptedPrivateKeyPemExport", testRSAEncryptedPrivateKeyPemExport),
+        ("testRSAEncryptedPrivateKeyPem", testRSAEncryptedPrivateKeyPem),
         ("testRSAEncryptedPrivateKeyPem2", testRSAEncryptedPrivateKeyPem2),
         ("testRSA_Pem_Parsing_Public", testRSA_Pem_Parsing_Public),
         ("testRSA_Pem_Parsing_Private", testRSA_Pem_Parsing_Private),
