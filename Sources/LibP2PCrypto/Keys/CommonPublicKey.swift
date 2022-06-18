@@ -9,7 +9,7 @@ import Foundation
 import Multihash
 import Multibase
 
-public protocol CommonPublicKey {
+public protocol CommonPublicKey:DERCodable {
     static var keyType:LibP2PCrypto.Keys.GenericKeyType { get }
     
     /// Init from raw representation
