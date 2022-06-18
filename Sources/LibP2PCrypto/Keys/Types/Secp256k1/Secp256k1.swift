@@ -126,11 +126,36 @@ extension Secp256k1PublicKey:DERCodable {
     }
     
     public func publicKeyDER() throws -> Array<UInt8> {
-        self.rawRepresentation.bytes
+        [0x04] + self.rawRepresentation
     }
     
     public func privateKeyDER() throws -> Array<UInt8> {
         throw NSError(domain: "Public Key doesn't have private DER representation", code: 0)
+    }
+    
+    public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> Array<UInt8> {
+        let publicDER = try self.publicKeyDER()
+        
+        let asnNodes:ASN1.Node = .sequence(nodes: [
+          .sequence(nodes: [
+            .objectIdentifier(data: Data(Self.primaryObjectIdentifier)),
+            .objectIdentifier(data: Data(Self.secondaryObjectIdentifier!))
+          ]),
+          .bitString(data: Data( publicDER ))
+        ])
+      
+        let base64String = ASN1.Encoder.encode(asnNodes).toBase64()
+        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
+        let bodyUTF8Bytes = bodyString.bytes
+        
+        if withHeaderAndFooter {
+          let header = PEM.PEMType.publicKey.headerBytes + [0x0a]
+          let footer = [0x0a] + PEM.PEMType.publicKey.footerBytes
+        
+          return header + bodyUTF8Bytes + footer
+        } else {
+          return bodyUTF8Bytes
+        }
     }
 }
 
@@ -154,5 +179,34 @@ extension Secp256k1PrivateKey:DERCodable {
         self.rawRepresentation.bytes
     }
     
+    public func exportPrivateKeyPEMRaw() throws -> Array<UInt8> {
+        let publicDER = try self.publicKeyDER()
+        
+        let pubKeyBitString:ASN1.Node = .bitString(data: Data( publicDER ))
+        
+        let asnNodes:ASN1.Node = .sequence(nodes: [
+          .integer(data: Data(hex: "0x01")),
+          .octetString(data: self.rawRepresentation),
+          .ecObject(data: Data(Self.primaryObjectIdentifier)),
+          .ecBits(data: Data(ASN1.Encoder.encode(pubKeyBitString)))
+        ])
+          
+        return ASN1.Encoder.encode(asnNodes)
+    }
+    
+    public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> Array<UInt8> {
+        let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
+        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
+        let bodyUTF8Bytes = bodyString.bytes
+        
+        if withHeaderAndFooter {
+          let header = PEM.PEMType.ecPrivateKey.headerBytes + [0x0a]
+          let footer = [0x0a] + PEM.PEMType.ecPrivateKey.footerBytes
+        
+          return header + bodyUTF8Bytes + footer
+        } else {
+          return bodyUTF8Bytes
+        }
+    }
     
 }
