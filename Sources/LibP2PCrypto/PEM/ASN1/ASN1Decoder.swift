@@ -91,6 +91,7 @@ extension ASN1 {
           let length = try scanner.consumeLength()
           let data = try scanner.consume(length: length)
           //print("Found an EC Curve Obj ID: [\(data.map { "\($0)" }.joined(separator: ","))]")
+          //return .ecObject(data: data)
           return .objectIdentifier(data: data)
         }
 
@@ -104,7 +105,8 @@ extension ASN1 {
 
           let data = try scanner.consume(length: length - 1)
           //print("Found an EC Curve Bit String: [\(data.map { "\($0)" }.joined(separator: ","))]")
-          return .bitString(data: data)
+          //return .bitString(data: data)
+          return .ecBits(data: data)
         }
         
         throw DecodingError.invalidType(value: firstByte)
