@@ -332,3 +332,41 @@ extension LibP2PCrypto.Keys.KeyPair {
         }
     }
 }
+
+extension LibP2PCrypto.Keys.KeyPair {
+    
+    func exportPublicPEM(withHeaderAndFooter:Bool = true) throws -> Array<UInt8> {
+        //guard let der = publicKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
+        return try publicKey.exportPublicKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
+    }
+    
+    func exportPrivatePEM(withHeaderAndFooter:Bool = true) throws -> Array<UInt8> {
+        guard let privKey = self.privateKey else { throw NSError(domain: "No private key available to export", code: 0) }
+        //guard let der = privKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
+        return try privKey.exportPrivateKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
+    }
+    
+    func exportPublicPEMString(withHeaderAndFooter:Bool = true) throws -> String {
+        //guard let der = publicKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
+        return try publicKey.exportPublicKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
+    }
+    
+    func exportPrivatePEMString(withHeaderAndFooter:Bool = true) throws -> String {
+        guard let privKey = self.privateKey else { throw NSError(domain: "No private key available to export", code: 0) }
+        //guard let der = privKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
+        return try privKey.exportPrivateKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
+    }
+    
+    func exportEncryptedPrivatePEM(withPassword password:String, usingPBKDF pbkdf:PEM.PBKDFAlgorithm? = nil, andCipher cipher:PEM.CipherAlgorithm? = nil) throws -> Array<UInt8> {
+        let cipher = try cipher ?? .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
+        let pbkdf = try pbkdf ?? .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 8), iterations: 2048)
+        
+        return try PEM.encryptPEM(Data(self.privateKey!.exportPrivateKeyPEMRaw()), withPassword: password, usingPBKDF: pbkdf, andCipher: cipher).bytes
+    }
+    
+    func exportEncryptedPrivatePEMString(withPassword password:String, usingPBKDF pbkdf:PEM.PBKDFAlgorithm? = nil, andCipher cipher:PEM.CipherAlgorithm? = nil) throws -> String {
+        let data = try self.exportEncryptedPrivatePEM(withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
+        return String(data: Data(data), encoding: .utf8)!
+    }
+    
+}
