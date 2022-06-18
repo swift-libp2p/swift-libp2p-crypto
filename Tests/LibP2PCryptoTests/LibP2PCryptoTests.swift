@@ -1327,7 +1327,7 @@ final class libp2p_cryptoTests: XCTestCase {
     }
     
     func testRSAEncryptedPrivateKeyPemRoundTrip() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.RSA(bits: .B2048))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.RSA(bits: .B1024))
         
         XCTAssertEqual(keyPair.keyType, .rsa)
         XCTAssertEqual(keyPair.hasPrivateKey, true)
