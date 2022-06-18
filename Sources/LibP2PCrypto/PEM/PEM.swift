@@ -384,6 +384,38 @@ extension PEM {
   
     return EncryptedPEM(objectIdentifer: objID.bytes, ciphertext: octets.bytes, pbkdfAlgorithm: pbkdf, cipherAlgorithm: cipher)
   }
+    
+  internal static func encryptPEM(_ pem:Data, withPassword password:String, usingPBKDF pbkdf:PBKDFAlgorithm = .pbkdf2(salt: try! LibP2PCrypto.randomBytes(length: 8), iterations: 2048), andCipher cipher:CipherAlgorithm = .aes_128_cbc(iv: try! LibP2PCrypto.randomBytes(length: 16))) throws -> Data {
+
+    // Generate Encryption Key from Password
+    let key = try pbkdf.deriveKey(password: password, ofLength: cipher.desiredKeyLength)
+
+    // Encrypt Plaintext
+    let ciphertext = try cipher.encrypt(bytes: pem.bytes, withKey: key)
+
+    // Encode Encrypted PEM (including pbkdf and cipher algos used)
+    let nodes:ASN1.Node = .sequence(nodes: [
+      .sequence(nodes: [
+        .objectIdentifier(data: Data(hex: "2a864886f70d01050d")),
+        .sequence(nodes: [
+          try pbkdf.encodePBKDF(),
+          try cipher.encodeCipher()
+        ])
+      ]),
+      .octetString(data: Data(ciphertext))
+    ])
+
+    let encoded = ASN1.Encoder.encode(nodes)
+
+    let base64 = "\n" + encoded.toBase64().split(intoChunksOfLength: 64).joined(separator: "\n") + "\n"
+      
+      return Data(PEM.PEMType.encryptedPrivateKey.headerBytes + base64.bytes +  PEM.PEMType.encryptedPrivateKey.footerBytes)
+  }
+    
+  internal static func encryptPEMString(_ pem:Data, withPassword password:String, usingPBKDF pbkdf:PBKDFAlgorithm = .pbkdf2(salt: try! LibP2PCrypto.randomBytes(length: 8), iterations: 2048), andCipher cipher:CipherAlgorithm = .aes_128_cbc(iv: try! LibP2PCrypto.randomBytes(length: 16))) throws -> String {
+      let data = try PEM.encryptPEM(pem, withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
+      return String(data: data, encoding: .utf8)!
+  }
 }
 
 
@@ -407,10 +439,44 @@ extension PEM {
     func deriveKey(password:String, ofLength keyLength:Int, usingHashVarient variant:HMAC.Variant = .sha1) throws -> [UInt8] {
       switch self {
       case .pbkdf2(let salt, let iterations):
-        return try PKCS5.PBKDF2(password: password.bytes, salt: salt, iterations: iterations, keyLength: keyLength, variant: variant).calculate()
+        //print("Salt: \(salt), Iterations: \(iterations)")
+        let key = try PKCS5.PBKDF2(password: password.bytes, salt: salt, iterations: iterations, keyLength: keyLength, variant: variant).calculate()
+        //print(key)
+        return key
       //default:
       //    throw Error.invalidPEMFormat
       }
+    }
+      
+    var objectIdentifier:[UInt8] {
+      switch self {
+      case .pbkdf2:
+        return [42, 134, 72, 134, 247, 13, 1, 5, 12]
+      }
+    }
+      
+    var salt:[UInt8] {
+      switch self {
+      case .pbkdf2(let salt, _):
+        return salt
+      }
+    }
+    
+    var iterations:Int {
+      switch self {
+      case .pbkdf2(_, let iterations):
+        return iterations
+      }
+    }
+    
+    func encodePBKDF() throws -> ASN1.Node {
+      return .sequence(nodes: [
+        .objectIdentifier(data: Data(self.objectIdentifier)),
+        .sequence(nodes: [
+            .octetString(data: Data(self.salt)),
+            .integer(data: Data(self.iterations.bytes(totalBytes: 2)))
+        ])
+      ])
     }
   }
   
@@ -467,11 +533,22 @@ extension PEM {
     func decrypt(bytes: [UInt8], withKey key:[UInt8]) throws -> [UInt8] {
       switch self {
       case .aes_128_cbc(let iv):
+        //print("128 IV: \(iv)")
         return try AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).decrypt(bytes)
       case .aes_256_cbc(let iv):
+        //print("256 IV: \(iv)")
         return try AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).decrypt(bytes)
       //default:
         //throw Error.invalidPEMFormat
+      }
+    }
+    
+    func encrypt(bytes: [UInt8], withKey key:[UInt8]) throws -> [UInt8] {
+      switch self {
+      case .aes_128_cbc(let iv):
+        return try AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).encrypt(bytes)
+      case .aes_256_cbc(let iv):
+        return try AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).encrypt(bytes)
       }
     }
   
@@ -482,6 +559,31 @@ extension PEM {
       case .aes_128_cbc: return 16
       case .aes_256_cbc: return 32
       }
+    }
+      
+    var objectIdentifier:[UInt8] {
+      switch self {
+      case .aes_128_cbc:
+        return [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x02]
+      case .aes_256_cbc:
+        return [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x2a]
+      }
+    }
+    
+    var iv:[UInt8] {
+      switch self {
+      case .aes_128_cbc(let iv):
+        return iv
+      case .aes_256_cbc(let iv):
+        return iv
+      }
+    }
+      
+    func encodeCipher() throws -> ASN1.Node {
+      return .sequence(nodes: [
+        .objectIdentifier(data: Data(self.objectIdentifier)),
+        .octetString(data: Data(self.iv))
+      ])
     }
   }
   
@@ -504,4 +606,46 @@ extension PEM {
   
     return try CipherAlgorithm(objID: objID.bytes, iv: initialVector.bytes)
   }
+}
+
+
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(ucrt)
+import ucrt
+#endif
+
+extension FixedWidthInteger {
+  @inlinable
+  func bytes(totalBytes: Int = MemoryLayout<Self>.size) -> Array<UInt8> {
+    arrayOfBytes(value: self.littleEndian, length: totalBytes)
+    // TODO: adjust bytes order
+    // var value = self.littleEndian
+    // return withUnsafeBytes(of: &value, Array.init).reversed()
+  }
+}
+
+@_specialize(where T == Int)
+@_specialize(where T == UInt)
+@_specialize(where T == UInt8)
+@_specialize(where T == UInt16)
+@_specialize(where T == UInt32)
+@_specialize(where T == UInt64)
+@inlinable
+func arrayOfBytes<T: FixedWidthInteger>(value: T, length totalBytes: Int = MemoryLayout<T>.size) -> Array<UInt8> {
+  let valuePointer = UnsafeMutablePointer<T>.allocate(capacity: 1)
+  valuePointer.pointee = value
+
+  let bytesPointer = UnsafeMutablePointer<UInt8>(OpaquePointer(valuePointer))
+  var bytes = Array<UInt8>(repeating: 0, count: totalBytes)
+  for j in 0..<min(MemoryLayout<T>.size, totalBytes) {
+    bytes[totalBytes - 1 - j] = (bytesPointer + j).pointee
+  }
+
+  valuePointer.deinitialize(count: 1)
+  valuePointer.deallocate()
+
+  return bytes
 }
