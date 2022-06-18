@@ -84,6 +84,7 @@ public extension DERDecodable {
   
       // Proceed with the unencrypted PEM (can public PEM keys be encrypted as well, wouldn't really make sense but idk if we should support it)?
       let der = try PEM.decodePrivateKeyPEM(Data(decryptedPEM), expectedPrimaryObjectIdentifier: Key.primaryObjectIdentifier, expectedSecondaryObjectIdentifier: Key.secondaryObjectIdentifier)
+        
       try self.init(privateDER: der)
     }
   }
@@ -99,8 +100,11 @@ public protocol DEREncodable {
   func publicKeyDER() throws -> Array<UInt8>
   func privateKeyDER() throws -> Array<UInt8>
   
+  /// The raw ASN1 Encoded PEM data without headers, footers and line breaks
+  func exportPrivateKeyPEMRaw() throws -> Array<UInt8>
+    
   /// PublicKey PEM Export Functions
-    func exportPublicKeyPEM(withHeaderAndFooter:Bool) throws -> Array<UInt8>
+  func exportPublicKeyPEM(withHeaderAndFooter:Bool) throws -> Array<UInt8>
   func exportPublicKeyPEMString(withHeaderAndFooter:Bool) throws -> String
   
   /// PrivateKey PEM Export Functions
@@ -109,17 +113,41 @@ public protocol DEREncodable {
 }
 
 public extension DEREncodable {
-  func exportPublicKeyPEM(withHeaderAndFooter:Bool = true) throws -> Array<UInt8> {
+
+  internal func exportPublicKeyPEMRaw() throws -> Array<UInt8> {
     let publicDER = try self.publicKeyDER()
-    let asnNodes:ASN1.Node = .sequence(nodes: [
-      .sequence(nodes: [
-        .objectIdentifier(data: Data(Self.primaryObjectIdentifier)),
-        .null
-      ]),
-      .bitString(data: Data( publicDER ))
-    ])
+    let secondaryObject:ASN1.Node?
+    if Self.primaryObjectIdentifier == RSAPublicKey.primaryObjectIdentifier {
+      secondaryObject = .null
+    } else if Self.primaryObjectIdentifier == Secp256k1PublicKey.primaryObjectIdentifier {
+      secondaryObject = .objectIdentifier(data: Data(Self.secondaryObjectIdentifier!))
+    } else {
+      secondaryObject = nil
+    }
   
-    let base64String = ASN1.Encoder.encode(asnNodes).toBase64()
+    let asnNodes:ASN1.Node
+    if let secObj = secondaryObject {
+      asnNodes = .sequence(nodes: [
+        .sequence(nodes: [
+          .objectIdentifier(data: Data(Self.primaryObjectIdentifier)),
+          secObj
+        ]),
+        .bitString(data: Data( publicDER ))
+      ])
+    } else {
+      asnNodes = .sequence(nodes: [
+        .sequence(nodes: [
+          .objectIdentifier(data: Data(Self.primaryObjectIdentifier))
+        ]),
+        .bitString(data: Data( publicDER ))
+      ])
+    }
+  
+    return ASN1.Encoder.encode(asnNodes)
+  }
+
+  func exportPublicKeyPEM(withHeaderAndFooter:Bool = true) throws -> Array<UInt8> {
+    let base64String = try self.exportPublicKeyPEMRaw().toBase64()
     let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
     let bodyUTF8Bytes = bodyString.bytes
     
@@ -141,18 +169,22 @@ public extension DEREncodable {
     return pemAsString
   }
   
-  func exportPrivateKeyPEM(withHeaderAndFooter:Bool = true) throws -> Array<UInt8> {
+  func exportPrivateKeyPEMRaw() throws -> Array<UInt8> {
     let privateDER = try self.privateKeyDER()
     let asnNodes:ASN1.Node = .sequence(nodes: [
       .integer(data: Data(hex: "0x00")),
       .sequence(nodes: [
         .objectIdentifier(data: Data(Self.primaryObjectIdentifier)),
-        .null
+        //.null
       ]),
       .octetString(data: Data( privateDER ))
     ])
-      
-    let base64String = ASN1.Encoder.encode(asnNodes).toBase64()
+  
+    return ASN1.Encoder.encode(asnNodes)
+  }
+    
+  func exportPrivateKeyPEM(withHeaderAndFooter:Bool = true) throws -> Array<UInt8> {
+    let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
     let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
     let bodyUTF8Bytes = bodyString.bytes
     
