@@ -34,7 +34,11 @@ This library...
 This package currently doesn't support Blake2b, Blake2s & Blake3. If you're up for the challenge, please feel free to add support!
 
 ## Disclaimer
-‼️ Don't use this in production ‼️ This is a work in progress ‼️ Assume the cryptography in this library is broken / unsafe ‼️
+‼️ Don't use this in production ‼️
+
+‼️ This is a work in progress ‼️ 
+
+‼️ Assume the cryptography in this library is broken / unsafe ‼️
 
 ## Install
 
