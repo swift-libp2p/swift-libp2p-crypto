@@ -207,7 +207,7 @@ public extension DEREncodable {
   }
 }
 
-/// Conform to this protocol if your type can both be instantiated and expressed by an ASN1 DER representation.
+/// Conform to this protocol if your type can both be instantiated and expressed as an ASN1 DER representation.
 public protocol DERCodable: DERDecodable, DEREncodable { }
 
 struct DER {
