@@ -28,8 +28,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "1.0.0")),
         .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.5.0")),
         .package(url: "https://github.com/swift-libp2p/swift-multihash.git", .upToNextMajor(from: "0.0.1")),
-        // JWT Support
-        .package(url: "https://github.com/vapor/jwt-kit.git", .upToNextMajor(from: "4.0.0"))
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -45,7 +43,6 @@ let package = Package(
                 .product(name: "secp256k1", package: "secp256k1.swift"),
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "CryptoSwift", package: "CryptoSwift"),
-                .product(name: "JWTKit", package: "jwt-kit")
             ],
             resources: [
               .copy("Protobufs/keys.proto")
