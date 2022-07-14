@@ -107,7 +107,7 @@ struct RSAPrivateKey:CommonPrivateKey {
     }
     
     /// Initializes a new RSA key (backed by CryptoSwift) of the specified bit size
-    init(keySize: Int) throws {
+    internal init(keySize: Int) throws {
         switch keySize {
         case 1024:
             self.key = CryptoSwift.RSA(keySize: keySize)
@@ -120,6 +120,10 @@ struct RSAPrivateKey:CommonPrivateKey {
         default:
             throw NSError(domain: "Invalid RSA Key Bit Length. (Use one of 2048, 3072 or 4096)", code: 0)
         }
+    }
+    
+    init(keySize: LibP2PCrypto.Keys.RSABitLength) throws {
+        try self.init(keySize: keySize.bits)
     }
     
     /// Expects the ASN1 Encoding of the DER formatted RSA Private Key
