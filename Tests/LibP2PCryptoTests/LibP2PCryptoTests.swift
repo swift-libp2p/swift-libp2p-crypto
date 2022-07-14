@@ -73,6 +73,63 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssertEqual(attributes?.size, 4096)
         XCTAssertEqual(attributes?.isPrivate, true)
     }
+  
+    /// This test ensures that SecKey's CopyExternalRepresentation outputs the same data as our CryptoSwift RSA Implementation
+    func testRSAExternalRepresentation() throws {
+        /// Generate a SecKey RSA Key
+        let parameters:[CFString:Any] = [
+            kSecAttrKeyType: kSecAttrKeyTypeRSA,
+            kSecAttrKeySizeInBits: 1024
+        ]
+                
+        var error:Unmanaged<CFError>? = nil
+        
+        guard let privKey = SecKeyCreateRandomKey(parameters as CFDictionary, &error) else {
+            print(error.debugDescription)
+            throw NSError(domain: "Key Generation Error: \(error.debugDescription)", code: 0, userInfo: nil)
+        }
+        
+        let rsaSecKey = privKey
+        
+        /// Lets grab the external representation
+        var externalRepError:Unmanaged<CFError>?
+        guard let cfdata = SecKeyCopyExternalRepresentation(rsaSecKey, &externalRepError) else {
+            XCTFail("Failed to copy external representation for RSA SecKey")
+            return
+        }
+        
+        let rsaSecKeyRawRep = cfdata as Data
+        
+        print(rsaSecKeyRawRep.asString(base: .base16))
+        
+        
+        /// Ensure we can import the RSA key as a CryptoSwift RSA Key
+        guard case .sequence(let params) = try ASN1.Decoder.decode(data: rsaSecKeyRawRep) else { throw NSError(domain: "Invalid ASN1 Encoding -> No PrivKey Sequence", code: 0) }
+        // We check for 4 here because internally we can only marshal the first 4 integers at the moment...
+        guard params.count == 4 || params.count == 9 else { throw NSError(domain: "Invalid ASN1 Encoding -> Invalid Private RSA param count. Expected 9 got \(params.count)", code: 0) }
+        guard case .integer(let n) = params[1] else { throw NSError(domain: "Invalid ASN1 Encoding -> PrivKey No Modulus", code: 0) }
+        guard case .integer(let e) = params[2] else { throw NSError(domain: "Invalid ASN1 Encoding -> PrivKey No Public Exponent", code: 0) }
+        guard case .integer(let d) = params[3] else { throw NSError(domain: "Invalid ASN1 Encoding -> PrivKey No Private Exponent", code: 0) }
+
+        let rsaCryptoSwift = RSA(n: n.bytes, e: e.bytes, d: d.bytes)
+        
+        // Raw Rep
+        guard let d = rsaCryptoSwift.d else { XCTFail("Failed to import RSA SecKey as private CryptoSwift Key"); return }
+        let mod = rsaCryptoSwift.n.serialize()
+        let privkeyAsnNode:ASN1.Node =
+            .sequence(nodes: [
+                .integer(data: Data( Array<UInt8>(arrayLiteral: 0x00) )),
+                .integer(data: Data(DER.i2osp(x: mod.bytes, size: mod.count + 1))),
+                .integer(data: rsaCryptoSwift.e.serialize()),
+                .integer(data: d.serialize())
+            ])
+        
+        let rsaCryptoSwiftRawRep = Data(ASN1.Encoder.encode(privkeyAsnNode))
+        
+        
+        print(rsaCryptoSwiftRawRep.asString(base: .base16))
+    
+    }
     #endif
 
     func testED25519() throws {
@@ -363,27 +420,27 @@ final class libp2p_cryptoTests: XCTestCase {
         let rsa = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: TestFixtures.RSA_1024.privateMarshaled, base: .base64Pad)
 
         let signedData = try rsa.privateKey!.sign(message: message)
-                
+
         print(signedData.asString(base: .base64Pad))
-        
+
         XCTAssertEqual(signedData.asString(base: .base64Pad), TestFixtures.RSA_1024.signedMessages["algid:sign:RSA:message-PKCS1v15:SHA256"])
         XCTAssertNotEqual(message, signedData)
-        
+
         // This just ensures that a newly instantiated Pub SecKey matches the derived pubkey from the keypair...
         let recoveredPubKey:RSAPublicKey = try RSAPublicKey(rawRepresentation: rsa.publicKey.data)
         XCTAssertEqual(rsa.publicKey.data, recoveredPubKey.rawRepresentation)
         XCTAssertEqual(try rsa.marshalPublicKey().asString(base: .base64Pad), TestFixtures.RSA_1024.publicMarshaled)
-        
+
         // Ensure the rsaSignatureMessagePKCS1v15SHA256 algorithm works with our RSA KeyPair
         //XCTAssertTrue(SecKeyIsAlgorithmSupported(recoveredPubKey, .verify, .rsaSignatureMessagePKCS1v15SHA256))
-        
+
         // Ensure the Signed Data is Valid for the given message
         XCTAssertTrue(try rsa.publicKey.verify(signature: signedData, for: message))
-        
+
         // Ensure that the signature is no longer valid if it is tweaked in any way
         XCTAssertThrowsError(try rsa.publicKey.verify(signature: Data(signedData.shuffled()), for: message))
         XCTAssertThrowsError(try rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message))
-        
+
         // Ensure that the signature is no longer valid if the message is tweaked in any way
         XCTAssertThrowsError(try rsa.publicKey.verify(signature: signedData, for: Data(message.shuffled())))
         XCTAssertThrowsError(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())))
