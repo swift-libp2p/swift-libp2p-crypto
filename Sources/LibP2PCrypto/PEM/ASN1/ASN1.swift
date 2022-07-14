@@ -36,13 +36,24 @@ enum ASN1 {
   
   /// An ASN1 node
   enum Node:CustomStringConvertible {
+    /// An array of more `ASN1.Node`s
     case sequence(nodes: [Node])
+    /// An integer
     case integer(data: Data)
+    /// An objectIdentifier
     case objectIdentifier(data: Data)
+    /// A null object
     case null
+    /// A bitString
     case bitString(data: Data)
+    /// An octetString
     case octetString(data: Data)
+    
+    //Exteneded Params
+    
+    /// Elliptic Curve specific objectIdentifier
     case ecObject(data: Data)
+    /// Elliptic Curve specific bitString
     case ecBits(data: Data)
       
     var description: String {
