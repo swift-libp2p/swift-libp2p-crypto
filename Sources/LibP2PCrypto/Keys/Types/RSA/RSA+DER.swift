@@ -70,7 +70,6 @@ extension RSAPrivateKey: DERCodable {
     }
     
     public func exportPrivateKeyPEMRaw() throws -> Array<UInt8> {
-        #if canImport(Security)
         let privateDER = try self.privateKeyDER()
         let asnNodes:ASN1.Node = .sequence(nodes: [
           .integer(data: Data(hex: "0x00")),
@@ -82,9 +81,6 @@ extension RSAPrivateKey: DERCodable {
         ])
           
         return ASN1.Encoder.encode(asnNodes)
-        #else
-        throw NSError(domain: "CryptoSwift doesn't support exporting private keys yet", code: 0)
-        #endif
     }
     
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> Array<UInt8> {
