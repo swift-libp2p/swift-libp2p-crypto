@@ -198,8 +198,8 @@ struct PEM {
   internal static func decodePublicKeyPEM(_ pem:Data, expectedPrimaryObjectIdentifier:Array<UInt8>, expectedSecondaryObjectIdentifier:Array<UInt8>?) throws -> Array<UInt8> {
     let asn = try ASN1.Decoder.decode(data: pem)
     
-    print("PublicKey")
-    print(asn)
+    //print("PublicKey")
+    //print(asn)
       
     // Enforce the above ASN1 Structure
     guard case .sequence(let sequence) = asn else { throw Error.invalidPEMFormat("PublicKey::No top level sequence for PublicKey PEM") }
@@ -231,14 +231,14 @@ struct PEM {
   internal static func decodePrivateKeyPEM(_ pem:Data, expectedPrimaryObjectIdentifier:Array<UInt8>, expectedSecondaryObjectIdentifier:Array<UInt8>?) throws -> Array<UInt8> {
     let asn = try ASN1.Decoder.decode(data: pem)
   
-    print("PrivateKey")
-    print(asn)
+    //print("PrivateKey")
+    //print(asn)
   
     // Enforce the above ASN1 Structure
     guard case .sequence(let sequence) = asn else { throw Error.invalidPEMFormat("PrivateKey::Top level node is not a sequence") }
     // Enforce the integer/version param as the first param in our top level sequence
     guard case .integer(let integer) = sequence.first else { throw Error.invalidPEMFormat("PrivateKey::First item in top level sequence wasn't an integer") }
-      print("PEM Version: \(integer.bytes)")
+      //print("PEM Version: \(integer.bytes)")
       switch integer {
       case Data(hex: "0x00"):
         //Proceed with standard pkcs1 private key format
