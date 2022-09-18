@@ -7,6 +7,23 @@
 
 import Foundation
 
+struct TestFixtures {
+  struct Fixture {
+    let keySize: Int
+    let publicDER: String
+    let privateDER: String
+    let publicPEM:String
+    let privatePEM:String
+    let encryptedPEM:[String:String]
+    let encryptionPassword:String
+    let publicMarshaled:String
+    let privateMarshaled:String
+    let rawMessage: String
+    let encryptedMessage: [String: String]
+    let signedMessages: [String: String]
+  }
+}
+
 extension TestFixtures {
   static let RSA_1024 = Fixture(
     keySize: 1024,
