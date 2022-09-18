@@ -9,8 +9,6 @@
 import Foundation
 import Multibase
 import Security
-//import RSAPublicKeyImporter
-//import RSAPublicKeyExporter
 
 struct RSAPublicKey:CommonPublicKey {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
@@ -46,8 +44,6 @@ struct RSAPublicKey:CommonPublicKey {
         guard objID.bytes == RSAPublicKey.primaryObjectIdentifier else { throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0) }
         guard case .bitString(let bits) = nodes[1] else { throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0) }
         try self.init(rawRepresentation: bits)
-        
-        //try self.init(rawRepresentation: try RSAPublicKeyImporter().fromSubjectPublicKeyInfo(data))
     }
     
     var rawRepresentation: Data {
@@ -60,9 +56,6 @@ struct RSAPublicKey:CommonPublicKey {
         ])
         
         return Data(ASN1.Encoder.encode(asnNodes))
-        
-        //try! RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.key.rawRepresentation())
-        //try! self.key.rawRepresentation()
     }
     
     func encrypt(data: Data) throws -> Data {
