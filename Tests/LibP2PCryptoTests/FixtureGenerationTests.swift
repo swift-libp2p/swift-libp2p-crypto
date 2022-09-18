@@ -5,6 +5,7 @@
 //  Created by Brandon Toms on 7/7/22.
 //
 
+#if canImport(Security)
 import XCTest
 @testable import LibP2PCrypto
 
@@ -276,6 +277,7 @@ static let {{KEY_TYPE}}{{KEY_SIZE}} = Fixture(
   }
   
 }
+#endif
 
 struct TestFixtures {
   struct Fixture {
