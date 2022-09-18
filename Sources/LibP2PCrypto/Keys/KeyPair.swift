@@ -89,7 +89,7 @@ extension LibP2PCrypto.Keys {
             case .rsa:
                 let count = self.publicKey.rawRepresentation.count
                 switch self.publicKey.rawRepresentation.count {
-                case 140, 162:
+                case 140, 161, 162:
                     return Attributes(type: .RSA(bits: .B1024), size: 1024, isPrivate: (self.privateKey != nil))
                 case 270, 294:
                     return Attributes(type: .RSA(bits: .B2048), size: 2048, isPrivate: (self.privateKey != nil))
