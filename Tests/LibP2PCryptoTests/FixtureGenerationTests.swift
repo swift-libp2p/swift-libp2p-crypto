@@ -205,6 +205,7 @@ static let {{KEY_TYPE}}{{KEY_SIZE}} = Fixture(
     return secKey
   }
 
+  /// https://datatracker.ietf.org/doc/html/rfc8017#section-9.1
   private func sign(message: Data, using key: SecKey) throws -> [String] {
     let algorithms: [SecKeyAlgorithm] = [
       .rsaSignatureRaw,
