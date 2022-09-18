@@ -110,3 +110,103 @@ extension Secp256k1PrivateKey:CommonPrivateKey {
     }
 
 }
+
+
+extension Secp256k1PublicKey:DERCodable {
+    public static var primaryObjectIdentifier: Array<UInt8> { [0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01] }
+    public static var secondaryObjectIdentifier: Array<UInt8>? { [0x2B, 0x81, 0x04, 0x00, 0x0A] }
+    
+    public convenience init(publicDER: Array<UInt8>) throws {
+        /// Expects a 0x0422 32byte long octetString as the rawRepresentation
+        try self.init(rawRepresentation: Data(publicDER))
+    }
+    
+    public convenience init(privateDER: Array<UInt8>) throws {
+        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+    }
+    
+    public func publicKeyDER() throws -> Array<UInt8> {
+        [0x04] + self.rawRepresentation
+    }
+    
+    public func privateKeyDER() throws -> Array<UInt8> {
+        throw NSError(domain: "Public Key doesn't have private DER representation", code: 0)
+    }
+    
+    public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> Array<UInt8> {
+        let publicDER = try self.publicKeyDER()
+        
+        let asnNodes:ASN1.Node = .sequence(nodes: [
+          .sequence(nodes: [
+            .objectIdentifier(data: Data(Self.primaryObjectIdentifier)),
+            .objectIdentifier(data: Data(Self.secondaryObjectIdentifier!))
+          ]),
+          .bitString(data: Data( publicDER ))
+        ])
+      
+        let base64String = ASN1.Encoder.encode(asnNodes).toBase64()
+        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
+        let bodyUTF8Bytes = bodyString.bytes
+        
+        if withHeaderAndFooter {
+          let header = PEM.PEMType.publicKey.headerBytes + [0x0a]
+          let footer = [0x0a] + PEM.PEMType.publicKey.footerBytes
+        
+          return header + bodyUTF8Bytes + footer
+        } else {
+          return bodyUTF8Bytes
+        }
+    }
+}
+
+extension Secp256k1PrivateKey:DERCodable {
+    public static var primaryObjectIdentifier: Array<UInt8> { [0x06, 0x05, 0x2B, 0x81, 0x04, 0x00, 0x0A] }
+    public static var secondaryObjectIdentifier: Array<UInt8>? { nil }
+    
+    public convenience init(publicDER: Array<UInt8>) throws {
+        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+    }
+    
+    public convenience init(privateDER: Array<UInt8>) throws {
+        try self.init(rawRepresentation: Data(privateDER))
+    }
+    
+    public func publicKeyDER() throws -> Array<UInt8> {
+        try self.publicKey.publicKeyDER()
+    }
+    
+    public func privateKeyDER() throws -> Array<UInt8> {
+        self.rawRepresentation.bytes
+    }
+    
+    public func exportPrivateKeyPEMRaw() throws -> Array<UInt8> {
+        let publicDER = try self.publicKeyDER()
+        
+        let pubKeyBitString:ASN1.Node = .bitString(data: Data( publicDER ))
+        
+        let asnNodes:ASN1.Node = .sequence(nodes: [
+          .integer(data: Data(hex: "0x01")),
+          .octetString(data: self.rawRepresentation),
+          .ecObject(data: Data(Self.primaryObjectIdentifier)),
+          .ecBits(data: Data(ASN1.Encoder.encode(pubKeyBitString)))
+        ])
+          
+        return ASN1.Encoder.encode(asnNodes)
+    }
+    
+    public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> Array<UInt8> {
+        let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
+        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
+        let bodyUTF8Bytes = bodyString.bytes
+        
+        if withHeaderAndFooter {
+          let header = PEM.PEMType.ecPrivateKey.headerBytes + [0x0a]
+          let footer = [0x0a] + PEM.PEMType.ecPrivateKey.footerBytes
+        
+          return header + bodyUTF8Bytes + footer
+        } else {
+          return bodyUTF8Bytes
+        }
+    }
+    
+}

@@ -8,7 +8,7 @@
 import Foundation
 import Multibase
 
-public protocol CommonPrivateKey {
+public protocol CommonPrivateKey:DERCodable {
     static var keyType:LibP2PCrypto.Keys.GenericKeyType { get }
     
     /// Init from raw representation

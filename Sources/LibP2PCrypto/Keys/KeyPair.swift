@@ -89,7 +89,7 @@ extension LibP2PCrypto.Keys {
             case .rsa:
                 let count = self.publicKey.rawRepresentation.count
                 switch self.publicKey.rawRepresentation.count {
-                case 140, 162:
+                case 140, 161, 162:
                     return Attributes(type: .RSA(bits: .B1024), size: 1024, isPrivate: (self.privateKey != nil))
                 case 270, 294:
                     return Attributes(type: .RSA(bits: .B2048), size: 2048, isPrivate: (self.privateKey != nil))
@@ -232,4 +232,141 @@ extension LibP2PCrypto.Keys {
             }
         }
     }
+}
+
+
+extension LibP2PCrypto.Keys.KeyPair {
+    init(pem:String, password:String? = nil) throws {
+        try self.init(pem: pem.bytes, password: password)
+    }
+    
+    init(pem:Data, password:String? = nil) throws {
+        try self.init(pem: pem.bytes, password: password)
+    }
+    
+    init(pem pemBytes:Array<UInt8>, password:String? = nil) throws {
+        
+        let (type, bytes, ids) = try PEM.pemToData(pemBytes)
+              
+        if password != nil {
+          guard type == .encryptedPrivateKey else { throw PEM.Error.invalidParameters }
+        }
+        
+        switch type {
+        case .publicRSAKeyDER:
+          // Ensure the objectIdentifier is rsaEncryption
+            try self.init(publicKey: RSAPublicKey(publicDER: bytes))
+            
+        case .privateRSAKeyDER:
+          // Ensure the objectIdentifier is rsaEncryption
+          try self.init(privateKey: RSAPrivateKey(privateDER: bytes))
+            
+        case .publicKey:
+            // Attempt to further classify the pem into it's exact key type
+            if ids.contains(RSAPublicKey.primaryObjectIdentifier) {
+                try self.init(publicKey: RSAPublicKey(pem: pemBytes, asType: RSAPublicKey.self))
+            } else if ids.contains(Curve25519.Signing.PublicKey.primaryObjectIdentifier) {
+                try self.init(publicKey: Curve25519.Signing.PublicKey(pem: pemBytes, asType: Curve25519.Signing.PublicKey.self))
+            } else if ids.contains(Secp256k1PublicKey.primaryObjectIdentifier) {
+                try self.init(publicKey: Secp256k1PublicKey(pem: pemBytes, asType: Secp256k1PublicKey.self))
+            } else {
+                throw PEM.Error.unsupportedPEMType
+            }
+            
+        case .privateKey, .ecPrivateKey:
+            // Attempt to further classify the pem into it's exact key type
+            if ids.contains(RSAPrivateKey.primaryObjectIdentifier) {
+                try self.init(privateKey: RSAPrivateKey(pem: pemBytes, asType: RSAPrivateKey.self))
+            } else if ids.contains(Curve25519.Signing.PrivateKey.primaryObjectIdentifier) {
+                try self.init(privateKey: Curve25519.Signing.PrivateKey(pem: pemBytes, asType: Curve25519.Signing.PrivateKey.self))
+            } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
+                try self.init(privateKey: Secp256k1PrivateKey(pem: pemBytes, asType: Secp256k1PrivateKey.self))
+            } else {
+                throw PEM.Error.unsupportedPEMType
+            }
+            
+        case .encryptedPrivateKey:
+          // Decrypt the encrypted PEM and attempt to instantiate it again...
+      
+          // Ensure we were provided a password
+          guard let password = password else { throw PEM.Error.invalidParameters }
+      
+          // Parse out Encryption Strategy and CipherText
+          let decryptionStategy = try PEM.decodeEncryptedPEM(Data(bytes)) // RSA.decodeEncryptedPEM(Data(bytes))
+      
+          // Derive Encryption Key from Password
+          let key = try decryptionStategy.pbkdfAlgorithm.deriveKey(password: password, ofLength: decryptionStategy.cipherAlgorithm.desiredKeyLength)
+      
+          // Decrypt CipherText
+          let decryptedPEM = try decryptionStategy.cipherAlgorithm.decrypt(bytes: decryptionStategy.ciphertext, withKey: key)
+          
+          // Extract out the objectIdentifiers from the decrypted pem
+          let ids = try PEM.objIdsInSequence(ASN1.Decoder.decode(data: Data(decryptedPEM))).map { $0.bytes }
+            
+          // Attempt to classify the Key Type
+          if ids.contains(RSAPrivateKey.primaryObjectIdentifier) {
+              let der = try PEM.decodePrivateKeyPEM(
+                Data(decryptedPEM),
+                expectedPrimaryObjectIdentifier: RSAPrivateKey.primaryObjectIdentifier,
+                expectedSecondaryObjectIdentifier: RSAPrivateKey.secondaryObjectIdentifier
+              )
+              try self.init(privateKey: RSAPrivateKey(privateDER: der))
+          } else if ids.contains(Curve25519.Signing.PrivateKey.primaryObjectIdentifier) {
+              let der = try PEM.decodePrivateKeyPEM(
+                Data(decryptedPEM),
+                expectedPrimaryObjectIdentifier: Curve25519.Signing.PrivateKey.primaryObjectIdentifier,
+                expectedSecondaryObjectIdentifier: Curve25519.Signing.PrivateKey.secondaryObjectIdentifier
+              )
+              try self.init(privateKey: Curve25519.Signing.PrivateKey(privateDER: der))
+          } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
+              let der = try PEM.decodePrivateKeyPEM(
+                Data(decryptedPEM),
+                expectedPrimaryObjectIdentifier: Secp256k1PrivateKey.primaryObjectIdentifier,
+                expectedSecondaryObjectIdentifier: Secp256k1PrivateKey.secondaryObjectIdentifier
+              )
+              try self.init(privateKey: Secp256k1PrivateKey(privateDER: der))
+          } else {
+              print(ids)
+              throw PEM.Error.unsupportedPEMType
+          }
+        }
+    }
+}
+
+extension LibP2PCrypto.Keys.KeyPair {
+    
+    func exportPublicPEM(withHeaderAndFooter:Bool = true) throws -> Array<UInt8> {
+        //guard let der = publicKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
+        return try publicKey.exportPublicKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
+    }
+    
+    func exportPrivatePEM(withHeaderAndFooter:Bool = true) throws -> Array<UInt8> {
+        guard let privKey = self.privateKey else { throw NSError(domain: "No private key available to export", code: 0) }
+        //guard let der = privKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
+        return try privKey.exportPrivateKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
+    }
+    
+    func exportPublicPEMString(withHeaderAndFooter:Bool = true) throws -> String {
+        //guard let der = publicKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
+        return try publicKey.exportPublicKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
+    }
+    
+    func exportPrivatePEMString(withHeaderAndFooter:Bool = true) throws -> String {
+        guard let privKey = self.privateKey else { throw NSError(domain: "No private key available to export", code: 0) }
+        //guard let der = privKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
+        return try privKey.exportPrivateKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
+    }
+    
+    func exportEncryptedPrivatePEM(withPassword password:String, usingPBKDF pbkdf:PEM.PBKDFAlgorithm? = nil, andCipher cipher:PEM.CipherAlgorithm? = nil) throws -> Array<UInt8> {
+        let cipher = try cipher ?? .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
+        let pbkdf = try pbkdf ?? .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 8), iterations: 2048)
+        
+        return try PEM.encryptPEM(Data(self.privateKey!.exportPrivateKeyPEMRaw()), withPassword: password, usingPBKDF: pbkdf, andCipher: cipher).bytes
+    }
+    
+    func exportEncryptedPrivatePEMString(withPassword password:String, usingPBKDF pbkdf:PEM.PBKDFAlgorithm? = nil, andCipher cipher:PEM.CipherAlgorithm? = nil) throws -> String {
+        let data = try self.exportEncryptedPrivatePEM(withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
+        return String(data: Data(data), encoding: .utf8)!
+    }
+    
 }

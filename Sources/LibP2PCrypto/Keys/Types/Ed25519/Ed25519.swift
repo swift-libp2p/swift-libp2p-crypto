@@ -7,6 +7,7 @@
 
 import Foundation
 import Crypto
+//import PEM
 
 extension Curve25519.Signing.PublicKey:CommonPublicKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
@@ -128,3 +129,104 @@ extension Curve25519.Signing.PrivateKey:Equatable {
         lhs.rawRepresentation == rhs.rawRepresentation
     }
 }
+
+extension Curve25519.Signing.PublicKey:DERCodable {
+    public static var primaryObjectIdentifier: Array<UInt8> { [0x2B, 0x65, 0x70] } 
+    public static var secondaryObjectIdentifier: Array<UInt8>? { nil }
+    
+    public init(publicDER: Array<UInt8>) throws {
+        try self.init(rawRepresentation: publicDER)
+    }
+    
+    public init(privateDER: Array<UInt8>) throws {
+        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+    }
+    
+    public func publicKeyDER() throws -> Array<UInt8> {
+        self.rawRepresentation.bytes
+    }
+    
+    public func privateKeyDER() throws -> Array<UInt8> {
+        throw NSError(domain: "Public Key doesn't have private DER representation", code: 0)
+    }
+    
+    public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> Array<UInt8> {
+        let publicDER = try self.publicKeyDER()
+        
+        let asnNodes:ASN1.Node = .sequence(nodes: [
+          .sequence(nodes: [
+            .objectIdentifier(data: Data(Self.primaryObjectIdentifier)),
+          ]),
+          .bitString(data: Data( publicDER ))
+        ])
+      
+        let base64String = ASN1.Encoder.encode(asnNodes).toBase64()
+        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
+        let bodyUTF8Bytes = bodyString.bytes
+        
+        if withHeaderAndFooter {
+          let header = PEM.PEMType.publicKey.headerBytes + [0x0a]
+          let footer = [0x0a] + PEM.PEMType.publicKey.footerBytes
+        
+          return header + bodyUTF8Bytes + footer
+        } else {
+          return bodyUTF8Bytes
+        }
+    }
+}
+
+extension Curve25519.Signing.PrivateKey:DERCodable {
+    public static var primaryObjectIdentifier: Array<UInt8> { [0x2B, 0x65, 0x70] }
+    public static var secondaryObjectIdentifier: Array<UInt8>? { nil }
+    
+    public init(publicDER: Array<UInt8>) throws {
+        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+    }
+    
+    public init(privateDER: Array<UInt8>) throws {
+        guard case .octetString(let rawData) = try ASN1.Decoder.decode(data: Data(privateDER)) else {
+            throw PEM.Error.invalidParameters
+        }
+        try self.init(rawRepresentation: rawData)
+    }
+    
+    public func publicKeyDER() throws -> Array<UInt8> {
+        try self.publicKey.publicKeyDER()
+    }
+    
+    public func privateKeyDER() throws -> Array<UInt8> {
+        ASN1.Encoder.encode(
+            ASN1.Node.octetString(data: Data( self.rawRepresentation ))
+        )
+    }
+    
+    public func exportPrivateKeyPEMRaw() throws -> Array<UInt8> {
+        let privKey = try privateKeyDER()
+        
+        let asnNodes:ASN1.Node = .sequence(nodes: [
+          .integer(data: Data(hex: "0x00")),
+          .sequence(nodes: [
+            .objectIdentifier(data: Data(Self.primaryObjectIdentifier) )
+          ]),
+          .octetString(data: Data(privKey) )
+        ])
+          
+        return ASN1.Encoder.encode(asnNodes)
+    }
+    
+    public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> Array<UInt8> {
+        let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
+        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
+        let bodyUTF8Bytes = bodyString.bytes
+        
+        if withHeaderAndFooter {
+          let header = PEM.PEMType.privateKey.headerBytes + [0x0a]
+          let footer = [0x0a] + PEM.PEMType.privateKey.footerBytes
+        
+          return header + bodyUTF8Bytes + footer
+        } else {
+          return bodyUTF8Bytes
+        }
+    }
+}
+
