@@ -26,7 +26,7 @@ let package = Package(
         .package(url: "https://github.com/Boilertalk/secp256k1.swift.git", .exact("0.1.6")),
         // 🔑 Hashing (BCrypt, SHA2, HMAC), encryption (AES), public-key (RSA), PEM and DER file handling, and random data generation.
         .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "1.0.0")),
-        .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.5.0")),
+        .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMinor(from: "1.5.0")),
         .package(url: "https://github.com/swift-libp2p/swift-multihash.git", .upToNextMajor(from: "0.0.1")),
     ],
     targets: [
