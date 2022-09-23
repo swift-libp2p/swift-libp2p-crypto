@@ -34,11 +34,7 @@ This library...
 This package currently doesn't support Blake2b, Blake2s & Blake3. If you're up for the challenge, please feel free to add support!
 
 ## Disclaimer
-‼️ Don't use this in production ‼️
-
 ‼️ This is a work in progress ‼️ 
-
-‼️ Assume the cryptography in this library is broken / unsafe ‼️
 
 ## Install
 
@@ -99,19 +95,19 @@ MCowBQYDK2VwAyEACM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=
 -----END PUBLIC KEY-----
 """
 
-let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
+let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
 
 keyPair.keyType     // -> .ed25519
 keyPair.publicKey   // -> Public Key (can be used for verifying signed messages...)
 keyPair.privateKey  // -> nil (private key is nil when importing public keys...)
 
 /// You can import encrypted PEM files as well...
-let keyPair = try LibP2PCrypto.Keys.parseEncryptedPem(encryptedPem, password: "mypassword")
+let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: encryptedPem, password: "mypassword")
 
 
 /// Once you have a KeyPair, you can use it to.... 
-/// Sign & Verify Messages 
 
+/// Sign & Verify Messages 
 let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
 let message = "Hello, world!".data(using: .utf8)!
 let signedData = try keyPair.privateKey!.sign(message: message)
@@ -122,8 +118,11 @@ if try keyPair.publicKey.verfiy(signedData, for: message) {
  // Invalid signature. This public key does not belong to the private key that signed the message. 
 }
 
-/// If you want to share the public key, you can export it by marshaling it (we don't support exporting PEM yet)
+/// If you want to share the public key, you can export it by marshaling it 
 try keyPair.publicKey.marshal()
+
+/// If you want to safely store the Private key between sessions you can export it as an encrypted PEM String
+try keyPair.exportEncryptedPrivatePEMString(withPassword "mypassword")
 
 
 
@@ -174,10 +173,9 @@ LibP2PCrypto.Keys.KeyPair(marshaledPublicKey data:Data) throws
 LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey str:String, base:BaseEncoding) throws
 LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey data:Data) throws
 
-/// Import PEM / DER formatted Keys
-LibP2PCrypto.Keys.parsePem(_ pem:String) throws -> KeyPair
-LibP2PCrypto.Keys.parsePem(_ rawPem:Data, isPrivate:Bool) throws -> KeyPair
-LibP2PCrypto.Keys.parseEncryptedPem(_ pem:String, password:String) throws -> KeyPair
+/// Import PEM formatted Keys
+LibP2PCrypto.Keys.KeyPair(pem:String, password:String? = nil) throws -> KeyPair
+LibP2PCrypto.Keys.KeyPair(pem:Data, password:String? = nil) throws -> KeyPair
 
 /// Sign & Verify
 RawPrivateKey.sign(message: Data) throws -> Data
