@@ -236,15 +236,15 @@ extension LibP2PCrypto.Keys {
 
 
 extension LibP2PCrypto.Keys.KeyPair {
-    init(pem:String, password:String? = nil) throws {
+    public init(pem:String, password:String? = nil) throws {
         try self.init(pem: pem.bytes, password: password)
     }
     
-    init(pem:Data, password:String? = nil) throws {
+    public init(pem:Data, password:String? = nil) throws {
         try self.init(pem: pem.bytes, password: password)
     }
     
-    init(pem pemBytes:Array<UInt8>, password:String? = nil) throws {
+    public init(pem pemBytes:Array<UInt8>, password:String? = nil) throws {
         
         let (type, bytes, ids) = try PEM.pemToData(pemBytes)
               
@@ -333,7 +333,7 @@ extension LibP2PCrypto.Keys.KeyPair {
     }
 }
 
-extension LibP2PCrypto.Keys.KeyPair {
+public extension LibP2PCrypto.Keys.KeyPair {
     
     func exportPublicPEM(withHeaderAndFooter:Bool = true) throws -> Array<UInt8> {
         //guard let der = publicKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
@@ -357,14 +357,22 @@ extension LibP2PCrypto.Keys.KeyPair {
         return try privKey.exportPrivateKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
     }
     
-    func exportEncryptedPrivatePEM(withPassword password:String, usingPBKDF pbkdf:PEM.PBKDFAlgorithm? = nil, andCipher cipher:PEM.CipherAlgorithm? = nil) throws -> Array<UInt8> {
+    func exportEncryptedPrivatePEMString(withPassword password:String) throws -> String {
+        try self.exportEncryptedPrivatePEMString(
+            withPassword: password,
+            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 8), iterations: 2048),
+            andCipher: .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
+        )
+    }
+    
+    internal func exportEncryptedPrivatePEM(withPassword password:String, usingPBKDF pbkdf:PEM.PBKDFAlgorithm? = nil, andCipher cipher:PEM.CipherAlgorithm? = nil) throws -> Array<UInt8> {
         let cipher = try cipher ?? .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
         let pbkdf = try pbkdf ?? .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 8), iterations: 2048)
         
         return try PEM.encryptPEM(Data(self.privateKey!.exportPrivateKeyPEMRaw()), withPassword: password, usingPBKDF: pbkdf, andCipher: cipher).bytes
     }
     
-    func exportEncryptedPrivatePEMString(withPassword password:String, usingPBKDF pbkdf:PEM.PBKDFAlgorithm? = nil, andCipher cipher:PEM.CipherAlgorithm? = nil) throws -> String {
+    internal func exportEncryptedPrivatePEMString(withPassword password:String, usingPBKDF pbkdf:PEM.PBKDFAlgorithm? = nil, andCipher cipher:PEM.CipherAlgorithm? = nil) throws -> String {
         let data = try self.exportEncryptedPrivatePEM(withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
         return String(data: Data(data), encoding: .utf8)!
     }
