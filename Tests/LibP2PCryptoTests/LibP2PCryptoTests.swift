@@ -29,8 +29,6 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssertEqual(attributes?.isPrivate, true)
     }
     
-    /// These tests are skipped on Linux when using CryptoSwift due to very slow key generation times.
-    #if canImport(Security)
     func testRSA2048() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
         print(keyPair)
@@ -45,6 +43,7 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssertEqual(attributes?.isPrivate, true)
     }
     
+    /// These tests are skipped on Linux when using CryptoSwift due to very slow key generation times.
     func testRSA3072() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B3072))
         print(keyPair)
@@ -72,8 +71,10 @@ final class libp2p_cryptoTests: XCTestCase {
         XCTAssertEqual(attributes?.size, 4096)
         XCTAssertEqual(attributes?.isPrivate, true)
     }
-  
+    
+    
     /// This test ensures that SecKey's CopyExternalRepresentation outputs the same data as our CryptoSwift RSA Implementation
+    #if canImport(Security)
     func testRSAExternalRepresentation() throws {
         /// Generate a SecKey RSA Key
         let parameters:[CFString:Any] = [
