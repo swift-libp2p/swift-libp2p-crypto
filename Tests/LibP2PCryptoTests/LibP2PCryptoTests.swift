@@ -1605,7 +1605,7 @@ final class libp2p_cryptoTests: XCTestCase {
         ("testRSA_Pem_Parsing_Public", testRSA_Pem_Parsing_Public),
         ("testRSA_Pem_Parsing_Private", testRSA_Pem_Parsing_Private),
         ("testEd25519_Pem_Parsing_Public", testEd25519_Pem_Parsing_Public),
-        //("testEd25519_Pem_Parsing_Private", testEd25519_Pem_Parsing_Private),
+        ("testEd25519_Pem_Parsing_Private", testEd25519_Pem_Parsing_Private),
         //("testSecp256k1_Pem_Parsing_Public", testSecp256k1_Pem_Parsing_Public),
         ("testSecp256k1_Pem_Parsing_Private", testSecp256k1_Pem_Parsing_Private),
         ("testEmbeddedEd25519PublicKey", testEmbeddedEd25519PublicKey)
