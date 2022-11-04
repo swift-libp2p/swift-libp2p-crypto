@@ -19,9 +19,9 @@ let package = Package(
         // Multibase Support
         .package(url: "https://github.com/swift-libp2p/swift-multibase.git", .upToNextMinor(from: "0.0.1")),
         // Protobuf Marshaling
-        .package(url: "https://github.com/apple/swift-protobuf.git", .upToNextMajor(from: "1.12.0")),
+        .package(name: "SwiftProtobuf", url: "https://github.com/apple/swift-protobuf.git", .upToNextMajor(from: "1.12.0")),
         // Secp256k1 Support
-        .package(url: "https://github.com/Boilertalk/secp256k1.swift.git", .exact("0.1.6")),
+        .package(name: "secp256k1", url: "https://github.com/Boilertalk/secp256k1.swift.git", .exact("0.1.6")),
         // 🔑 Hashing (BCrypt, SHA2, HMAC), encryption (AES), public-key (RSA), PEM and DER file handling, and random data generation.
         .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "1.0.0")),
         .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMinor(from: "1.6.0")),
@@ -35,8 +35,8 @@ let package = Package(
             dependencies: [
                 .product(name: "Multibase", package: "swift-multibase"),
                 .product(name: "Multihash", package: "swift-multihash"),
-                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-                .product(name: "secp256k1", package: "secp256k1.swift"),
+                .product(name: "SwiftProtobuf", package: "SwiftProtobuf"),
+                .product(name: "secp256k1", package: "secp256k1"),
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "CryptoSwift", package: "CryptoSwift"),
             ],
