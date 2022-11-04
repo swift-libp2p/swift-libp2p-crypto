@@ -95,7 +95,7 @@ extension LibP2PCrypto.Keys {
                     return Attributes(type: .RSA(bits: .B2048), size: 2048, isPrivate: (self.privateKey != nil))
                 case 398, 422:
                     return Attributes(type: .RSA(bits: .B3072), size: 3072, isPrivate: (self.privateKey != nil))
-                case 526, 550, 560:
+                case 526, 549, 550, 560:
                     return Attributes(type: .RSA(bits: .B4096), size: 4096, isPrivate: (self.privateKey != nil))
                 default:
                     print("PubKey Data Count: \(count)");
