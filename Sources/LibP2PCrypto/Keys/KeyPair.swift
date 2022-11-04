@@ -93,7 +93,7 @@ extension LibP2PCrypto.Keys {
                     return Attributes(type: .RSA(bits: .B1024), size: 1024, isPrivate: (self.privateKey != nil))
                 case 270, 293, 294:
                     return Attributes(type: .RSA(bits: .B2048), size: 2048, isPrivate: (self.privateKey != nil))
-                case 398, 422:
+                case 398, 421, 422:
                     return Attributes(type: .RSA(bits: .B3072), size: 3072, isPrivate: (self.privateKey != nil))
                 case 526, 549, 550, 560:
                     return Attributes(type: .RSA(bits: .B4096), size: 4096, isPrivate: (self.privateKey != nil))
