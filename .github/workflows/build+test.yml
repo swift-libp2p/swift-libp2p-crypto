@@ -15,6 +15,7 @@ jobs:
   test-matrix:
     if: ${{ !(github.event.pull_request.draft || false) }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         swift-version: ["5.9", "5.8", "5.7"]
