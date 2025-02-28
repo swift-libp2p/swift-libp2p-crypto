@@ -12,19 +12,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-import secp256k1
 import CryptoSwift
+import Foundation
 import Multibase
+import secp256k1
 
-fileprivate extension Array where Element == UInt8 {
+extension Array where Element == UInt8 {
 
-    var bigEndianUInt: UInt? {
+    fileprivate var bigEndianUInt: UInt? {
         guard self.count <= MemoryLayout<UInt>.size else {
             return nil
         }
         var number: UInt = 0
-        for i in (0 ..< self.count).reversed() {
+        for i in (0..<self.count).reversed() {
             number = number | (UInt(self[self.count - i - 1]) << (i * 8))
         }
 
@@ -66,13 +66,13 @@ public final class Secp256k1PrivateKey {
      */
     public convenience init() throws {
         guard var rand = try? LibP2PCrypto.randomBytes(length: 2).bigEndianUInt else {
-        //guard var rand = [UInt8].secureRandom(count: 2)?.bigEndianUInt else {
+            //guard var rand = [UInt8].secureRandom(count: 2)?.bigEndianUInt else {
             throw Error.internalError
         }
         rand += 55
 
         guard let bytes = try? LibP2PCrypto.randomBytes(length: Int(rand)) else {
-        //guard let bytes = [UInt8].secureRandom(count: Int(rand)) else {
+            //guard let bytes = [UInt8].secureRandom(count: Int(rand)) else {
             throw Error.internalError
         }
         let bytesHash = SHA3(variant: .keccak256).calculate(for: bytes)
@@ -138,7 +138,8 @@ public final class Secp256k1PrivateKey {
         self.ctx = finalCtx
 
         // *** Generate public key ***
-        guard let pubKey = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self) else {
+        guard let pubKey = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self)
+        else {
             throw Error.internalError
         }
         // Cleanup
@@ -228,7 +229,6 @@ public final class Secp256k1PrivateKey {
             let s = hexPrivateKey.index(hexPrivateKey.startIndex, offsetBy: i)
             let e = hexPrivateKey.index(hexPrivateKey.startIndex, offsetBy: i + 2)
 
-            
             guard let b = UInt8(String(hexPrivateKey[s..<e]), radix: 16) else {
                 throw Error.keyMalformed
             }
@@ -245,12 +245,16 @@ public final class Secp256k1PrivateKey {
         return try sign(hash: hash)
     }
 
-    public func sign(hash _hash: Array<UInt8>) throws -> (v: UInt, r: [UInt8], s: [UInt8]) {
+    public func sign(hash _hash: [UInt8]) throws -> (v: UInt, r: [UInt8], s: [UInt8]) {
         var hash = _hash
         guard hash.count == 32 else {
             throw Error.internalError
         }
-        guard let sig = malloc(MemoryLayout<secp256k1_ecdsa_recoverable_signature>.size)?.assumingMemoryBound(to: secp256k1_ecdsa_recoverable_signature.self) else {
+        guard
+            let sig = malloc(MemoryLayout<secp256k1_ecdsa_recoverable_signature>.size)?.assumingMemoryBound(
+                to: secp256k1_ecdsa_recoverable_signature.self
+            )
+        else {
             throw Error.internalError
         }
         defer {
@@ -280,12 +284,12 @@ public final class Secp256k1PrivateKey {
      */
     public func hex() -> String {
         rawPrivateKey.asString(base: .base16)
-//        var h = "0x"
-//        for b in rawPrivateKey {
-//            h += String(format: "%02x", b)
-//        }
-//
-//        return h
+        //        var h = "0x"
+        //        for b in rawPrivateKey {
+        //            h += String(format: "%02x", b)
+        //        }
+        //
+        //        return h
     }
 
     // MARK: - Helper functions
@@ -319,8 +323,8 @@ public final class Secp256k1PrivateKey {
 
 extension Secp256k1PrivateKey: Equatable {
 
-    public static func ==(_ lhs: Secp256k1PrivateKey, _ rhs: Secp256k1PrivateKey) -> Bool {
-        return lhs.rawPrivateKey == rhs.rawPrivateKey
+    public static func == (_ lhs: Secp256k1PrivateKey, _ rhs: Secp256k1PrivateKey) -> Bool {
+        lhs.rawPrivateKey == rhs.rawPrivateKey
     }
 }
 
@@ -329,7 +333,7 @@ extension Secp256k1PrivateKey: Equatable {
 extension Secp256k1PrivateKey /*: BytesConvertible*/ {
 
     public func makeBytes() -> [UInt8] {
-        return rawPrivateKey
+        rawPrivateKey
     }
 }
 

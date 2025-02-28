@@ -15,7 +15,7 @@
 import Foundation
 
 /// libp2p PBKDF parameters
-fileprivate struct PBKDF {
+private struct PBKDF {
     static let algorithmTagLength = 16
     static let nonceLength = 12
     static let keyLength = 16
@@ -30,22 +30,62 @@ import CommonCrypto
 
 struct PBKDF2 {
     static func SHA1(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
-        return pbkdf2(hash:CCPBKDFAlgorithm(kCCPRFHmacAlgSHA1), password: password, salt: salt, keyByteCount: keyByteCount, rounds: rounds)
+        pbkdf2(
+            hash: CCPBKDFAlgorithm(kCCPRFHmacAlgSHA1),
+            password: password,
+            salt: salt,
+            keyByteCount: keyByteCount,
+            rounds: rounds
+        )
     }
-    
-    static func SHA256(password: String, salt: Data, keyByteCount: Int = PBKDF.keyLength, rounds: Int = PBKDF.iterations) -> Data? {
-        return pbkdf2(hash:CCPBKDFAlgorithm(kCCPRFHmacAlgSHA256), password: password, salt: salt, keyByteCount: keyByteCount, rounds: rounds)
+
+    static func SHA256(
+        password: String,
+        salt: Data,
+        keyByteCount: Int = PBKDF.keyLength,
+        rounds: Int = PBKDF.iterations
+    ) -> Data? {
+        pbkdf2(
+            hash: CCPBKDFAlgorithm(kCCPRFHmacAlgSHA256),
+            password: password,
+            salt: salt,
+            keyByteCount: keyByteCount,
+            rounds: rounds
+        )
     }
-    
-    static func SHA384(password: String, salt: Data, keyByteCount: Int = PBKDF.keyLength, rounds: Int = PBKDF.iterations) -> Data? {
-        return pbkdf2(hash:CCPBKDFAlgorithm(kCCPRFHmacAlgSHA384), password: password, salt: salt, keyByteCount: keyByteCount, rounds: rounds)
+
+    static func SHA384(
+        password: String,
+        salt: Data,
+        keyByteCount: Int = PBKDF.keyLength,
+        rounds: Int = PBKDF.iterations
+    ) -> Data? {
+        pbkdf2(
+            hash: CCPBKDFAlgorithm(kCCPRFHmacAlgSHA384),
+            password: password,
+            salt: salt,
+            keyByteCount: keyByteCount,
+            rounds: rounds
+        )
     }
 
     static func SHA512(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
-        return pbkdf2(hash:CCPBKDFAlgorithm(kCCPRFHmacAlgSHA512), password: password, salt: salt, keyByteCount: keyByteCount, rounds: rounds)
+        pbkdf2(
+            hash: CCPBKDFAlgorithm(kCCPRFHmacAlgSHA512),
+            password: password,
+            salt: salt,
+            keyByteCount: keyByteCount,
+            rounds: rounds
+        )
     }
-    
-    private static func pbkdf2(hash: CCPBKDFAlgorithm, password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
+
+    private static func pbkdf2(
+        hash: CCPBKDFAlgorithm,
+        password: String,
+        salt: Data,
+        keyByteCount: Int,
+        rounds: Int
+    ) -> Data? {
         guard let passwordData = password.data(using: .utf8) else { return nil }
         var derivedKeyData = Data(repeating: 0, count: keyByteCount)
         let derivedCount = derivedKeyData.count
@@ -63,7 +103,8 @@ struct PBKDF2 {
                     hash,
                     UInt32(rounds),
                     keyBuffer,
-                    derivedCount)
+                    derivedCount
+                )
             }
         }
         return derivationStatus == kCCSuccess ? derivedKeyData : nil
@@ -76,23 +117,73 @@ import CryptoSwift
 
 struct PBKDF2 {
     static func MD5(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
-        return try? Data(CryptoSwift.PKCS5.PBKDF2(password: password.bytes, salt: salt.bytes, iterations: rounds, keyLength: keyByteCount, variant: .md5).calculate())
+        try? Data(
+            CryptoSwift.PKCS5.PBKDF2(
+                password: password.bytes,
+                salt: salt.bytes,
+                iterations: rounds,
+                keyLength: keyByteCount,
+                variant: .md5
+            ).calculate()
+        )
     }
-    
+
     static func SHA1(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
-        return try? Data(CryptoSwift.PKCS5.PBKDF2(password: password.bytes, salt: salt.bytes, iterations: rounds, keyLength: keyByteCount, variant: .sha1).calculate())
+        try? Data(
+            CryptoSwift.PKCS5.PBKDF2(
+                password: password.bytes,
+                salt: salt.bytes,
+                iterations: rounds,
+                keyLength: keyByteCount,
+                variant: .sha1
+            ).calculate()
+        )
     }
-    
-    static func SHA256(password: String, salt: Data, keyByteCount: Int = PBKDF.keyLength, rounds: Int = PBKDF.iterations) -> Data? {
-        return try? Data(CryptoSwift.PKCS5.PBKDF2(password: password.bytes, salt: salt.bytes, iterations: rounds, keyLength: keyByteCount, variant: .sha2(.sha256)).calculate())
+
+    static func SHA256(
+        password: String,
+        salt: Data,
+        keyByteCount: Int = PBKDF.keyLength,
+        rounds: Int = PBKDF.iterations
+    ) -> Data? {
+        try? Data(
+            CryptoSwift.PKCS5.PBKDF2(
+                password: password.bytes,
+                salt: salt.bytes,
+                iterations: rounds,
+                keyLength: keyByteCount,
+                variant: .sha2(.sha256)
+            ).calculate()
+        )
     }
-    
-    static func SHA384(password: String, salt: Data, keyByteCount: Int = PBKDF.keyLength, rounds: Int = PBKDF.iterations) -> Data? {
-        return try? Data(CryptoSwift.PKCS5.PBKDF2(password: password.bytes, salt: salt.bytes, iterations: rounds, keyLength: keyByteCount, variant: .sha2(.sha384)).calculate())
+
+    static func SHA384(
+        password: String,
+        salt: Data,
+        keyByteCount: Int = PBKDF.keyLength,
+        rounds: Int = PBKDF.iterations
+    ) -> Data? {
+        try? Data(
+            CryptoSwift.PKCS5.PBKDF2(
+                password: password.bytes,
+                salt: salt.bytes,
+                iterations: rounds,
+                keyLength: keyByteCount,
+                variant: .sha2(.sha384)
+            ).calculate()
+        )
     }
 
     static func SHA512(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
-        return try? Data(CryptoSwift.PKCS5.PBKDF2(password: password.bytes, salt: salt.bytes, iterations: rounds, keyLength: keyByteCount, variant: .sha2(.sha512)).calculate())
+        try? Data(
+            CryptoSwift.PKCS5.PBKDF2(
+                password: password.bytes,
+                salt: salt.bytes,
+                iterations: rounds,
+                keyLength: keyByteCount,
+                variant: .sha2(.sha512)
+            ).calculate()
+        )
     }
 }
 
@@ -106,7 +197,7 @@ struct PBKDF2 {
 //    func pbkdf2SHA256(password: String, salt: Data, keyByteCount: Int = 16, rounds: Int = 32767) -> Data? {
 //        //let salt:Data = self.prefix(PBKDF.saltLength)
 //        //let ciphertextAndNonce:Data = self.dropFirst(PBKDF.saltLength)
-//        
+//
 //        return pbkdf2(hash:CCPBKDFAlgorithm(kCCPRFHmacAlgSHA256), password: password, salt: salt, keyByteCount: keyByteCount, rounds: rounds)
 //    }
 //

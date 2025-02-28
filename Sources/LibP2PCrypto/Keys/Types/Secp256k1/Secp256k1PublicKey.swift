@@ -12,17 +12,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Foundation
-import secp256k1
 import CryptoSwift
+import Foundation
 import Multibase
+import secp256k1
 
 public func secp256k1_default_ctx_create(errorThrowable: Error) throws -> OpaquePointer {
     let c = secp256k1_context_create(UInt32(SECP256K1_CONTEXT_SIGN) | UInt32(SECP256K1_CONTEXT_VERIFY))
     guard let ctx = c else {
         throw errorThrowable
     }
-    
+
     guard var rand = try? LibP2PCrypto.randomBytes(length: 32) else {
         throw errorThrowable
     }
@@ -145,86 +145,86 @@ public final class Secp256k1PublicKey {
      * - throws: EthereumPublicKey.Error.signatureMalformed if the signature is not valid or in other ways malformed.
      *           EthereumPublicKey.Error.internalError if a secp256k1 library call or another internal call fails.
      */
-//    public init(message: [UInt8], v: EthereumQuantity, r: EthereumQuantity, s: EthereumQuantity, ctx: OpaquePointer? = nil) throws {
-//        // Create context
-//        let finalCtx: OpaquePointer
-//        if let ctx = ctx {
-//            finalCtx = ctx
-//            self.ctxSelfManaged = true
-//        } else {
-//            let ctx = try secp256k1_default_ctx_create(errorThrowable: Error.internalError)
-//            finalCtx = ctx
-//            self.ctxSelfManaged = false
-//        }
-//        self.ctx = finalCtx
-//
-//        // Create raw signature array
-//        var rawSig = [UInt8]()
-//        var r = r.quantity.makeBytes().trimLeadingZeros()
-//        var s = s.quantity.makeBytes().trimLeadingZeros()
-//
-//        guard r.count <= 32 && s.count <= 32 else {
-//            throw Error.signatureMalformed
-//        }
-//        guard let vUInt = v.quantity.makeBytes().bigEndianUInt, vUInt <= Int32.max else {
-//            throw Error.signatureMalformed
-//        }
-//        let v = Int32(vUInt)
-//
-//        for _ in 0..<(32 - r.count) {
-//            r.insert(0, at: 0)
-//        }
-//        for _ in 0..<(32 - s.count) {
-//            s.insert(0, at: 0)
-//        }
-//
-//        rawSig.append(contentsOf: r)
-//        rawSig.append(contentsOf: s)
-//
-//        // Parse recoverable signature
-//        guard let recsig = malloc(MemoryLayout<secp256k1_ecdsa_recoverable_signature>.size)?.assumingMemoryBound(to: secp256k1_ecdsa_recoverable_signature.self) else {
-//            throw Error.internalError
-//        }
-//        defer {
-//            free(recsig)
-//        }
-//        guard secp256k1_ecdsa_recoverable_signature_parse_compact(finalCtx, recsig, &rawSig, v) == 1 else {
-//            throw Error.signatureMalformed
-//        }
-//
-//        // Recover public key
-//        guard let pubkey = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self) else {
-//            throw Error.internalError
-//        }
-//        defer {
-//            free(pubkey)
-//        }
-//        var hash = SHA3(variant: .keccak256).calculate(for: rawSig)
-//        guard hash.count == 32 else {
-//            throw Error.internalError
-//        }
-//        guard secp256k1_ecdsa_recover(finalCtx, pubkey, recsig, &hash) == 1 else {
-//            throw Error.signatureMalformed
-//        }
-//
-//        // Generate uncompressed public key bytes
-//        var rawPubKey = [UInt8](repeating: 0, count: 65)
-//        var outputlen = 65
-//        guard secp256k1_ec_pubkey_serialize(finalCtx, &rawPubKey, &outputlen, pubkey, UInt32(SECP256K1_EC_UNCOMPRESSED)) == 1 else {
-//            throw Error.internalError
-//        }
-//
-//        rawPubKey.remove(at: 0)
-//        self.rawPublicKey = rawPubKey
-//
-//        // Generate associated ethereum address
-//        //var pubHash = SHA3(variant: .keccak256).calculate(for: rawPubKey)
-//        //guard pubHash.count == 32 else {
-//        //    throw Error.internalError
-//        //}
-//        //pubHash = Array(pubHash[12...])
-//        //self.address = try EthereumAddress(rawAddress: pubHash)
-//    }
+    //    public init(message: [UInt8], v: EthereumQuantity, r: EthereumQuantity, s: EthereumQuantity, ctx: OpaquePointer? = nil) throws {
+    //        // Create context
+    //        let finalCtx: OpaquePointer
+    //        if let ctx = ctx {
+    //            finalCtx = ctx
+    //            self.ctxSelfManaged = true
+    //        } else {
+    //            let ctx = try secp256k1_default_ctx_create(errorThrowable: Error.internalError)
+    //            finalCtx = ctx
+    //            self.ctxSelfManaged = false
+    //        }
+    //        self.ctx = finalCtx
+    //
+    //        // Create raw signature array
+    //        var rawSig = [UInt8]()
+    //        var r = r.quantity.makeBytes().trimLeadingZeros()
+    //        var s = s.quantity.makeBytes().trimLeadingZeros()
+    //
+    //        guard r.count <= 32 && s.count <= 32 else {
+    //            throw Error.signatureMalformed
+    //        }
+    //        guard let vUInt = v.quantity.makeBytes().bigEndianUInt, vUInt <= Int32.max else {
+    //            throw Error.signatureMalformed
+    //        }
+    //        let v = Int32(vUInt)
+    //
+    //        for _ in 0..<(32 - r.count) {
+    //            r.insert(0, at: 0)
+    //        }
+    //        for _ in 0..<(32 - s.count) {
+    //            s.insert(0, at: 0)
+    //        }
+    //
+    //        rawSig.append(contentsOf: r)
+    //        rawSig.append(contentsOf: s)
+    //
+    //        // Parse recoverable signature
+    //        guard let recsig = malloc(MemoryLayout<secp256k1_ecdsa_recoverable_signature>.size)?.assumingMemoryBound(to: secp256k1_ecdsa_recoverable_signature.self) else {
+    //            throw Error.internalError
+    //        }
+    //        defer {
+    //            free(recsig)
+    //        }
+    //        guard secp256k1_ecdsa_recoverable_signature_parse_compact(finalCtx, recsig, &rawSig, v) == 1 else {
+    //            throw Error.signatureMalformed
+    //        }
+    //
+    //        // Recover public key
+    //        guard let pubkey = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self) else {
+    //            throw Error.internalError
+    //        }
+    //        defer {
+    //            free(pubkey)
+    //        }
+    //        var hash = SHA3(variant: .keccak256).calculate(for: rawSig)
+    //        guard hash.count == 32 else {
+    //            throw Error.internalError
+    //        }
+    //        guard secp256k1_ecdsa_recover(finalCtx, pubkey, recsig, &hash) == 1 else {
+    //            throw Error.signatureMalformed
+    //        }
+    //
+    //        // Generate uncompressed public key bytes
+    //        var rawPubKey = [UInt8](repeating: 0, count: 65)
+    //        var outputlen = 65
+    //        guard secp256k1_ec_pubkey_serialize(finalCtx, &rawPubKey, &outputlen, pubkey, UInt32(SECP256K1_EC_UNCOMPRESSED)) == 1 else {
+    //            throw Error.internalError
+    //        }
+    //
+    //        rawPubKey.remove(at: 0)
+    //        self.rawPublicKey = rawPubKey
+    //
+    //        // Generate associated ethereum address
+    //        //var pubHash = SHA3(variant: .keccak256).calculate(for: rawPubKey)
+    //        //guard pubHash.count == 32 else {
+    //        //    throw Error.internalError
+    //        //}
+    //        //pubHash = Array(pubHash[12...])
+    //        //self.address = try EthereumAddress(rawAddress: pubHash)
+    //    }
 
     /**
      * Initializes a new instance of `EthereumPublicKey` with the given uncompressed hex string.
@@ -249,12 +249,12 @@ public final class Secp256k1PublicKey {
 
     // MARK: - Convenient functions
 
-    
     public func verifySignature(message: [UInt8], v: [UInt8], r: [UInt8], s: [UInt8]) throws -> Bool {
         // Get public key
         var rawpubKey = rawPublicKey
         rawpubKey.insert(0x04, at: 0)
-        guard let pubkey = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self) else {
+        guard let pubkey = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self)
+        else {
             throw Error.internalError
         }
         defer {
@@ -265,40 +265,44 @@ public final class Secp256k1PublicKey {
         }
 
         // Create raw signature array
-        var rawSig:[UInt8] = []
+        var rawSig: [UInt8] = []
         //var r = r.trimLeadingZeros()
         //var s = s.trimLeadingZeros()
 
         guard r.count <= 32 && s.count <= 32 else {
             throw Error.signatureMalformed
         }
-//        guard v <= Int32.max else {
-//            throw Error.signatureMalformed
-//        }
-        
+        //        guard v <= Int32.max else {
+        //            throw Error.signatureMalformed
+        //        }
+
         /// Fatal error: UnsafeRawBufferPointer.load out of bounds (when using v.withUnsafeBytes { $0.load(as: Int32.self) } )
         //let vInt = v.withUnsafeBytes { $0.load(as: Int32.self) }
-        
+
         /// So we do this instead...
         guard let vInt = Int32(v.asString(base: .base16), radix: 16), vInt >= 0, vInt <= 3 else {
             print("Invalid v param")
             throw Error.signatureMalformed
         }
-        
+
         //print("Converted '\(v.asString(base: .base16))' into an Int32: \(vInt)")
 
-//        for i in 0..<(32 - r.count) {
-//            r.insert(0, at: 0)
-//        }
-//        for i in 0..<(32 - s.count) {
-//            s.insert(0, at: 0)
-//        }
+        //        for i in 0..<(32 - r.count) {
+        //            r.insert(0, at: 0)
+        //        }
+        //        for i in 0..<(32 - s.count) {
+        //            s.insert(0, at: 0)
+        //        }
 
         rawSig.append(contentsOf: r)
         rawSig.append(contentsOf: s)
 
         // Parse recoverable signature
-        guard let recsig = malloc(MemoryLayout<secp256k1_ecdsa_recoverable_signature>.size)?.assumingMemoryBound(to: secp256k1_ecdsa_recoverable_signature.self) else {
+        guard
+            let recsig = malloc(MemoryLayout<secp256k1_ecdsa_recoverable_signature>.size)?.assumingMemoryBound(
+                to: secp256k1_ecdsa_recoverable_signature.self
+            )
+        else {
             throw Error.internalError
         }
         defer {
@@ -309,7 +313,11 @@ public final class Secp256k1PublicKey {
         }
 
         // Convert to normal signature
-        guard let sig = malloc(MemoryLayout<secp256k1_ecdsa_signature>.size)?.assumingMemoryBound(to: secp256k1_ecdsa_signature.self) else {
+        guard
+            let sig = malloc(MemoryLayout<secp256k1_ecdsa_signature>.size)?.assumingMemoryBound(
+                to: secp256k1_ecdsa_signature.self
+            )
+        else {
             throw Error.internalError
         }
         defer {
@@ -332,12 +340,12 @@ public final class Secp256k1PublicKey {
      */
     public func hex() -> String {
         rawPublicKey.asString(base: .base16)
-//        var h = "0x"
-//        for b in rawPublicKey {
-//            h += String(format: "%02x", b)
-//        }
-//
-//        return h
+        //        var h = "0x"
+        //        for b in rawPublicKey {
+        //            h += String(format: "%02x", b)
+        //        }
+        //
+        //        return h
     }
 
     // MARK: - Helper functions
@@ -346,7 +354,8 @@ public final class Secp256k1PublicKey {
         var pubKey = rawPublicKey
         pubKey.insert(0x04, at: 0)
 
-        guard let result = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self) else {
+        guard let result = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self)
+        else {
             throw Error.internalError
         }
 
@@ -381,8 +390,8 @@ public final class Secp256k1PublicKey {
 
 extension Secp256k1PublicKey: Equatable {
 
-    public static func ==(_ lhs: Secp256k1PublicKey, _ rhs: Secp256k1PublicKey) -> Bool {
-        return lhs.rawPublicKey == rhs.rawPublicKey
+    public static func == (_ lhs: Secp256k1PublicKey, _ rhs: Secp256k1PublicKey) -> Bool {
+        lhs.rawPublicKey == rhs.rawPublicKey
     }
 }
 
@@ -391,7 +400,7 @@ extension Secp256k1PublicKey: Equatable {
 extension Secp256k1PublicKey /*BytesConvertible*/ {
 
     public func makeBytes() -> [UInt8] {
-        return rawPublicKey
+        rawPublicKey
     }
 }
 
