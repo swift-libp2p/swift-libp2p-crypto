@@ -1,37 +1,13 @@
 name: Build & Test
 
 on:
-  push:
-    paths-ignore:
-      - 'README.md'
-    branches: [ main ]
-  pull_request:
-    paths-ignore:
-      - 'README.md'
-    branches: [ main ]
+  schedule:
+    - cron: "49 4 * * 1"
   workflow_dispatch:
 
 jobs:
-  test-matrix:
-    if: ${{ !(github.event.pull_request.draft || false) }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        swift-version: ["6.0", "5.10", "5.9"]
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v4
-    - uses: SwiftyLab/setup-swift@latest
-      with:
-        swift-version: ${{ matrix.swift-version }}
-    - name: Get swift version
-      run: swift --version
-    - name: Build
-      run: swift build -v
-    - name: Test
-      if: ${{ !(matrix.os == 'ubuntu-latest') }}
-      run: swift test -v
-    - name: Test Release
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-      run: swift test -c release -Xswiftc -enable-testing
+  tests:
+    name: Tests
+    uses: swift-libp2p/github-workflows/.github/workflows/build+test.yml@main
+    with:
+      test_in_release_configuration: true
