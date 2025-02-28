@@ -20,6 +20,15 @@
         }
       },
       {
+        "package": "swift-asn1",
+        "repositoryURL": "https://github.com/apple/swift-asn1.git",
+        "state": {
+          "branch": null,
+          "revision": "ae33e5941bb88d88538d0a6b19ca0b01e6c76dcf",
+          "version": "1.3.1"
+        }
+      },
+      {
         "package": "swift-bases",
         "repositoryURL": "https://github.com/swift-libp2p/swift-bases.git",
         "state": {
@@ -33,8 +42,8 @@
         "repositoryURL": "https://github.com/apple/swift-crypto.git",
         "state": {
           "branch": null,
-          "revision": "cc76b894169a3c86b71bac10c78a4db6beb7a9ad",
-          "version": "3.2.0"
+          "revision": "45305d32cfb830faebcaa9a7aea66ad342637518",
+          "version": "3.11.1"
         }
       },
       {
