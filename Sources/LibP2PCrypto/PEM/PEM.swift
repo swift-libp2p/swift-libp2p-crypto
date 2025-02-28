@@ -204,11 +204,11 @@ struct PEM {
     internal static func objIdsInSequence(_ nodes: [ASN1.Node]) -> [Data] {
         var objs: [Data] = []
 
-        nodes.forEach {
-            if case .objectIdentifier(let id) = $0 {
+        for node in nodes {
+            if case .objectIdentifier(let id) = node {
                 objs.append(id)
-            } else if case .sequence(let nodes) = $0 {
-                return objs.append(contentsOf: objIdsInSequence(nodes))
+            } else if case .sequence(let nodes) = node {
+                objs.append(contentsOf: objIdsInSequence(nodes))
             }
         }
 

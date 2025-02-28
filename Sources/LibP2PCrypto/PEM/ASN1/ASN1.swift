@@ -95,7 +95,9 @@ enum ASN1 {
             str.append("\(prefix)EC Bits: \(ecBits.toHexString())")
         case .sequence(let nodes):
             str.append("\(prefix)Sequence:")
-            nodes.forEach { str.append(printNode($0, level: level + 1)) }
+            for node in nodes {
+                str.append(printNode(node, level: level + 1))
+            }
         }
         return str.joined(separator: "\n")
     }

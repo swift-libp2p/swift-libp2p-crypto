@@ -110,7 +110,8 @@ struct RSAPublicKey: CommonPublicKey {
     public func marshal() throws -> Data {
         var publicKey = PublicKey()
         publicKey.type = .rsa
-        publicKey.data = self.rawRepresentation  //RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.rawRepresentation)
+        //RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.rawRepresentation)
+        publicKey.data = self.rawRepresentation
         return try publicKey.serializedData()
     }
 

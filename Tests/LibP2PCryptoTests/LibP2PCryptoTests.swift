@@ -328,7 +328,8 @@ final class libp2p_cryptoTests: XCTestCase {
         print(pubKey)
 
         /// Now lets try and re-marshal the imported key and make sure it matches the original data...
-        let marshaledKey = try pubKey.marshalPublicKey()  // LibP2PCrypto.Keys.marshalPublicKey(pubKey, keyType: .RSA(bits: .B1024))
+        // LibP2PCrypto.Keys.marshalPublicKey(pubKey, keyType: .RSA(bits: .B1024))
+        let marshaledKey = try pubKey.marshalPublicKey()
 
         let base64MarshaledPublicKey = marshaledKey.asString(base: .base64Pad)
 
@@ -390,16 +391,18 @@ final class libp2p_cryptoTests: XCTestCase {
 
     func testImportFromMarshalledPrivateKey_Manual() throws {
         let marshaledData = try BaseEncoding.decode(MarshaledData.PRIVATE_RSA_KEY_1024, as: .base64Pad)
-        let privKey = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaledData.data)  //LibP2PCrypto.Keys.importMarshaledPrivateKey(marshaledData.data.bytes)
+        //LibP2PCrypto.Keys.importMarshaledPrivateKey(marshaledData.data.bytes)
+        let privKey = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaledData.data)
 
         print(privKey)
     }
 
     func testImportFromMarshalledPrivateKey_1024() throws {
+        //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
         let keyPair = try LibP2PCrypto.Keys.KeyPair(
             marshaledPrivateKey: MarshaledData.PRIVATE_RSA_KEY_1024,
             base: .base64Pad
-        )  //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
+        )
 
         print(keyPair)
 
@@ -416,10 +419,11 @@ final class libp2p_cryptoTests: XCTestCase {
     }
 
     func testImportFromMarshalledPrivateKey_2048() throws {
+        //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
         let keyPair = try LibP2PCrypto.Keys.KeyPair(
             marshaledPrivateKey: MarshaledData.PRIVATE_RSA_KEY_2048,
             base: .base64Pad
-        )  //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
+        )
 
         print(keyPair)
 
@@ -436,10 +440,11 @@ final class libp2p_cryptoTests: XCTestCase {
     }
 
     func testImportFromMarshalledPrivateKey_3072() throws {
+        //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
         let keyPair = try LibP2PCrypto.Keys.KeyPair(
             marshaledPrivateKey: MarshaledData.PRIVATE_RSA_KEY_3072,
             base: .base64Pad
-        )  //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
+        )
 
         print(keyPair)
 
@@ -456,10 +461,11 @@ final class libp2p_cryptoTests: XCTestCase {
     }
 
     func testImportFromMarshalledPrivateKey_4096() throws {
+        //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
         let keyPair = try LibP2PCrypto.Keys.KeyPair(
             marshaledPrivateKey: MarshaledData.PRIVATE_RSA_KEY_4096,
             base: .base64Pad
-        )  //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
+        )
 
         print(keyPair)
 
@@ -647,12 +653,16 @@ final class libp2p_cryptoTests: XCTestCase {
         let decrypted: String = try aes256Key.decrypt(encrypted)
         let decrypted2: String = try aes256Key2.decrypt(encrypted2)
 
-        XCTAssertNotEqual(encrypted, encrypted2)  //Ensure that the encrypted data is different using different keys
-        XCTAssertEqual(decrypted, message)  //Ensure we can decrypt the data with the proper key
-        XCTAssertEqual(decrypted2, message)  //Ensure we can decrypt the data with the proper key
+        //Ensure that the encrypted data is different using different keys
+        XCTAssertNotEqual(encrypted, encrypted2)
+        //Ensure we can decrypt the data with the proper key
+        XCTAssertEqual(decrypted, message)
+        //Ensure we can decrypt the data with the proper key
+        XCTAssertEqual(decrypted2, message)
 
         //Ensure that decryption fails when we use the wrong key
-        let decryptedWrongKey: String? = try? aes256Key.decrypt(encrypted2)  //Usually results in an String.Encoding Error (cause gibberish)
+        //Usually results in an String.Encoding Error (cause gibberish)
+        let decryptedWrongKey: String? = try? aes256Key.decrypt(encrypted2)
         XCTAssertNotEqual(decryptedWrongKey, message)
     }
 
@@ -714,8 +724,10 @@ final class libp2p_cryptoTests: XCTestCase {
 
         let encrypted = hmacKeyLocal.encrypt(message)
 
-        XCTAssertTrue(hmacKeyRemote.verify(message, hash: encrypted))  // Correct data, hash matches...
-        XCTAssertFalse(hmacKeyRemote.verify("HellØ world", hash: encrypted))  // Corrupted data, hash doesn't match...
+        // Correct data, hash matches...
+        XCTAssertTrue(hmacKeyRemote.verify(message, hash: encrypted))
+        // Corrupted data, hash doesn't match...
+        XCTAssertFalse(hmacKeyRemote.verify("HellØ world", hash: encrypted))
     }
 
     //    func testAES() throws {
@@ -1208,14 +1220,13 @@ final class libp2p_cryptoTests: XCTestCase {
     }
 
     func testRSAEncryptedPrivateKeyPem() throws {
-        /*
-        * Generated with
-        * openssl genpkey -algorithm RSA
-        *   -pkeyopt rsa_keygen_bits:1024
-        *   -pkeyopt rsa_keygen_pubexp:65537
-        *   -out foo.pem
-        * openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
-        */
+
+        /// Generated with
+        /// openssl genpkey -algorithm RSA
+        ///   -pkeyopt rsa_keygen_bits:1024
+        ///   -pkeyopt rsa_keygen_pubexp:65537
+        ///   -out foo.pem
+        /// openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
         let pem = """
             -----BEGIN ENCRYPTED PRIVATE KEY-----
             MIICzzBJBgkqhkiG9w0BBQ0wPDAbBgkqhkiG9w0BBQwwDgQIP5QK2RfqUl4CAggA
@@ -1244,14 +1255,13 @@ final class libp2p_cryptoTests: XCTestCase {
     }
 
     func testImportEncryptedPemKey() throws {
-        /*
-         * Generated with
-         * openssl genpkey -algorithm RSA
-         *   -pkeyopt rsa_keygen_bits:1024
-         *   -pkeyopt rsa_keygen_pubexp:65537
-         *   -out foo.pem
-         * openssl pkcs8 -in foo.pem -topk8 -v2 des3 -passout pass:mypassword
-         */
+
+        /// Generated with
+        /// openssl genpkey -algorithm RSA
+        ///   -pkeyopt rsa_keygen_bits:1024
+        ///   -pkeyopt rsa_keygen_pubexp:65537
+        ///   -out foo.pem
+        /// openssl pkcs8 -in foo.pem -topk8 -v2 des3 -passout pass:mypassword
         let pem = """
             -----BEGIN ENCRYPTED PRIVATE KEY-----
             MIICxjBABgkqhkiG9w0BBQ0wMzAbBgkqhkiG9w0BBQwwDgQISznrfHd+D58CAggA
@@ -1277,14 +1287,14 @@ final class libp2p_cryptoTests: XCTestCase {
     }
 
     func testRSAEncryptedPrivateKeyPemExportManual() throws {
-        /*
-        * Generated with
-        * openssl genpkey -algorithm RSA
-        *   -pkeyopt rsa_keygen_bits:1024
-        *   -pkeyopt rsa_keygen_pubexp:65537
-        *   -out foo.pem
-        * openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
-        */
+
+        /// Generated with
+        /// openssl genpkey -algorithm RSA
+        ///   -pkeyopt rsa_keygen_bits:1024
+        ///   -pkeyopt rsa_keygen_pubexp:65537
+        ///   -out foo.pem
+        /// openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
+        ///
         let pem = """
             -----BEGIN ENCRYPTED PRIVATE KEY-----
             MIICzzBJBgkqhkiG9w0BBQ0wPDAbBgkqhkiG9w0BBQwwDgQIP5QK2RfqUl4CAggA
@@ -1399,14 +1409,13 @@ final class libp2p_cryptoTests: XCTestCase {
     }
 
     func testRSAEncryptedPrivateKeyPemExport() throws {
-        /*
-        * Generated with
-        * openssl genpkey -algorithm RSA
-        *   -pkeyopt rsa_keygen_bits:1024
-        *   -pkeyopt rsa_keygen_pubexp:65537
-        *   -out foo.pem
-        * openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
-        */
+
+        /// Generated with
+        /// openssl genpkey -algorithm RSA
+        ///   -pkeyopt rsa_keygen_bits:1024
+        ///   -pkeyopt rsa_keygen_pubexp:65537
+        ///   -out foo.pem
+        /// openssl pkcs8 -in foo.pem -topk8 -v2 aes-128-cbc -passout pass:mypassword
         let pem = """
             -----BEGIN ENCRYPTED PRIVATE KEY-----
             MIICzzBJBgkqhkiG9w0BBQ0wPDAbBgkqhkiG9w0BBQwwDgQIP5QK2RfqUl4CAggA

@@ -56,35 +56,17 @@ public final class Secp256k1PublicKey {
 
     // MARK: - Initialization
 
-    /**
-     * Convenient initializer for `init(publicKey:)`
-     */
+    /// Convenient initializer for `init(publicKey:)`
     public required convenience init(_ bytes: [UInt8]) throws {
         try self.init(publicKey: bytes)
     }
 
-    /**
-     * Initializes a new instance of `EthereumPublicKey` with the given raw uncompressed public key Bytes.
-     *
-     * `publicKey` must be either a 64 Byte array (containing the uncompressed public key)
-     * or a 65 byte array where the first byte must be the uncompressed header byte 0x04
-     * and the following 64 bytes must be the uncompressed public key.
-     *
-     * - parameter publicKey: The uncompressed public key either with the header byte 0x04 or without.
-     *
-     * - parameter ctx: An optional self managed context. If you have specific requirements and
-     *                  your app performs not as fast as you want it to, you can manage the
-     *                  `secp256k1_context` yourself with the public methods
-     *                  `secp256k1_default_ctx_create` and `secp256k1_default_ctx_destroy`.
-     *                  If you do this, we will not be able to free memory automatically and you
-     *                  __have__ to destroy the context yourself once your app is closed or
-     *                  you are sure it will not be used any longer. Only use this optional
-     *                  context management if you know exactly what you are doing and you really
-     *                  need it.
-     *
-     * - throws: EthereumPublicKey.Error.keyMalformed if the given `publicKey` does not fulfill the requirements from above.
-     *           EthereumPublicKey.Error.internalError if a secp256k1 library call or another internal call fails.
-     */
+    /// Initializes a new instance of `EthereumPublicKey` with the given raw uncompressed public key Bytes.
+    /// - Parameters:
+    ///   - publicKey: The uncompressed public key either with the header byte 0x04 or without. Must be either a 64 Byte array (containing the uncompressed public key) or a 65 byte array where the first byte must be the uncompressed header byte 0x04 and the following 64 bytes must be the uncompressed public key.
+    ///   - ctx: An optional self managed context. If you have specific requirements and your app performs not as fast as you want it to, you can manage the `secp256k1_context` yourself with the public methods `secp256k1_default_ctx_create` and `secp256k1_default_ctx_destroy`. If you do this, we will not be able to free memory automatically and you __have__ to destroy the context yourself once your app is closed or you are sure it will not be used any longer. Only use this optional context management if you know exactly what you are doing and you really need it.
+    ///
+    /// - throws: EthereumPublicKey.Error.keyMalformed if the given `publicKey` does not fulfill the requirements from above. EthereumPublicKey.Error.internalError if a secp256k1 library call or another internal call fails.
     public init(publicKey: [UInt8], ctx: OpaquePointer? = nil) throws {
         guard publicKey.count == 64 || publicKey.count == 65 else {
             throw Error.keyMalformed
@@ -226,18 +208,9 @@ public final class Secp256k1PublicKey {
     //        //self.address = try EthereumAddress(rawAddress: pubHash)
     //    }
 
-    /**
-     * Initializes a new instance of `EthereumPublicKey` with the given uncompressed hex string.
-     *
-     * `hexPublicKey` must have either 128 characters (containing the uncompressed public key)
-     * or 130 characters in which case the first two characters must be the hex prefix 0x
-     * and the following 128 characters must be the uncompressed public key.
-     *
-     * - parameter hexPublicKey: The uncompressed hex public key either with the hex prefix 0x or without.
-     *
-     * - throws: EthereumPublicKey.Error.keyMalformed if the given `hexPublicKey` does not fulfill the requirements from above.
-     *           EthereumPublicKey.Error.internalError if a secp256k1 library call or another internal call fails.
-     */
+    /// Initializes a new instance of `EthereumPublicKey` with the given uncompressed hex string.
+    /// - Parameter hexPublicKey: The uncompressed hex public key either with the hex prefix 0x or without. Must have either 128 characters (containing the uncompressed public key) or 130 characters in which case the first two characters must be the hex prefix 0x and the following 128 characters must be the uncompressed public key.
+    /// - throws: EthereumPublicKey.Error.keyMalformed if the given `hexPublicKey` does not fulfill the requirements from above. EthereumPublicKey.Error.internalError if a secp256k1 library call or another internal call fails.
     public convenience init(hexPublicKey: String) throws {
         guard hexPublicKey.count == 128 || hexPublicKey.count == 130 else {
             throw Error.keyMalformed
@@ -335,9 +308,7 @@ public final class Secp256k1PublicKey {
         return secp256k1_ecdsa_verify(ctx, sig, &hash, pubkey) == 1
     }
 
-    /**
-     * Returns this public key serialized as a hex string.
-     */
+    /// Returns this public key serialized as a hex string.
     public func hex() -> String {
         rawPublicKey.asString(base: .base16)
         //        var h = "0x"
@@ -397,7 +368,7 @@ extension Secp256k1PublicKey: Equatable {
 
 // MARK: - BytesConvertible
 
-extension Secp256k1PublicKey /*BytesConvertible*/ {
+extension Secp256k1PublicKey {
 
     public func makeBytes() -> [UInt8] {
         rawPublicKey
