@@ -1,13 +1,20 @@
+//===----------------------------------------------------------------------===//
 //
-//  Keys.swift
-//  
+// This source file is part of the swift-libp2p open source project
 //
-//  Created by Brandon Toms on 5/1/22.
+// Copyright (c) 2022-2025 swift-libp2p project authors
+// Licensed under MIT
 //
+// See LICENSE for license information
+// See CONTRIBUTORS for the list of swift-libp2p project authors
+//
+// SPDX-License-Identifier: MIT
+//
+//===----------------------------------------------------------------------===//
 
+import Crypto
 import Foundation
 import Multibase
-import Crypto
 
 extension LibP2PCrypto {
     public enum Keys {
@@ -15,8 +22,8 @@ extension LibP2PCrypto {
             case P256
             case P384
             case P521
-            
-            var bits:Int {
+
+            var bits: Int {
                 switch self {
                 case .P256:
                     return 256
@@ -26,20 +33,20 @@ extension LibP2PCrypto {
                     return 521
                 }
             }
-            
-            var description:String {
-                return "\(bits) Curve"
+
+            var description: String {
+                "\(bits) Curve"
             }
         }
-        
+
         public enum RSABitLength {
             case B1024
             case B2048
             case B3072
             case B4096
-            case custom(bits:Int)
-            
-            var bits:Int {
+            case custom(bits: Int)
+
+            var bits: Int {
                 switch self {
                 case .B1024:
                     return 1024
@@ -50,21 +57,21 @@ extension LibP2PCrypto {
                 case .B4096:
                     return 4096
                 case .custom(let bits):
-                    if bits < 1024 { print("‼️ WARNING: RSA Keys less than 1024 are considered insecure! ‼️")}
+                    if bits < 1024 { print("‼️ WARNING: RSA Keys less than 1024 are considered insecure! ‼️") }
                     return bits
                 }
             }
-            
-            var description:String {
-                return "\(self.bits) Bit"
+
+            var description: String {
+                "\(self.bits) Bit"
             }
         }
-        
+
         public enum KeyPairType {
-            case RSA(bits:RSABitLength = .B2048)
+            case RSA(bits: RSABitLength = .B2048)
             case Ed25519
             case Secp256k1
-            
+
             //case EC(curve:ElipticCurveType = .P256)
             //case ECDSA(curve:ElipticCurveType = .P256)
             //case ECSECPrimeRandom(curve:ElipticCurveType = .P256)
@@ -75,8 +82,8 @@ extension LibP2PCrypto {
             //case RC2(bits:Int)
             //case RC4(bits:Int)
             //case ThreeDES
-            
-            var toProtoType:KeyType {
+
+            var toProtoType: KeyType {
                 switch self {
                 case .RSA:
                     return .rsa
@@ -86,12 +93,12 @@ extension LibP2PCrypto {
                     return .secp256K1
                 }
             }
-            
-            var toGenericType:GenericKeyType {
-                return .init(self.toProtoType)
+
+            var toGenericType: GenericKeyType {
+                .init(self.toProtoType)
             }
-            
-            var name:String {
+
+            var name: String {
                 switch self {
                 case .RSA:
                     return "RSA"
@@ -101,8 +108,8 @@ extension LibP2PCrypto {
                     return "Secp256k1"
                 }
             }
-            
-            var description:String {
+
+            var description: String {
                 switch self {
                 case .RSA(let bits):
                     return "\(bits.description) RSA"
@@ -113,34 +120,40 @@ extension LibP2PCrypto {
                 }
             }
         }
-    
-        public static func generateKeyPair(_ type:KeyPairType) throws -> KeyPair {
+
+        public static func generateKeyPair(_ type: KeyPairType) throws -> KeyPair {
             try LibP2PCrypto.Keys.KeyPair(type)
         }
-        
+
         /// Converts a protobuf serialized public key into its representative object.
-        public static func unmarshalPublicKey(buf:[UInt8], into base:BaseEncoding = .base16) throws -> String {
+        public static func unmarshalPublicKey(buf: [UInt8], into base: BaseEncoding = .base16) throws -> String {
             let pubKeyProto = try PublicKey(contiguousBytes: buf)
-            
-            guard !pubKeyProto.data.isEmpty else { throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil) }
+
+            guard !pubKeyProto.data.isEmpty else {
+                throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil)
+            }
             switch pubKeyProto.type {
             case .rsa:
                 //let data = try RSAPublicKeyImporter().fromSubjectPublicKeyInfo( pubKeyProto.data )
                 //return data.asString(base: base)
                 return pubKeyProto.data.asString(base: base)
-                
+
             case .ed25519:
                 return pubKeyProto.data.asString(base: base)
             case .secp256K1:
                 return pubKeyProto.data.asString(base: base)
             }
-            
+
         }
-        
+
         /// Converts a raw private key string into a protobuf serialized private key.
-        public static func marshalPrivateKey(raw:String, asKeyType:KeyPairType, fromBase base:BaseEncoding? = nil) throws -> [UInt8] {
+        public static func marshalPrivateKey(
+            raw: String,
+            asKeyType: KeyPairType,
+            fromBase base: BaseEncoding? = nil
+        ) throws -> [UInt8] {
             do {
-                let decoded:(base:BaseEncoding, data:Data)
+                let decoded: (base: BaseEncoding, data: Data)
                 if let b = base {
                     decoded = try BaseEncoding.decode(raw, as: b)
                 } else {
@@ -149,29 +162,31 @@ extension LibP2PCrypto {
                 return try self.marshalPrivateKey(raw: decoded.data, keyType: asKeyType)
             } catch {
                 print(error)
-                throw NSError(domain: "Failed to decode raw private key, unknown base encoding.", code: 0, userInfo: nil)
+                throw NSError(
+                    domain: "Failed to decode raw private key, unknown base encoding.",
+                    code: 0,
+                    userInfo: nil
+                )
             }
         }
-        
-        public static func marshalPrivateKey(raw:Data, keyType:KeyPairType) throws -> [UInt8] {
+
+        public static func marshalPrivateKey(raw: Data, keyType: KeyPairType) throws -> [UInt8] {
             var privKeyProto = PrivateKey()
             privKeyProto.data = raw
             privKeyProto.type = keyType.toProtoType
             return Array(try privKeyProto.serializedData())
         }
-        
+
         /// Converts a protobuf serialized private key into its representative object.
-        public static func unmarshalPrivateKey(buf:[UInt8], into base:BaseEncoding = .base16) throws -> String {
+        public static func unmarshalPrivateKey(buf: [UInt8], into base: BaseEncoding = .base16) throws -> String {
             let privKeyProto = try PrivateKey(contiguousBytes: buf)
-            
+
             let data = privKeyProto.data
             guard !data.isEmpty else { throw NSError(domain: "Unable to Unmarshal PrivateKey", code: 0, userInfo: nil) }
-            
+
             return data.asString(base: base)
         }
-        
-        
-        
+
         /// Converts a public key object into a protobuf serialized public key.
         /// - TODO: PEM Format
         /// - [PEM](https://developer.apple.com/forums/thread/104753)
@@ -227,12 +242,12 @@ extension LibP2PCrypto {
             case PEM
             case JWK
         }
-        
-        func exportKey(key:String, password:String, format:ExportedKeyType) { }
-    
-        func keyStretcher(cipherType:String, hashType:String, secret:String) {}
-        
-        func importKey(encryptedKey:String, password:String) { }
-        
+
+        func exportKey(key: String, password: String, format: ExportedKeyType) {}
+
+        func keyStretcher(cipherType: String, hashType: String, secret: String) {}
+
+        func importKey(encryptedKey: String, password: String) {}
+
     }
 }
