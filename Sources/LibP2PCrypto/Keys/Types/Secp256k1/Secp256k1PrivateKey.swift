@@ -124,7 +124,7 @@ public final class Secp256k1PrivateKey {
         }
         self.ctx = finalCtx
 
-        // *** Generate public key ***
+        // Generate public key
         guard let pubKey = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self)
         else {
             throw Error.internalError
@@ -149,7 +149,7 @@ public final class Secp256k1PrivateKey {
         pubOut.remove(at: 0)
 
         self.publicKey = try Secp256k1PublicKey(publicKey: pubOut, ctx: ctx)
-        // *** End Generate public key ***
+        // End Generate public key
 
         // Verify private key
         try verifyPrivateKey()
@@ -306,7 +306,7 @@ extension Secp256k1PrivateKey: Equatable {
 
 // MARK: - BytesConvertible
 
-extension Secp256k1PrivateKey /*: BytesConvertible*/ {
+extension Secp256k1PrivateKey {
 
     public func makeBytes() -> [UInt8] {
         rawPrivateKey

@@ -585,8 +585,11 @@ final class libp2p_cryptoTests: XCTestCase {
 
         var alertedSignedData = signedData
         alertedSignedData[32] = 0
-        XCTAssertFalse(try secp.publicKey.verify(signature: alertedSignedData, for: message))  //We dont simply shuffle the data because it will most likely throw an error (due to invalid first byte 'v')
-        XCTAssertThrowsError(try secp.publicKey.verify(signature: Data(signedData.dropFirst()), for: message))  //Invalid length will throw error...
+        // We dont simply shuffle the data because it will most likely throw an error
+        // (due to invalid first byte 'v')
+        XCTAssertFalse(try secp.publicKey.verify(signature: alertedSignedData, for: message))
+        // Invalid length will throw error...
+        XCTAssertThrowsError(try secp.publicKey.verify(signature: Data(signedData.dropFirst()), for: message))
 
         XCTAssertFalse(try secp.publicKey.verify(signature: signedData, for: Data(message.shuffled())))
         XCTAssertFalse(try secp.publicKey.verify(signature: signedData, for: Data(message.shuffled())))
