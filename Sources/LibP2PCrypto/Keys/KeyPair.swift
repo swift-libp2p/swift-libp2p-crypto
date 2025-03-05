@@ -161,7 +161,7 @@ extension LibP2PCrypto.Keys {
         }
         /// Instantiate a KeyPair from a marshaled public key
         public init(marshaledPublicKey data: Data) throws {
-            let proto = try PublicKey(serializedBytes: data)
+            let proto = try PublicKey(contiguousBytes: data)
             switch proto.type {
             case .rsa:
                 try self.init(publicKey: RSAPublicKey(marshaledData: proto.data))
@@ -182,7 +182,7 @@ extension LibP2PCrypto.Keys {
         /// Instantiate a KeyPair from a marshaled private key
         /// https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md
         public init(marshaledPrivateKey data: Data) throws {
-            let proto = try PrivateKey(serializedBytes: data)
+            let proto = try PrivateKey(contiguousBytes: data)
             switch proto.type {
             case .rsa:
                 try self.init(privateKey: RSAPrivateKey(marshaledData: proto.data))
