@@ -178,7 +178,9 @@ extension LibP2PCrypto.Keys {
         public init(marshaledPrivateKey str: String, base: BaseEncoding) throws {
             try self.init(marshaledPrivateKey: BaseEncoding.decode(str, as: base).data)
         }
+
         /// Instantiate a KeyPair from a marshaled private key
+        /// https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md
         public init(marshaledPrivateKey data: Data) throws {
             let proto = try PrivateKey(contiguousBytes: data)
             switch proto.type {
@@ -186,8 +188,38 @@ extension LibP2PCrypto.Keys {
                 try self.init(privateKey: RSAPrivateKey(marshaledData: proto.data))
 
             case .ed25519:
-                try self.init(privateKey: Curve25519.Signing.PrivateKey(marshaledData: proto.data))
-
+                switch proto.data.count {
+                case 32:
+                    try self.init(privateKey: Curve25519.Signing.PrivateKey(marshaledData: proto.data))
+                case 64:
+                    // [private key bytes][public key bytes]
+                    // Ensure we can derive the attached public key
+                    let privkey = try Curve25519.Signing.PrivateKey(marshaledData: proto.data.prefix(32))
+                    guard privkey.publicKey.rawRepresentation == proto.data.suffix(32) else {
+                        throw NSError(
+                            domain: "Invalid private key protobuf encoding -> unable to validate public key",
+                            code: 0
+                        )
+                    }
+                    try self.init(privateKey: privkey)
+                case 96:
+                    // [private key][public key][public key]
+                    // Ensure the two pubkeys match and we can derive the attached public key
+                    let parts = Array(proto.data.chunks(ofCount: 32))
+                    guard parts[1] == parts[2] else {
+                        throw NSError(domain: "Invalid private key protobuf encoding -> pubkeys dont match", code: 0)
+                    }
+                    let privkey = try Curve25519.Signing.PrivateKey(marshaledData: parts[0])
+                    guard privkey.publicKey.rawRepresentation == parts[1] else {
+                        throw NSError(
+                            domain: "Invalid private key protobuf encoding -> unable to validate public key",
+                            code: 0
+                        )
+                    }
+                    try self.init(privateKey: privkey)
+                default:
+                    throw NSError(domain: "Invalid private key protobuf encoding -> invalid data payload", code: 0)
+                }
             case .secp256K1:
                 try self.init(privateKey: Secp256k1PrivateKey(marshaledData: proto.data))
             }
