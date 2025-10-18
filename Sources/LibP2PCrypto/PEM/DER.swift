@@ -46,7 +46,7 @@ extension DERDecodable {
     ///   - password: A password to use to decrypt an encrypted PEM file
     ///   - asType: The underlying DERDecodable Key Type (ex: RSA.self)
     public init<Key: DERDecodable>(pem: Data, password: String? = nil, asType: Key.Type = Key.self) throws {
-        try self.init(pem: pem.bytes, password: password, asType: Key.self)
+        try self.init(pem: Array<UInt8>(pem), password: password, asType: Key.self)
     }
 
     /// Instantiates a DERDecodable Key from ut8 decoded PEM bytes

@@ -55,7 +55,7 @@ extension ASN1 {
             }
 
             // Integer
-            if firstByte == IDENTIFIERS.INTERGER {
+            if firstByte == IDENTIFIERS.INTEGER {
                 let length = try scanner.consumeLength()
                 let data = try scanner.consume(length: length)
                 return .integer(data: data)

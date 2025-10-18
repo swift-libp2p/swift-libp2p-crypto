@@ -125,13 +125,13 @@ extension Curve25519.Signing.PrivateKey: CommonPrivateKey {
     //    }
 }
 
-extension Curve25519.Signing.PublicKey: Equatable {
+extension Curve25519.Signing.PublicKey: @retroactive Equatable {
     public static func == (lhs: Curve25519.Signing.PublicKey, rhs: Curve25519.Signing.PublicKey) -> Bool {
         lhs.rawRepresentation == rhs.rawRepresentation
     }
 }
 
-extension Curve25519.Signing.PrivateKey: Equatable {
+extension Curve25519.Signing.PrivateKey: @retroactive Equatable {
     public static func == (lhs: Curve25519.Signing.PrivateKey, rhs: Curve25519.Signing.PrivateKey) -> Bool {
         lhs.rawRepresentation == rhs.rawRepresentation
     }
@@ -150,7 +150,7 @@ extension Curve25519.Signing.PublicKey: DERCodable {
     }
 
     public func publicKeyDER() throws -> [UInt8] {
-        self.rawRepresentation.bytes
+        Array(self.rawRepresentation)
     }
 
     public func privateKeyDER() throws -> [UInt8] {
@@ -169,7 +169,7 @@ extension Curve25519.Signing.PublicKey: DERCodable {
 
         let base64String = ASN1.Encoder.encode(asnNodes).toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
+        let bodyUTF8Bytes = [UInt8](bodyString.utf8)
 
         if withHeaderAndFooter {
             let header = PEM.PEMType.publicKey.headerBytes + [0x0a]
@@ -224,7 +224,7 @@ extension Curve25519.Signing.PrivateKey: DERCodable {
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
         let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
+        let bodyUTF8Bytes = [UInt8](bodyString.utf8)
 
         if withHeaderAndFooter {
             let header = PEM.PEMType.privateKey.headerBytes + [0x0a]
@@ -236,3 +236,4 @@ extension Curve25519.Signing.PrivateKey: DERCodable {
         }
     }
 }
+

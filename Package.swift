@@ -19,7 +19,7 @@ let package = Package(
     name: "swift-libp2p-crypto",
     platforms: [
         .macOS(.v10_15),
-        .iOS(.v13),
+        .iOS("18.0.0"), // TODO: use a constant like `.v18` when one exists -- SWB 2025-10-17
     ],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
