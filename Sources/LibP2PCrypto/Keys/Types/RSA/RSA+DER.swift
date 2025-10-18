@@ -21,7 +21,7 @@ extension RSAPublicKey: DERCodable {
     public static var secondaryObjectIdentifier: [UInt8]? { nil }
 
     public func publicKeyDER() throws -> [UInt8] {
-        self.rawRepresentation.bytes
+        [UInt8](self.rawRepresentation)
     }
 
     public func privateKeyDER() throws -> [UInt8] {
@@ -61,11 +61,12 @@ extension RSAPrivateKey: DERCodable {
     static var secondaryObjectIdentifier: [UInt8]? { nil }
 
     func publicKeyDER() throws -> [UInt8] {
-        try self.derivePublicKey().rawRepresentation.bytes
+        let rawRepresentation = try self.derivePublicKey().rawRepresentation
+        return [UInt8](rawRepresentation)
     }
 
     func privateKeyDER() throws -> [UInt8] {
-        self.rawRepresentation.bytes
+        [UInt8](self.rawRepresentation)
     }
 
     init(publicDER: [UInt8]) throws {

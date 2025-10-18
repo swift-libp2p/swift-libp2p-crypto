@@ -58,7 +58,7 @@ struct RSAPublicKey: CommonPublicKey {
         guard case .objectIdentifier(let objID) = subjectInfo.first else {
             throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0)
         }
-        guard objID.bytes == RSAPublicKey.primaryObjectIdentifier else {
+        guard [UInt8](objID) == RSAPublicKey.primaryObjectIdentifier else {
             throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0)
         }
         guard case .bitString(let bits) = nodes[1] else {

@@ -92,12 +92,12 @@ extension Data {
 
     /// Returns the encrypted data in the format [ { salt }  { nonce}  { ciphertext }  { GCM algorithm tag } ]
     public func encryptGCM(password: String) throws -> Data {
-        try Data(self.bytes.encryptGCM(password: password))
+        try Data(([UInt8](self)).encryptGCM(password: password))
     }
 
     /// Returns  decrypted data that was previously encrypted with `encryptGCM(password:)`
     public func decryptGCM(password: String) throws -> Data {
-        try Data(self.bytes.decryptGCM(password: password))
+        try Data(([UInt8](self)).decryptGCM(password: password))
     }
 
     public func encrypt(withKey key: Encryptable) throws -> Data {
@@ -173,7 +173,10 @@ extension Array where Element == UInt8 {
 
         //let ciphertext = aesGCM
 
-        return aesGCM.combined?.bytes ?? []  //nonce + ciphertext
+        guard let combinedData = aesGCM.combined else {
+            return []
+        }
+        return [UInt8](combinedData)
     }
 
     private func decryptGCM(data: [UInt8], withKey key: Data) throws -> [UInt8] {
@@ -185,7 +188,7 @@ extension Array where Element == UInt8 {
         // Decrypt the ciphertext
         //        return try aesGCM.decrypt(data.dropFirst(12))
 
-        try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: SymmetricKey(data: key)).bytes
-
+        let theData = try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: SymmetricKey(data: key))
+        return [UInt8](theData)
     }
 }
