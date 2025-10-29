@@ -25,7 +25,7 @@ import Foundation
 enum ASN1 {
     internal enum IDENTIFIERS: UInt8, Equatable {
         case SEQUENCE = 0x30
-        case INTERGER = 0x02
+        case INTEGER = 0x02
         case OBJECTID = 0x06
         case NULL = 0x05
         case BITSTRING = 0x03
