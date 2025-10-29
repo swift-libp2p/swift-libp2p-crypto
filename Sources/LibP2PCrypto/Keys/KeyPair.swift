@@ -277,7 +277,7 @@ extension LibP2PCrypto.Keys.KeyPair {
     }
 
     public init(pem: Data, password: String? = nil) throws {
-        try self.init(pem: pem.bytes, password: password)
+        try self.init(pem: pem.byteArray, password: password)
     }
 
     public init(pem pemBytes: [UInt8], password: String? = nil) throws {
@@ -347,7 +347,7 @@ extension LibP2PCrypto.Keys.KeyPair {
             )
 
             // Extract out the objectIdentifiers from the decrypted pem
-            let ids = try PEM.objIdsInSequence(ASN1.Decoder.decode(data: Data(decryptedPEM))).map { $0.bytes }
+            let ids = try PEM.objIdsInSequence(ASN1.Decoder.decode(data: Data(decryptedPEM))).map { $0.byteArray }
 
             // Attempt to classify the Key Type
             if ids.contains(RSAPrivateKey.primaryObjectIdentifier) {
@@ -428,7 +428,7 @@ extension LibP2PCrypto.Keys.KeyPair {
             withPassword: password,
             usingPBKDF: pbkdf,
             andCipher: cipher
-        ).bytes
+        ).byteArray
     }
 
     internal func exportEncryptedPrivatePEMString(

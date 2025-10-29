@@ -187,7 +187,7 @@ struct PEM {
         let asn1 = try ASN1.Decoder.decode(data: pemData)
 
         // return the PEMType and PEM Data (without header & footer)
-        return (type: pemType, bytes: pemData.bytes, objectIdentifiers: objIdsInSequence(asn1).map { $0.bytes })
+        return (type: pemType, bytes: pemData.byteArray, objectIdentifiers: objIdsInSequence(asn1).map { $0.byteArray })
     }
 
     /// Traverses a Node tree and returns all instances of objectIds
@@ -262,8 +262,8 @@ struct PEM {
         }
 
         // Ensure the ObjectID specified in the PEM matches that of the Key.Type we're attempting to instantiate
-        guard objectID.bytes == expectedPrimaryObjectIdentifier else {
-            throw Error.objectIdentifierMismatch(got: objectID.bytes, expected: expectedPrimaryObjectIdentifier)
+        guard objectID.byteArray == expectedPrimaryObjectIdentifier else {
+            throw Error.objectIdentifierMismatch(got: objectID.byteArray, expected: expectedPrimaryObjectIdentifier)
         }
 
         // If the key supports a secondary objectIdentifier (ensure one is present and that they match)
@@ -272,9 +272,9 @@ struct PEM {
             guard case .objectIdentifier(let objectIDSecondary) = params[1] else {
                 throw Error.invalidPEMFormat("PrivateKey::")
             }
-            guard objectIDSecondary.bytes == expectedSecondaryObjectIdentifier else {
+            guard objectIDSecondary.byteArray == expectedSecondaryObjectIdentifier else {
                 throw Error.objectIdentifierMismatch(
-                    got: objectIDSecondary.bytes,
+                    got: objectIDSecondary.byteArray,
                     expected: expectedSecondaryObjectIdentifier
                 )
             }
@@ -284,7 +284,7 @@ struct PEM {
             throw Error.invalidPEMFormat("Expected the last element of the top level sequence to be a bitString")
         }
 
-        return bits.bytes
+        return bits.byteArray
     }
 
     /// Decodes an ASN1 formatted Private Key into it's raw DER representation
@@ -360,8 +360,8 @@ struct PEM {
         guard case .objectIdentifier(let objectID) = params.first else { throw Error.invalidPEMFormat("PrivateKey::") }
 
         // Ensure the ObjectID specified in the PEM matches that of the Key.Type we're attempting to instantiate
-        guard objectID.bytes == expectedPrimaryObjectIdentifier else {
-            throw Error.objectIdentifierMismatch(got: objectID.bytes, expected: expectedPrimaryObjectIdentifier)
+        guard objectID.byteArray == expectedPrimaryObjectIdentifier else {
+            throw Error.objectIdentifierMismatch(got: objectID.byteArray, expected: expectedPrimaryObjectIdentifier)
         }
 
         // If the key supports a secondary objectIdentifier (ensure one is present and that they match)
@@ -370,9 +370,9 @@ struct PEM {
             guard case .objectIdentifier(let objectIDSecondary) = params[1] else {
                 throw Error.invalidPEMFormat("PrivateKey::")
             }
-            guard objectIDSecondary.bytes == expectedSecondaryObjectIdentifier else {
+            guard objectIDSecondary.byteArray == expectedSecondaryObjectIdentifier else {
                 throw Error.objectIdentifierMismatch(
-                    got: objectIDSecondary.bytes,
+                    got: objectIDSecondary.byteArray,
                     expected: expectedSecondaryObjectIdentifier
                 )
             }
@@ -380,7 +380,7 @@ struct PEM {
 
         guard case .octetString(let octet) = sequence[2] else { throw Error.invalidPEMFormat("PrivateKey::") }
 
-        return octet.bytes
+        return octet.byteArray
     }
 
     /// Decodes an Eliptic Curve Private Key PEM that conforms to the IETF RFC5915 structure
@@ -415,8 +415,8 @@ struct PEM {
                 throw Error.invalidPEMFormat("PrivateKey::EC::Missing objectIdentifier in top level sequence")
             }
             // Ensure the ObjectID specified in the PEM matches that of the Key.Type we're attempting to instantiate
-            guard objectID.bytes == expectedPrimaryObjectIdentifier else {
-                throw Error.objectIdentifierMismatch(got: objectID.bytes, expected: expectedPrimaryObjectIdentifier)
+            guard objectID.byteArray == expectedPrimaryObjectIdentifier else {
+                throw Error.objectIdentifierMismatch(got: objectID.byteArray, expected: expectedPrimaryObjectIdentifier)
             }
         }
 
@@ -425,6 +425,6 @@ struct PEM {
         //    guard case .bitString(let _) = sequence[3] else { throw Error.invalidPEMFormat("PrivateKey::EC::") }
         //}
 
-        return octet.bytes
+        return octet.byteArray
     }
 }

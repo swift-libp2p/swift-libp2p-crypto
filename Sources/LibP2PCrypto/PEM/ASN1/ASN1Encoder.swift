@@ -16,26 +16,26 @@ import Foundation
 
 extension ASN1 {
     enum Encoder {
-        /// Encodes an ASN1Node into it's byte representation
+        /// Encodes an ASN1Node into its byte representation
         ///
         /// - Parameter node: The Node to encode
         /// - Returns: The encoded bytes as a UInt8 array
         public static func encode(_ node: ASN1.Node) -> [UInt8] {
             switch node {
             case .integer(let integer):
-                return IDENTIFIERS.INTERGER.bytes + asn1LengthPrefixed(integer.bytes)
+                return IDENTIFIERS.INTEGER.bytes + asn1LengthPrefixed(integer.byteArray)
             case .bitString(let bits):
-                return IDENTIFIERS.BITSTRING.bytes + asn1LengthPrefixed([0x00] + bits.bytes)
+                return IDENTIFIERS.BITSTRING.bytes + asn1LengthPrefixed([0x00] + bits.byteArray)
             case .octetString(let octet):
-                return IDENTIFIERS.OCTETSTRING.bytes + asn1LengthPrefixed(octet.bytes)
+                return IDENTIFIERS.OCTETSTRING.bytes + asn1LengthPrefixed(octet.byteArray)
             case .null:
                 return IDENTIFIERS.NULL.bytes
             case .objectIdentifier(let oid):
-                return IDENTIFIERS.OBJECTID.bytes + asn1LengthPrefixed(oid.bytes)
+                return IDENTIFIERS.OBJECTID.bytes + asn1LengthPrefixed(oid.byteArray)
             case .ecObject(let ecObj):
-                return IDENTIFIERS.EC_OBJECT.bytes + asn1LengthPrefixed(ecObj.bytes)
+                return IDENTIFIERS.EC_OBJECT.bytes + asn1LengthPrefixed(ecObj.byteArray)
             case .ecBits(let ecBits):
-                return IDENTIFIERS.EC_BITS.bytes + asn1LengthPrefixed(ecBits.bytes)
+                return IDENTIFIERS.EC_BITS.bytes + asn1LengthPrefixed(ecBits.byteArray)
             case .sequence(let nodes):
                 return IDENTIFIERS.SEQUENCE.bytes
                     + asn1LengthPrefixed(

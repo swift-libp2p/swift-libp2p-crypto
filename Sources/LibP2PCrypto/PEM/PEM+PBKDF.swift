@@ -119,6 +119,6 @@ extension PEM {
             throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF")
         }
 
-        return try PBKDFAlgorithm(objID: objID.bytes, salt: salt.bytes, iterations: iterations.bytes)
+        return try PBKDFAlgorithm(objID: objID.byteArray, salt: salt.byteArray, iterations: iterations.byteArray)
     }
 }

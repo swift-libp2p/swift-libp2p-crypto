@@ -115,6 +115,6 @@ extension PEM {
             throw Error.invalidPEMFormat("EncryptedPrivateKey::CIPHER")
         }
 
-        return try CipherAlgorithm(objID: objID.bytes, iv: initialVector.bytes)
+        return try CipherAlgorithm(objID: objID.byteArray, iv: initialVector.byteArray)
     }
 }

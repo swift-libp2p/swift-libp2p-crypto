@@ -84,8 +84,8 @@ extension PEM {
         }
 
         return EncryptedPEM(
-            objectIdentifer: objID.bytes,
-            ciphertext: octets.bytes,
+            objectIdentifer: objID.byteArray,
+            ciphertext: octets.byteArray,
             pbkdfAlgorithm: pbkdf,
             cipherAlgorithm: cipher
         )
@@ -102,7 +102,7 @@ extension PEM {
         let key = try pbkdf.deriveKey(password: password, ofLength: cipher.desiredKeyLength)
 
         // Encrypt Plaintext
-        let ciphertext = try cipher.encrypt(bytes: pem.bytes, withKey: key)
+        let ciphertext = try cipher.encrypt(bytes: pem.byteArray, withKey: key)
 
         // Encode Encrypted PEM (including pbkdf and cipher algos used)
         let nodes: ASN1.Node = .sequence(nodes: [

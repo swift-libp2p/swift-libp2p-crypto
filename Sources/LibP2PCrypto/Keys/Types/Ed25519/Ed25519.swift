@@ -150,7 +150,7 @@ extension Curve25519.Signing.PublicKey: DERCodable {
     }
 
     public func publicKeyDER() throws -> [UInt8] {
-        self.rawRepresentation.bytes
+        self.rawRepresentation.byteArray
     }
 
     public func privateKeyDER() throws -> [UInt8] {
