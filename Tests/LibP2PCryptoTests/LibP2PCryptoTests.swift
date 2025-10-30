@@ -1280,13 +1280,13 @@ struct Libp2pCryptoTests {
         ///     ObjectID: 06052b8104000a
         ///     BitString: 4200042200beb1c3052d405d7773a5328769e926c46811ab1f2cf0c437af8ec6d4d603a1763bbe15065a00bc1f5fb5e6b0784a145358a554b419784c333cc57f52ddef
 
-        let pemRECON = """
-            -----BEGIN EC PRIVATE KEY-----
-            MHQCAQEEIJmbpwD3mZhlEtiGzmgropJ/nSewc8UPyBE9wib742saoAcGBSuBBAAK
-            oUQAQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwf
-            X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
-            -----END EC PRIVATE KEY-----
-            """
+        //let pemRECON = """
+        //    -----BEGIN EC PRIVATE KEY-----
+        //    MHQCAQEEIJmbpwD3mZhlEtiGzmgropJ/nSewc8UPyBE9wib742saoAcGBSuBBAAK
+        //    oUQAQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwf
+        //    X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
+        //    -----END EC PRIVATE KEY-----
+        //    """
         /// Sequence:
         ///     Integer: 01
         ///     OctetString: 999ba700f799986512d886ce682ba2927f9d27b073c50fc8113dc226fbe36b1a
