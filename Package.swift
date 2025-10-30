@@ -30,7 +30,9 @@ let package = Package(
     ],
     dependencies: [
         // Multibase Support
-        .package(url: "https://github.com/swift-libp2p/swift-multibase.git", .upToNextMinor(from: "0.0.1")),
+        .package(url: "https://github.com/swift-libp2p/swift-multibase.git", .upToNextMinor(from: "0.2.0")),
+        // Multihash Support
+        .package(url: "https://github.com/swift-libp2p/swift-multihash.git", .upToNextMinor(from: "0.2.0")),
         // Protobuf Marshaling
         .package(url: "https://github.com/apple/swift-protobuf.git", .upToNextMajor(from: "1.12.0")),
         // Secp256k1 Support
@@ -38,7 +40,6 @@ let package = Package(
         // 🔑 Hashing (BCrypt, SHA2, HMAC), encryption (AES), public-key (RSA), PEM and DER file handling, and random data generation.
         .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "4.0.0")),
         .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.9.0")),
-        .package(url: "https://github.com/swift-libp2p/swift-multihash.git", .upToNextMinor(from: "0.0.1")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
