@@ -18,7 +18,7 @@ extension Secp256k1PublicKey: CommonPublicKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
 
     public convenience init(rawRepresentation raw: Data) throws {
-        try self.init(raw.bytes)
+        try self.init(raw.byteArray)
     }
 
     public convenience init(marshaledData data: Data) throws {
@@ -42,11 +42,11 @@ extension Secp256k1PublicKey: CommonPublicKey {
                 userInfo: nil
             )
         }
-        let bytes = signature.bytes
+        let bytes = signature.byteArray
         let v: [UInt8] = [UInt8](bytes[0..<1])  //First byte
         let r: [UInt8] = [UInt8](bytes[1...32])  //Next 32 bytes
         let s: [UInt8] = [UInt8](bytes[33...64])  //Last 32 bytes
-        return try self.verifySignature(message: expectedData.bytes, v: v, r: r, s: s)
+        return try self.verifySignature(message: expectedData.byteArray, v: v, r: r, s: s)
     }
 
     public func marshal() throws -> Data {
@@ -89,7 +89,7 @@ extension Secp256k1PrivateKey: CommonPrivateKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
 
     public convenience init(rawRepresentation raw: Data) throws {
-        try self.init(raw.bytes)
+        try self.init(raw.byteArray)
     }
 
     public convenience init(marshaledData data: Data) throws {
@@ -111,7 +111,7 @@ extension Secp256k1PrivateKey: CommonPrivateKey {
     }
 
     public func sign(message data: Data) throws -> Data {
-        let signature = try sign(message: data.bytes)
+        let signature = try sign(message: data.byteArray)
         return Data([UInt8(signature.v)] + signature.r + signature.s)
     }
 
@@ -188,7 +188,7 @@ extension Secp256k1PrivateKey: DERCodable {
     }
 
     public func privateKeyDER() throws -> [UInt8] {
-        self.rawRepresentation.bytes
+        self.rawRepresentation.byteArray
     }
 
     public func exportPrivateKeyPEMRaw() throws -> [UInt8] {

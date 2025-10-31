@@ -125,13 +125,13 @@ extension Curve25519.Signing.PrivateKey: CommonPrivateKey {
     //    }
 }
 
-extension Curve25519.Signing.PublicKey: Equatable {
+extension Curve25519.Signing.PublicKey: @retroactive Equatable {
     public static func == (lhs: Curve25519.Signing.PublicKey, rhs: Curve25519.Signing.PublicKey) -> Bool {
         lhs.rawRepresentation == rhs.rawRepresentation
     }
 }
 
-extension Curve25519.Signing.PrivateKey: Equatable {
+extension Curve25519.Signing.PrivateKey: @retroactive Equatable {
     public static func == (lhs: Curve25519.Signing.PrivateKey, rhs: Curve25519.Signing.PrivateKey) -> Bool {
         lhs.rawRepresentation == rhs.rawRepresentation
     }
@@ -150,7 +150,7 @@ extension Curve25519.Signing.PublicKey: DERCodable {
     }
 
     public func publicKeyDER() throws -> [UInt8] {
-        self.rawRepresentation.bytes
+        self.rawRepresentation.byteArray
     }
 
     public func privateKeyDER() throws -> [UInt8] {

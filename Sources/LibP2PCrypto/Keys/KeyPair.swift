@@ -161,7 +161,7 @@ extension LibP2PCrypto.Keys {
         }
         /// Instantiate a KeyPair from a marshaled public key
         public init(marshaledPublicKey data: Data) throws {
-            let proto = try PublicKey(contiguousBytes: data)
+            let proto = try PublicKey(serializedBytes: data)
             switch proto.type {
             case .rsa:
                 try self.init(publicKey: RSAPublicKey(marshaledData: proto.data))
@@ -182,7 +182,7 @@ extension LibP2PCrypto.Keys {
         /// Instantiate a KeyPair from a marshaled private key
         /// https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md
         public init(marshaledPrivateKey data: Data) throws {
-            let proto = try PrivateKey(contiguousBytes: data)
+            let proto = try PrivateKey(serializedBytes: data)
             switch proto.type {
             case .rsa:
                 try self.init(privateKey: RSAPrivateKey(marshaledData: proto.data))
@@ -277,7 +277,7 @@ extension LibP2PCrypto.Keys.KeyPair {
     }
 
     public init(pem: Data, password: String? = nil) throws {
-        try self.init(pem: pem.bytes, password: password)
+        try self.init(pem: pem.byteArray, password: password)
     }
 
     public init(pem pemBytes: [UInt8], password: String? = nil) throws {
@@ -347,7 +347,7 @@ extension LibP2PCrypto.Keys.KeyPair {
             )
 
             // Extract out the objectIdentifiers from the decrypted pem
-            let ids = try PEM.objIdsInSequence(ASN1.Decoder.decode(data: Data(decryptedPEM))).map { $0.bytes }
+            let ids = try PEM.objIdsInSequence(ASN1.Decoder.decode(data: Data(decryptedPEM))).map { $0.byteArray }
 
             // Attempt to classify the Key Type
             if ids.contains(RSAPrivateKey.primaryObjectIdentifier) {
@@ -428,7 +428,7 @@ extension LibP2PCrypto.Keys.KeyPair {
             withPassword: password,
             usingPBKDF: pbkdf,
             andCipher: cipher
-        ).bytes
+        ).byteArray
     }
 
     internal func exportEncryptedPrivatePEMString(

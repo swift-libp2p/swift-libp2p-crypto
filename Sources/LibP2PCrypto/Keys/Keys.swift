@@ -127,7 +127,7 @@ extension LibP2PCrypto {
 
         /// Converts a protobuf serialized public key into its representative object.
         public static func unmarshalPublicKey(buf: [UInt8], into base: BaseEncoding = .base16) throws -> String {
-            let pubKeyProto = try PublicKey(contiguousBytes: buf)
+            let pubKeyProto = try PublicKey(serializedBytes: buf)
 
             guard !pubKeyProto.data.isEmpty else {
                 throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil)
@@ -179,7 +179,7 @@ extension LibP2PCrypto {
 
         /// Converts a protobuf serialized private key into its representative object.
         public static func unmarshalPrivateKey(buf: [UInt8], into base: BaseEncoding = .base16) throws -> String {
-            let privKeyProto = try PrivateKey(contiguousBytes: buf)
+            let privKeyProto = try PrivateKey(serializedBytes: buf)
 
             let data = privKeyProto.data
             guard !data.isEmpty else { throw NSError(domain: "Unable to Unmarshal PrivateKey", code: 0, userInfo: nil) }
