@@ -341,7 +341,47 @@ struct Libp2pCryptoTests {
         #expect(cpk == pb.data.byteArray)
     }
 
-    // - MARK: Marshaling
+    /// The public key is embedded in certain PeerID's
+    /// Dialed: 12D3KooWAfPDpPRRRBrmqy9is2zjU5srQ4hKuZitiGmh4NTTpS2d
+    /// Provided: QmPoHmYtUt8BU9eiwMYdBfT6rooBnna5fdAZHUaZASGQY8
+    ///           QmPoHmYtUt8BU9eiwMYdBfT6rooBnna5fdAZHUaZASGQY8
+    ///
+    /// Dialed: 12D3KooWF5Qbrbvhhha1AcqRULWAfYzFEnKvWVGBUjw489hpo5La
+    /// Provided: Qmbp3SxL2SYcH6Ly4r5SGQwfxkDCJPuhJG35GCZimcTiBc
+    ///           Qmbp3SxL2SYcH6Ly4r5SGQwfxkDCJPuhJG35GCZimcTiBc
+    @Test func testEmbeddedEd25519PublicKey() throws {
+        let multi = try Multihash(b58String: "12D3KooWF5Qbrbvhhha1AcqRULWAfYzFEnKvWVGBUjw489hpo5La")
+        print(multi)
+        print("\(multi.value) (\(multi.value.count))")
+        print("\(multi.digest!) (\(multi.digest!.count))")
+
+        /// Ensure we can instantiate a ED25519 Public Key from the multihash's digest (identity)
+        let key = try Curve25519.Signing.PublicKey(rawRepresentation: multi.digest!.dropFirst(4))
+        print(key)
+
+        /// Ensure we can instantiate a KeyPair with the public key
+        let kp = try LibP2PCrypto.Keys.KeyPair(publicKey: key)
+        print(kp)
+        #expect(kp.keyType == .ed25519)
+
+        print(try kp.id(withMultibasePrefix: false))
+
+        /// Ensure we can instantiate a key pair directly from the Multihash's Digest (Identity)
+        let marshed = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: Data(multi.digest!))
+        print(marshed)
+
+        print(marshed.keyType)
+        print(marshed.publicKey)
+        print(try marshed.id(withMultibasePrefix: false))
+
+        #expect(
+            try marshed.id(withMultibasePrefix: false) == "12D3KooWF5Qbrbvhhha1AcqRULWAfYzFEnKvWVGBUjw489hpo5La"
+        )
+    }
+}
+
+@Suite("Marshalling Tests")
+struct MarshallingTests {
 
     // https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md#test-vectors
     @Test func testLibp2pPeerIDSpecTestVectors_RSA() throws {
@@ -553,8 +593,10 @@ struct Libp2pCryptoTests {
         /// Ensures that the public key derived from the private key is correct and the marshaled version matches that of the fixture.
         #expect(try keyPair.publicKey.marshal().asString(base: .base64Pad) == MarshaledData.PUBLIC_RSA_KEY_4096)
     }
+}
 
-    // - MARK: SIGN & VERIFY
+@Suite("Signature & Verification Tests")
+struct SignAndVerifyTests {
 
     @Test func testRSAMessageSignVerify_StaticKey() throws {
         let message = TestFixtures.RSA_1024.rawMessage.data(using: .utf8)!
@@ -674,8 +716,10 @@ struct Libp2pCryptoTests {
         #expect(try secp.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) == false)
         #expect(try secp.publicKey.verify(signature: signedData, for: Data(message.dropLast())) == false)
     }
+}
 
-    // - MARK: AES Cipher Tests
+@Suite("AES Cipher Tests")
+struct AESCipherTests {
 
     @Test func testAESEncryption128() throws {
         let message = "Hello World!"
@@ -764,8 +808,10 @@ struct Libp2pCryptoTests {
 
         #expect(msg == message)
     }
+}
 
-    // - MARK: Hashed Message Authentication Codes (HMAC)
+@Suite("HMAC Tests")
+struct HMACTests {
 
     @Test func testHMAC() throws {
         let message = "Hello World"
@@ -833,7 +879,11 @@ struct Libp2pCryptoTests {
     //        print(keyPair)
     //    }
 
-    // - MARK: PEM Decoding
+}
+
+@Suite("DER and PEM Tests")
+struct DERAndPEMTests {
+
     @Test func testPemParsing_RSA_1024_Public() throws {
 
         let pem = """
@@ -1730,43 +1780,5 @@ struct Libp2pCryptoTests {
         print(secp256k1Private)
 
         #expect(secp256k1Private.publicKey == secp256k1Public)
-    }
-
-    /// The public key is embedded in certain PeerID's
-    /// Dialed: 12D3KooWAfPDpPRRRBrmqy9is2zjU5srQ4hKuZitiGmh4NTTpS2d
-    /// Provided: QmPoHmYtUt8BU9eiwMYdBfT6rooBnna5fdAZHUaZASGQY8
-    ///           QmPoHmYtUt8BU9eiwMYdBfT6rooBnna5fdAZHUaZASGQY8
-    ///
-    /// Dialed: 12D3KooWF5Qbrbvhhha1AcqRULWAfYzFEnKvWVGBUjw489hpo5La
-    /// Provided: Qmbp3SxL2SYcH6Ly4r5SGQwfxkDCJPuhJG35GCZimcTiBc
-    ///           Qmbp3SxL2SYcH6Ly4r5SGQwfxkDCJPuhJG35GCZimcTiBc
-    @Test func testEmbeddedEd25519PublicKey() throws {
-        let multi = try Multihash(b58String: "12D3KooWF5Qbrbvhhha1AcqRULWAfYzFEnKvWVGBUjw489hpo5La")
-        print(multi)
-        print("\(multi.value) (\(multi.value.count))")
-        print("\(multi.digest!) (\(multi.digest!.count))")
-
-        /// Ensure we can instantiate a ED25519 Public Key from the multihash's digest (identity)
-        let key = try Curve25519.Signing.PublicKey(rawRepresentation: multi.digest!.dropFirst(4))
-        print(key)
-
-        /// Ensure we can instantiate a KeyPair with the public key
-        let kp = try LibP2PCrypto.Keys.KeyPair(publicKey: key)
-        print(kp)
-        #expect(kp.keyType == .ed25519)
-
-        print(try kp.id(withMultibasePrefix: false))
-
-        /// Ensure we can instantiate a key pair directly from the Multihash's Digest (Identity)
-        let marshed = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: Data(multi.digest!))
-        print(marshed)
-
-        print(marshed.keyType)
-        print(marshed.publicKey)
-        print(try marshed.id(withMultibasePrefix: false))
-
-        #expect(
-            try marshed.id(withMultibasePrefix: false) == "12D3KooWF5Qbrbvhhha1AcqRULWAfYzFEnKvWVGBUjw489hpo5La"
-        )
     }
 }
