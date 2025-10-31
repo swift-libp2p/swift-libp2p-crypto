@@ -30,7 +30,7 @@ let package = Package(
     ],
     dependencies: [
         // Multibase Support
-        .package(url: "https://github.com/swift-libp2p/swift-multibase.git", .upToNextMinor(from: "0.0.1")),
+        .package(url: "https://github.com/swift-libp2p/swift-multibase.git", .upToNextMinor(from: "0.2.0")),
         // Protobuf Marshaling
         .package(
             name: "SwiftProtobuf",

@@ -24,8 +24,8 @@
         "repositoryURL": "https://github.com/swift-libp2p/swift-bases.git",
         "state": {
           "branch": null,
-          "revision": "c84494da575bc776ae64c180af2731471193b812",
-          "version": "0.0.2"
+          "revision": "96615d4b582f9f6536d8278304ce2a64c8e5288a",
+          "version": "0.2.0"
         }
       },
       {
@@ -42,8 +42,8 @@
         "repositoryURL": "https://github.com/swift-libp2p/swift-multibase.git",
         "state": {
           "branch": null,
-          "revision": "45f3cf2844477b9d211e1d3e793d0853134fd942",
-          "version": "0.0.2"
+          "revision": "dbff69291919804a613b331908908d7b5aa0aaeb",
+          "version": "0.2.0"
         }
       },
       {
