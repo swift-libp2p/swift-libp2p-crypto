@@ -58,7 +58,7 @@ struct RSAPublicKey: CommonPublicKey {
                 throw NSError(domain: "Invalid ASN1 Encoding -> No Public Exponent", code: 0)
             }
 
-            self.key = CryptoSwift.RSA(n: n.bytes, e: e.bytes)
+            self.key = CryptoSwift.RSA(n: n.byteArray, e: e.byteArray)
         } else {
             throw NSError(domain: "Invalid RSA rawRepresentation", code: 0)
         }
@@ -82,7 +82,7 @@ struct RSAPublicKey: CommonPublicKey {
     }
 
     func encrypt(data: Data) throws -> Data {
-        try Data(key.encrypt(data.bytes))
+        try Data(key.encrypt(data.byteArray))
     }
 
     /// Verifies an RSA Signature for an expected block of data
@@ -155,7 +155,7 @@ struct RSAPrivateKey: CommonPrivateKey {
     }
 
     func decrypt(data: Data) throws -> Data {
-        try Data(key.decrypt(data.bytes))
+        try Data(key.decrypt(data.byteArray))
     }
 
     func sign(message: Data) throws -> Data {
@@ -189,7 +189,7 @@ extension CryptoSwift.RSA {
     /// - Note: The signature uses the SHA256 PKCS#1v15 Padding Scheme
     /// - Note: [EMSA-PKCS1-v1_5](https://datatracker.ietf.org/doc/html/rfc8017#section-9.2)
     fileprivate static func sign(message: Data, withKey key: RSA) throws -> Data {
-        try Data(key.sign(message.bytes, variant: .message_pkcs1v15_SHA256))
+        try Data(key.sign(message.byteArray, variant: .message_pkcs1v15_SHA256))
     }
 
     /// Verifies a signature for the expected data
@@ -197,7 +197,7 @@ extension CryptoSwift.RSA {
     /// - Note: This method assumes the signature was generated using the SHA256 PKCS#1v15 Padding Scheme
     /// - Note: [EMSA-PKCS1-v1_5](https://datatracker.ietf.org/doc/html/rfc8017#section-9.2)
     fileprivate static func verify(signature: Data, fromMessage message: Data, usingKey key: RSA) throws -> Bool {
-        try key.verify(signature: signature.bytes, for: message.bytes, variant: .message_pkcs1v15_SHA256)
+        try key.verify(signature: signature.byteArray, for: message.byteArray, variant: .message_pkcs1v15_SHA256)
     }
 }
 

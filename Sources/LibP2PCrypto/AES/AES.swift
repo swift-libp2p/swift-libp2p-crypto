@@ -202,7 +202,7 @@ extension LibP2PCrypto {
                     throw NSError(domain: "Error: Failed to set an initial vector.", code: 0, userInfo: nil)
                 }
 
-                self.aes = try CryptoSwift.AES(key: key.bytes, blockMode: CBC(iv: iv.bytes), padding: .pkcs5)
+                self.aes = try CryptoSwift.AES(key: key.byteArray, blockMode: CBC(iv: iv.byteArray), padding: .pkcs5)
             }
 
             /// Initializes an AES Key with the specified key and Initial Vector
@@ -230,11 +230,11 @@ extension LibP2PCrypto {
             }
 
             public func encrypt(_ data: Data) throws -> Data {
-                try Data(aes.encrypt(data.bytes))
+                try Data(aes.encrypt(data.byteArray))
             }
 
             public func decrypt(_ data: Data) throws -> Data {
-                try Data(aes.decrypt(data.bytes))
+                try Data(aes.decrypt(data.byteArray))
             }
         }
     }

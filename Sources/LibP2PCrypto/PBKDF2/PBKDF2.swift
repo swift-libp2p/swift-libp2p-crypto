@@ -119,8 +119,8 @@ struct PBKDF2 {
     static func MD5(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
-                password: password.bytes,
-                salt: salt.bytes,
+                password: password.byteArray,
+                salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
                 variant: .md5
@@ -131,8 +131,8 @@ struct PBKDF2 {
     static func SHA1(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
-                password: password.bytes,
-                salt: salt.bytes,
+                password: password.byteArray,
+                salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
                 variant: .sha1
@@ -148,8 +148,8 @@ struct PBKDF2 {
     ) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
-                password: password.bytes,
-                salt: salt.bytes,
+                password: password.byteArray,
+                salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
                 variant: .sha2(.sha256)
@@ -165,8 +165,8 @@ struct PBKDF2 {
     ) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
-                password: password.bytes,
-                salt: salt.bytes,
+                password: password.byteArray,
+                salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
                 variant: .sha2(.sha384)
@@ -177,8 +177,8 @@ struct PBKDF2 {
     static func SHA512(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
-                password: password.bytes,
-                salt: salt.bytes,
+                password: password.byteArray,
+                salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
                 variant: .sha2(.sha512)
