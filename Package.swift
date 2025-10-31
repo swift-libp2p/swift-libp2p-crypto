@@ -34,7 +34,7 @@ let package = Package(
         // Multihash Support
         .package(url: "https://github.com/swift-libp2p/swift-multihash.git", .upToNextMinor(from: "0.2.0")),
         // Protobuf Marshaling
-        .package(url: "https://github.com/apple/swift-protobuf.git", .upToNextMajor(from: "1.12.0")),
+        .package(url: "https://github.com/apple/swift-protobuf.git", .upToNextMajor(from: "1.33.3")),
         // Secp256k1 Support
         .package(url: "https://github.com/Boilertalk/secp256k1.swift.git", .upToNextMinor(from: "0.1.7")),
         // 🔑 Hashing (BCrypt, SHA2, HMAC), encryption (AES), public-key (RSA), PEM and DER file handling, and random data generation.
