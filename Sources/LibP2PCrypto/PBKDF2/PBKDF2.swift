@@ -28,7 +28,7 @@ private struct PBKDF {
 
 import CommonCrypto
 
-struct PBKDF2 {
+struct PBKDF2: Sendable {
     static func SHA1(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
         pbkdf2(
             hash: CCPBKDFAlgorithm(kCCPRFHmacAlgSHA1),
@@ -115,7 +115,7 @@ struct PBKDF2 {
 
 import CryptoSwift
 
-struct PBKDF2 {
+struct PBKDF2: Sendable {
     static func MD5(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
