@@ -189,7 +189,7 @@ extension LibP2PCrypto {
             return try key.decrypt(data)
         }
 
-        public struct AESKey: Encryptable, Decryptable, Sendable {
+        public struct AESKey: Encryptable, Decryptable {
             private let aes: CryptoSwift.AES
 
             public init(key: Data, iv: Data) throws {
