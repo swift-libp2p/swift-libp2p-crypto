@@ -119,7 +119,7 @@ struct PBKDF2 {
     static func MD5(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
-                password: password.byteArray,
+                password: password.bytes,
                 salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
@@ -131,7 +131,7 @@ struct PBKDF2 {
     static func SHA1(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
-                password: password.byteArray,
+                password: password.bytes,
                 salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
@@ -148,7 +148,7 @@ struct PBKDF2 {
     ) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
-                password: password.byteArray,
+                password: password.bytes,
                 salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
@@ -165,7 +165,7 @@ struct PBKDF2 {
     ) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
-                password: password.byteArray,
+                password: password.bytes,
                 salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
@@ -177,7 +177,7 @@ struct PBKDF2 {
     static func SHA512(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data? {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
-                password: password.byteArray,
+                password: password.bytes,
                 salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
