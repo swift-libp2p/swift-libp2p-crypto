@@ -120,7 +120,7 @@ struct PBKDF2 {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
                 password: password.bytes,
-                salt: salt.bytes,
+                salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
                 variant: .md5
@@ -132,7 +132,7 @@ struct PBKDF2 {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
                 password: password.bytes,
-                salt: salt.bytes,
+                salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
                 variant: .sha1
@@ -149,7 +149,7 @@ struct PBKDF2 {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
                 password: password.bytes,
-                salt: salt.bytes,
+                salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
                 variant: .sha2(.sha256)
@@ -166,7 +166,7 @@ struct PBKDF2 {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
                 password: password.bytes,
-                salt: salt.bytes,
+                salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
                 variant: .sha2(.sha384)
@@ -178,7 +178,7 @@ struct PBKDF2 {
         try? Data(
             CryptoSwift.PKCS5.PBKDF2(
                 password: password.bytes,
-                salt: salt.bytes,
+                salt: salt.byteArray,
                 iterations: rounds,
                 keyLength: keyByteCount,
                 variant: .sha2(.sha512)
