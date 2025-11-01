@@ -15,7 +15,7 @@
 #if canImport(Security)
 import Foundation
 import Multibase
-import Security
+@preconcurrency import Security
 
 struct RSAPublicKey: CommonPublicKey {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
