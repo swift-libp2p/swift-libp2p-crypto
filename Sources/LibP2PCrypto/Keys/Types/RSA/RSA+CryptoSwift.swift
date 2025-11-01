@@ -20,7 +20,7 @@ struct RSAPublicKey: CommonPublicKey {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
 
     /// RSA Object Identifier Bytes
-    private static var RSA_OBJECT_IDENTIFIER = [UInt8](arrayLiteral: 42, 134, 72, 134, 247, 13, 1, 1, 1)
+    private static let RSA_OBJECT_IDENTIFIER = [UInt8](arrayLiteral: 42, 134, 72, 134, 247, 13, 1, 1, 1)
 
     /// The underlying CryptoSwift RSA Key that backs this struct
     private let key: RSA
@@ -41,7 +41,7 @@ struct RSAPublicKey: CommonPublicKey {
             guard case .objectIdentifier(let oid) = objectID.first else {
                 throw NSError(domain: "Invalid ASN1 Encoding -> No ObjectID", code: 0)
             }
-            guard oid.bytes == RSAPublicKey.RSA_OBJECT_IDENTIFIER else {
+            guard oid.byteArray == RSAPublicKey.RSA_OBJECT_IDENTIFIER else {
                 throw NSError(domain: "Invalid ASN1 Encoding -> ObjectID != Public RSA Key ID", code: 0)
             }
             guard case .bitString(let bits) = params.last else {
