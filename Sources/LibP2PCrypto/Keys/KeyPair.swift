@@ -18,7 +18,7 @@ import Multibase
 import Multihash
 
 extension LibP2PCrypto.Keys {
-    public struct KeyPair {
+    public struct KeyPair: Sendable {
         public let keyType: LibP2PCrypto.Keys.GenericKeyType
         public let publicKey: CommonPublicKey
         public let privateKey: CommonPrivateKey?
@@ -242,7 +242,7 @@ extension LibP2PCrypto.Keys {
 }
 
 extension LibP2PCrypto.Keys {
-    public enum GenericKeyType {
+    public enum GenericKeyType: Sendable {
         case rsa
         case ed25519
         case secp256k1
