@@ -14,7 +14,7 @@
 
 #if !canImport(Security)
 import Foundation
-import CryptoSwift
+@preconcurrency import CryptoSwift
 
 struct RSAPublicKey: CommonPublicKey {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }

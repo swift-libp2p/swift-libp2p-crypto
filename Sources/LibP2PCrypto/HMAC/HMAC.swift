@@ -18,7 +18,7 @@ import Multibase
 
 extension LibP2PCrypto {
     public enum HMAC {
-        public enum CryptoAlgorithm {
+        public enum CryptoAlgorithm: Sendable {
             case MD5, SHA1, SHA256, SHA384, SHA512
 
             internal func encrypt(_ message: Data, key: String) -> Data {
@@ -47,7 +47,7 @@ extension LibP2PCrypto {
             }
         }
 
-        public struct HMACKey: Encryptable {
+        public struct HMACKey: Encryptable, Sendable {
             private let algorithm: CryptoAlgorithm
             private let secret: String
 

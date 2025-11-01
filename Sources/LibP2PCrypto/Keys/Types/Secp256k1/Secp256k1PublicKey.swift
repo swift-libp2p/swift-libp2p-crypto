@@ -38,7 +38,9 @@ public func secp256k1_default_ctx_destroy(ctx: OpaquePointer) {
     secp256k1_context_destroy(ctx)
 }
 
-public final class Secp256k1PublicKey {
+// TODO: Move to P256K implementation and remove @unchecked Sendable
+
+public final class Secp256k1PublicKey: @unchecked Sendable {
 
     static let UNCOMPRESSED_LENGTH = 64
     static let UNCOMPRESSED_LENGTH_WITH_HEADER = 65

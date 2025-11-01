@@ -16,7 +16,7 @@ import Foundation
 import Multibase
 import Multihash
 
-public protocol CommonPublicKey: DERCodable {
+public protocol CommonPublicKey: DERCodable, Sendable {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { get }
 
     /// Init from raw representation

@@ -32,7 +32,9 @@ extension Array where Element == UInt8 {
     }
 }
 
-public final class Secp256k1PrivateKey {
+// TODO: Move to P256K implementation and remove @unchecked Sendable
+
+public final class Secp256k1PrivateKey: @unchecked Sendable {
 
     // MARK: - Properties
 
