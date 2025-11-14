@@ -14,7 +14,7 @@
 
 import Foundation
 
-extension Secp256k1PublicKey: CommonPublicKey, @unchecked Sendable {
+extension Secp256k1PublicKey: CommonPublicKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
 
     public convenience init(rawRepresentation raw: Data) throws {
@@ -85,7 +85,7 @@ extension Secp256k1PublicKey: CommonPublicKey, @unchecked Sendable {
     //    }
 }
 
-extension Secp256k1PrivateKey: CommonPrivateKey, @unchecked Sendable {
+extension Secp256k1PrivateKey: CommonPrivateKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
 
     public convenience init(rawRepresentation raw: Data) throws {
