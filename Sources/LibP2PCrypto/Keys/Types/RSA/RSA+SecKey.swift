@@ -17,7 +17,7 @@ import Foundation
 import Multibase
 @preconcurrency import Security
 
-struct RSAPublicKey: CommonPublicKey, @unchecked Sendable {
+struct RSAPublicKey: CommonPublicKey {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
 
     /// The underlying SecKey that backs this struct
@@ -117,7 +117,7 @@ struct RSAPublicKey: CommonPublicKey, @unchecked Sendable {
 
 }
 
-struct RSAPrivateKey: CommonPrivateKey, @unchecked Sendable {
+struct RSAPrivateKey: CommonPrivateKey {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
 
     /// The underlying SecKey that backs this struct
