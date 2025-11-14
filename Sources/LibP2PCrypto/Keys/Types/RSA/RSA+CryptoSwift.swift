@@ -16,7 +16,7 @@
 import Foundation
 @preconcurrency import CryptoSwift
 
-struct RSAPublicKey: CommonPublicKey {
+struct RSAPublicKey: CommonPublicKey, @unchecked Sendable {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
 
     /// RSA Object Identifier Bytes
@@ -104,7 +104,7 @@ struct RSAPublicKey: CommonPublicKey {
 
 }
 
-struct RSAPrivateKey: CommonPrivateKey {
+struct RSAPrivateKey: CommonPrivateKey, @unchecked Sendable {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
 
     /// The underlying CryptoSwift RSA key that backs this struct

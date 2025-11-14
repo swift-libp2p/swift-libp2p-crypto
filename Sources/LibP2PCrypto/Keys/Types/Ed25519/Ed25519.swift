@@ -17,7 +17,7 @@ import Foundation
 
 //import PEM
 
-extension Curve25519.Signing.PublicKey: CommonPublicKey {
+extension Curve25519.Signing.PublicKey: CommonPublicKey, @unchecked Sendable {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
 
     init(marshaledData data: Data) throws {
@@ -68,7 +68,7 @@ extension Curve25519.Signing.PublicKey: CommonPublicKey {
     //    }
 }
 
-extension Curve25519.Signing.PrivateKey: CommonPrivateKey {
+extension Curve25519.Signing.PrivateKey: CommonPrivateKey, @unchecked Sendable {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
 
     init(marshaledData data: Data) throws {
