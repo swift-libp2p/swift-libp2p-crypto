@@ -242,7 +242,7 @@ extension LibP2PCrypto.Keys {
 }
 
 extension LibP2PCrypto.Keys {
-    public enum GenericKeyType: Sendable {
+    public enum GenericKeyType: Sendable, Equatable {
         case rsa
         case ed25519
         case secp256k1
@@ -267,6 +267,14 @@ extension LibP2PCrypto.Keys {
             case .secp256K1:
                 self = .secp256k1
             }
+        }
+        
+        static func == (lhs: GenericKeyType, rhs: KeyType) -> Bool {
+            return lhs.toProtoType == rhs
+        }
+        
+        public static func == (lhs: GenericKeyType, rhs: KeyPairType) -> Bool {
+            return lhs.toProtoType == rhs.toProtoType
         }
     }
 }
