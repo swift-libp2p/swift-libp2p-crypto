@@ -89,7 +89,7 @@ extension DERDecodable {
             guard let password = password else { throw LibP2PCrypto.PEM.Error.invalidParameters }
 
             // Parse out Encryption Strategy and CipherText
-            let decryptionStategy = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(bytes))  // RSA.decodeEncryptedPEM(Data(bytes))
+            let decryptionStategy = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(bytes))
 
             // Derive Encryption Key from Password
             let key = try decryptionStategy.pbkdfAlgorithm.deriveKey(
