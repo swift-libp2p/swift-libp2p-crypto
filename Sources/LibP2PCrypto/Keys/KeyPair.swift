@@ -242,7 +242,7 @@ extension LibP2PCrypto.Keys {
 }
 
 extension LibP2PCrypto.Keys {
-    public enum GenericKeyType: Sendable {
+    public enum GenericKeyType: Sendable, Equatable {
         case rsa
         case ed25519
         case secp256k1
@@ -268,6 +268,14 @@ extension LibP2PCrypto.Keys {
                 self = .secp256k1
             }
         }
+
+        static func == (lhs: GenericKeyType, rhs: KeyType) -> Bool {
+            lhs.toProtoType == rhs
+        }
+
+        public static func == (lhs: GenericKeyType, rhs: KeyPairType) -> Bool {
+            lhs.toProtoType == rhs.toProtoType
+        }
     }
 }
 
@@ -282,10 +290,10 @@ extension LibP2PCrypto.Keys.KeyPair {
 
     public init(pem pemBytes: [UInt8], password: String? = nil) throws {
 
-        let (type, bytes, ids) = try PEM.pemToData(pemBytes)
+        let (type, bytes, ids) = try LibP2PCrypto.PEM.pemToData(pemBytes)
 
         if password != nil {
-            guard type == .encryptedPrivateKey else { throw PEM.Error.invalidParameters }
+            guard type == .encryptedPrivateKey else { throw LibP2PCrypto.PEM.Error.invalidParameters }
         }
 
         switch type {
@@ -308,7 +316,7 @@ extension LibP2PCrypto.Keys.KeyPair {
             } else if ids.contains(Secp256k1PublicKey.primaryObjectIdentifier) {
                 try self.init(publicKey: Secp256k1PublicKey(pem: pemBytes, asType: Secp256k1PublicKey.self))
             } else {
-                throw PEM.Error.unsupportedPEMType
+                throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
 
         case .privateKey, .ecPrivateKey:
@@ -322,17 +330,17 @@ extension LibP2PCrypto.Keys.KeyPair {
             } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
                 try self.init(privateKey: Secp256k1PrivateKey(pem: pemBytes, asType: Secp256k1PrivateKey.self))
             } else {
-                throw PEM.Error.unsupportedPEMType
+                throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
 
         case .encryptedPrivateKey:
             // Decrypt the encrypted PEM and attempt to instantiate it again...
 
             // Ensure we were provided a password
-            guard let password = password else { throw PEM.Error.invalidParameters }
+            guard let password = password else { throw LibP2PCrypto.PEM.Error.invalidParameters }
 
             // Parse out Encryption Strategy and CipherText
-            let decryptionStategy = try PEM.decodeEncryptedPEM(Data(bytes))  // RSA.decodeEncryptedPEM(Data(bytes))
+            let decryptionStategy = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(bytes))
 
             // Derive Encryption Key from Password
             let key = try decryptionStategy.pbkdfAlgorithm.deriveKey(
@@ -347,25 +355,32 @@ extension LibP2PCrypto.Keys.KeyPair {
             )
 
             // Extract out the objectIdentifiers from the decrypted pem
-            let ids = try PEM.objIdsInSequence(ASN1.Decoder.decode(data: Data(decryptedPEM))).map { $0.byteArray }
+            let ids: [[UInt8]]
+            do {
+                ids = try LibP2PCrypto.PEM.objIdsInSequence(ASN1.Decoder.decode(data: Data(decryptedPEM))).map {
+                    $0.byteArray
+                }
+            } catch {
+                throw LibP2PCrypto.PEM.Error.decodingError
+            }
 
             // Attempt to classify the Key Type
             if ids.contains(RSAPrivateKey.primaryObjectIdentifier) {
-                let der = try PEM.decodePrivateKeyPEM(
+                let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
                     Data(decryptedPEM),
                     expectedPrimaryObjectIdentifier: RSAPrivateKey.primaryObjectIdentifier,
                     expectedSecondaryObjectIdentifier: RSAPrivateKey.secondaryObjectIdentifier
                 )
                 try self.init(privateKey: RSAPrivateKey(privateDER: der))
             } else if ids.contains(Curve25519.Signing.PrivateKey.primaryObjectIdentifier) {
-                let der = try PEM.decodePrivateKeyPEM(
+                let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
                     Data(decryptedPEM),
                     expectedPrimaryObjectIdentifier: Curve25519.Signing.PrivateKey.primaryObjectIdentifier,
                     expectedSecondaryObjectIdentifier: Curve25519.Signing.PrivateKey.secondaryObjectIdentifier
                 )
                 try self.init(privateKey: Curve25519.Signing.PrivateKey(privateDER: der))
             } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
-                let der = try PEM.decodePrivateKeyPEM(
+                let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
                     Data(decryptedPEM),
                     expectedPrimaryObjectIdentifier: Secp256k1PrivateKey.primaryObjectIdentifier,
                     expectedSecondaryObjectIdentifier: Secp256k1PrivateKey.secondaryObjectIdentifier
@@ -373,7 +388,7 @@ extension LibP2PCrypto.Keys.KeyPair {
                 try self.init(privateKey: Secp256k1PrivateKey(privateDER: der))
             } else {
                 print(ids)
-                throw PEM.Error.unsupportedPEMType
+                throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
         }
     }
@@ -417,13 +432,13 @@ extension LibP2PCrypto.Keys.KeyPair {
 
     internal func exportEncryptedPrivatePEM(
         withPassword password: String,
-        usingPBKDF pbkdf: PEM.PBKDFAlgorithm? = nil,
-        andCipher cipher: PEM.CipherAlgorithm? = nil
+        usingPBKDF pbkdf: LibP2PCrypto.PEM.PBKDFAlgorithm? = nil,
+        andCipher cipher: LibP2PCrypto.PEM.CipherAlgorithm? = nil
     ) throws -> [UInt8] {
         let cipher = try cipher ?? .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
         let pbkdf = try pbkdf ?? .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 8), iterations: 2048)
 
-        return try PEM.encryptPEM(
+        return try LibP2PCrypto.PEM.encryptPEM(
             Data(self.privateKey!.exportPrivateKeyPEMRaw()),
             withPassword: password,
             usingPBKDF: pbkdf,
@@ -433,8 +448,8 @@ extension LibP2PCrypto.Keys.KeyPair {
 
     internal func exportEncryptedPrivatePEMString(
         withPassword password: String,
-        usingPBKDF pbkdf: PEM.PBKDFAlgorithm? = nil,
-        andCipher cipher: PEM.CipherAlgorithm? = nil
+        usingPBKDF pbkdf: LibP2PCrypto.PEM.PBKDFAlgorithm? = nil,
+        andCipher cipher: LibP2PCrypto.PEM.CipherAlgorithm? = nil
     ) throws -> String {
         let data = try self.exportEncryptedPrivatePEM(withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
         return String(data: Data(data), encoding: .utf8)!

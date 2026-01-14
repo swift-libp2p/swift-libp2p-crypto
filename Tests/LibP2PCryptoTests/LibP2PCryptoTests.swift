@@ -1085,7 +1085,7 @@ struct DERAndPEMTests {
             -----END PUBLIC KEY-----
             """
 
-        let (_, bytes, _) = try PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1134,7 +1134,7 @@ struct DERAndPEMTests {
             -----END PRIVATE KEY-----
             """
 
-        let (_, bytes, _) = try PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1195,7 +1195,7 @@ struct DERAndPEMTests {
             -----END PUBLIC KEY-----
             """
 
-        let (_, bytes, _) = try PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1252,7 +1252,7 @@ struct DERAndPEMTests {
             -----END EC PRIVATE KEY-----
             """
 
-        let (_, bytes, _) = try PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1463,11 +1463,11 @@ struct DERAndPEMTests {
         // Password: mypassword
         // Cipher IV: 128 - [143, 115, 178, 51, 216, 39, 91, 103, 93, 253, 228, 71, 147, 24, 198, 174]
 
-        let cipher = PEM.CipherAlgorithm.aes_128_cbc(iv: [
+        let cipher = LibP2PCrypto.PEM.CipherAlgorithm.aes_128_cbc(iv: [
             143, 115, 178, 51, 216, 39, 91, 103, 93, 253, 228, 71, 147, 24, 198, 174,
         ])
 
-        let pbkdf = PEM.PBKDFAlgorithm.pbkdf2(salt: [63, 148, 10, 217, 23, 234, 82, 94], iterations: 2048)
+        let pbkdf = LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(salt: [63, 148, 10, 217, 23, 234, 82, 94], iterations: 2048)
 
         // Generate Encryption Key from Password (confirmed key is same)
         let key = try pbkdf.deriveKey(password: "mypassword", ofLength: cipher.desiredKeyLength)
@@ -1586,11 +1586,11 @@ struct DERAndPEMTests {
         // Password: mypassword
         // Cipher IV: 128 - [143, 115, 178, 51, 216, 39, 91, 103, 93, 253, 228, 71, 147, 24, 198, 174]
 
-        let cipher = PEM.CipherAlgorithm.aes_128_cbc(iv: [
+        let cipher = LibP2PCrypto.PEM.CipherAlgorithm.aes_128_cbc(iv: [
             143, 115, 178, 51, 216, 39, 91, 103, 93, 253, 228, 71, 147, 24, 198, 174,
         ])
 
-        let pbkdf = PEM.PBKDFAlgorithm.pbkdf2(salt: [63, 148, 10, 217, 23, 234, 82, 94], iterations: 2048)
+        let pbkdf = LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(salt: [63, 148, 10, 217, 23, 234, 82, 94], iterations: 2048)
 
         let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(
             withPassword: "mypassword",
@@ -1633,11 +1633,14 @@ struct DERAndPEMTests {
         // Password: mypassword
         // Cipher IV: 128 - [99, 63, 232, 90, 218, 184, 170, 21, 143, 54, 176, 16, 136, 237, 226, 231]
 
-        let cipher = PEM.CipherAlgorithm.aes_128_cbc(iv: [
+        let cipher = LibP2PCrypto.PEM.CipherAlgorithm.aes_128_cbc(iv: [
             99, 63, 232, 90, 218, 184, 170, 21, 143, 54, 176, 16, 136, 237, 226, 231,
         ])
 
-        let pbkdf = PEM.PBKDFAlgorithm.pbkdf2(salt: [227, 211, 237, 63, 238, 242, 38, 104], iterations: 2048)
+        let pbkdf = LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(
+            salt: [227, 211, 237, 63, 238, 242, 38, 104],
+            iterations: 2048
+        )
 
         let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(
             withPassword: "mypassword",

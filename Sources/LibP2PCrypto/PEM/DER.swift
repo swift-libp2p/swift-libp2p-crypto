@@ -55,10 +55,10 @@ extension DERDecodable {
     ///   - password: A password to use to decrypt an encrypted PEM file
     ///   - asType: The underlying DERDecodable Key Type (ex: RSA.self)
     public init<Key: DERDecodable>(pem: [UInt8], password: String? = nil, asType: Key.Type = Key.self) throws {
-        let (type, bytes, _) = try PEM.pemToData(pem)
+        let (type, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem)
 
         if password != nil {
-            guard type == .encryptedPrivateKey else { throw PEM.Error.invalidParameters }
+            guard type == .encryptedPrivateKey else { throw LibP2PCrypto.PEM.Error.invalidParameters }
         }
 
         switch type {
@@ -69,14 +69,14 @@ extension DERDecodable {
             // Ensure the objectIdentifier is rsaEncryption
             try self.init(privateDER: bytes)
         case .publicKey:
-            let der = try PEM.decodePublicKeyPEM(
+            let der = try LibP2PCrypto.PEM.decodePublicKeyPEM(
                 Data(bytes),
                 expectedPrimaryObjectIdentifier: Key.primaryObjectIdentifier,
                 expectedSecondaryObjectIdentifier: Key.secondaryObjectIdentifier
             )
             try self.init(publicDER: der)
         case .privateKey, .ecPrivateKey:
-            let der = try PEM.decodePrivateKeyPEM(
+            let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
                 Data(bytes),
                 expectedPrimaryObjectIdentifier: Key.primaryObjectIdentifier,
                 expectedSecondaryObjectIdentifier: Key.secondaryObjectIdentifier
@@ -86,10 +86,10 @@ extension DERDecodable {
             // Decrypt the encrypted PEM and attempt to instantiate it again...
 
             // Ensure we were provided a password
-            guard let password = password else { throw PEM.Error.invalidParameters }
+            guard let password = password else { throw LibP2PCrypto.PEM.Error.invalidParameters }
 
             // Parse out Encryption Strategy and CipherText
-            let decryptionStategy = try PEM.decodeEncryptedPEM(Data(bytes))  // RSA.decodeEncryptedPEM(Data(bytes))
+            let decryptionStategy = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(bytes))
 
             // Derive Encryption Key from Password
             let key = try decryptionStategy.pbkdfAlgorithm.deriveKey(
@@ -104,7 +104,7 @@ extension DERDecodable {
             )
 
             // Proceed with the unencrypted PEM (can public PEM keys be encrypted as well, wouldn't really make sense but idk if we should support it)?
-            let der = try PEM.decodePrivateKeyPEM(
+            let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
                 Data(decryptedPEM),
                 expectedPrimaryObjectIdentifier: Key.primaryObjectIdentifier,
                 expectedSecondaryObjectIdentifier: Key.secondaryObjectIdentifier
@@ -177,8 +177,8 @@ extension DEREncodable {
         let bodyUTF8Bytes = bodyString.bytes
 
         if withHeaderAndFooter {
-            let header = PEM.PEMType.publicKey.headerBytes + [0x0a]
-            let footer = [0x0a] + PEM.PEMType.publicKey.footerBytes
+            let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
+            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.publicKey.footerBytes
 
             return header + bodyUTF8Bytes + footer
         } else {
@@ -189,7 +189,7 @@ extension DEREncodable {
     public func exportPublicKeyPEMString(withHeaderAndFooter: Bool = true) throws -> String {
         let publicPEMData = try exportPublicKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
         guard let pemAsString = String(data: Data(publicPEMData), encoding: .utf8) else {
-            throw PEM.Error.encodingError
+            throw LibP2PCrypto.PEM.Error.encodingError
         }
         return pemAsString
     }
@@ -214,8 +214,8 @@ extension DEREncodable {
         let bodyUTF8Bytes = bodyString.bytes
 
         if withHeaderAndFooter {
-            let header = PEM.PEMType.privateKey.headerBytes + [0x0a]
-            let footer = [0x0a] + PEM.PEMType.privateKey.footerBytes
+            let header = LibP2PCrypto.PEM.PEMType.privateKey.headerBytes + [0x0a]
+            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.privateKey.footerBytes
 
             return header + bodyUTF8Bytes + footer
         } else {
@@ -226,7 +226,7 @@ extension DEREncodable {
     public func exportPrivateKeyPEMString(withHeaderAndFooter: Bool = true) throws -> String {
         let privatePEMData = try exportPrivateKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
         guard let pemAsString = String(data: Data(privatePEMData), encoding: .utf8) else {
-            throw PEM.Error.encodingError
+            throw LibP2PCrypto.PEM.Error.encodingError
         }
         return pemAsString
     }

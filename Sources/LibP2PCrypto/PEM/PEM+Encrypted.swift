@@ -17,7 +17,7 @@ import Foundation
 
 // MARK: Encrypted PEM
 
-extension PEM {
+extension LibP2PCrypto.PEM {
 
     internal struct EncryptedPEM {
         let objectIdentifer: [UInt8]
@@ -121,7 +121,8 @@ extension PEM {
         let base64 = "\n" + encoded.toBase64().split(intoChunksOfLength: 64).joined(separator: "\n") + "\n"
 
         return Data(
-            PEM.PEMType.encryptedPrivateKey.headerBytes + base64.bytes + PEM.PEMType.encryptedPrivateKey.footerBytes
+            LibP2PCrypto.PEM.PEMType.encryptedPrivateKey.headerBytes + base64.bytes
+                + LibP2PCrypto.PEM.PEMType.encryptedPrivateKey.footerBytes
         )
     }
 
@@ -131,7 +132,7 @@ extension PEM {
         usingPBKDF pbkdf: PBKDFAlgorithm = .pbkdf2(salt: try! LibP2PCrypto.randomBytes(length: 8), iterations: 2048),
         andCipher cipher: CipherAlgorithm = .aes_128_cbc(iv: try! LibP2PCrypto.randomBytes(length: 16))
     ) throws -> String {
-        let data = try PEM.encryptPEM(pem, withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
+        let data = try LibP2PCrypto.PEM.encryptPEM(pem, withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
         return String(data: data, encoding: .utf8)!
     }
 }

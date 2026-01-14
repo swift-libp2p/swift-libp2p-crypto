@@ -17,7 +17,7 @@ import Foundation
 
 // MARK: Encrypted PEM PBKDF Algorithms
 
-extension PEM {
+extension LibP2PCrypto.PEM {
     // MARK: Add support for new PBKDF Algorithms here...
     internal enum PBKDFAlgorithm {
         case pbkdf2(salt: [UInt8], iterations: Int)

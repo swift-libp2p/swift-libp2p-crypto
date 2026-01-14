@@ -17,7 +17,7 @@ import Foundation
 
 // MARK: Encrypted PEM Cipher Algorithms
 
-extension PEM {
+extension LibP2PCrypto.PEM {
     // MARK: Add support for new Cipher Algorithms here...
     internal enum CipherAlgorithm {
         case aes_128_cbc(iv: [UInt8])

@@ -161,8 +161,8 @@ extension Secp256k1PublicKey: DERCodable {
         let bodyUTF8Bytes = bodyString.bytes
 
         if withHeaderAndFooter {
-            let header = PEM.PEMType.publicKey.headerBytes + [0x0a]
-            let footer = [0x0a] + PEM.PEMType.publicKey.footerBytes
+            let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
+            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.publicKey.footerBytes
 
             return header + bodyUTF8Bytes + footer
         } else {
@@ -212,8 +212,8 @@ extension Secp256k1PrivateKey: DERCodable {
         let bodyUTF8Bytes = bodyString.bytes
 
         if withHeaderAndFooter {
-            let header = PEM.PEMType.ecPrivateKey.headerBytes + [0x0a]
-            let footer = [0x0a] + PEM.PEMType.ecPrivateKey.footerBytes
+            let header = LibP2PCrypto.PEM.PEMType.ecPrivateKey.headerBytes + [0x0a]
+            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.ecPrivateKey.footerBytes
 
             return header + bodyUTF8Bytes + footer
         } else {

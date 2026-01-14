@@ -44,8 +44,8 @@ extension RSAPublicKey: DERCodable {
         let bodyUTF8Bytes = bodyString.bytes
 
         if withHeaderAndFooter {
-            let header = PEM.PEMType.publicKey.headerBytes + [0x0a]
-            let footer = [0x0a] + PEM.PEMType.publicKey.footerBytes
+            let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
+            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.publicKey.footerBytes
 
             return header + bodyUTF8Bytes + footer
         } else {
@@ -96,8 +96,8 @@ extension RSAPrivateKey: DERCodable {
         let bodyUTF8Bytes = bodyString.bytes
 
         if withHeaderAndFooter {
-            let header = PEM.PEMType.privateKey.headerBytes + [0x0a]
-            let footer = [0x0a] + PEM.PEMType.privateKey.footerBytes
+            let header = LibP2PCrypto.PEM.PEMType.privateKey.headerBytes + [0x0a]
+            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.privateKey.footerBytes
 
             return header + bodyUTF8Bytes + footer
         } else {
