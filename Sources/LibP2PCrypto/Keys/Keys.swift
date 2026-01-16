@@ -39,7 +39,8 @@ extension LibP2PCrypto {
             }
         }
 
-        public enum RSABitLength {
+        public enum RSABitLength: Sendable {
+            /// - Warning: RSA Keys with less than 2048 bits are considered insecure
             case B1024
             case B2048
             case B3072
@@ -57,7 +58,7 @@ extension LibP2PCrypto {
                 case .B4096:
                     return 4096
                 case .custom(let bits):
-                    if bits < 1024 { print("‼️ WARNING: RSA Keys less than 1024 are considered insecure! ‼️") }
+                    if bits < 2048 { print("‼️ WARNING: RSA Keys less than 2048 are considered insecure! ‼️") }
                     return bits
                 }
             }
@@ -67,7 +68,7 @@ extension LibP2PCrypto {
             }
         }
 
-        public enum KeyPairType {
+        public enum KeyPairType: Sendable {
             case RSA(bits: RSABitLength = .B2048)
             case Ed25519
             case Secp256k1
