@@ -817,9 +817,9 @@ struct HMACTests {
     @Test func testHMAC() throws {
         let message = "Hello World"
         let key = "secret"
-        let hmac = try LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
-        let hmac2 = try LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
-        let hmac3 = try LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: "Secret")
+        let hmac = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
+        let hmac2 = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
+        let hmac3 = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: "Secret")
 
         #expect(hmac == hmac2)  //Same message, same key -> Same hash
         #expect(hmac != hmac3)  //Same message, different key -> Different hash
@@ -830,8 +830,8 @@ struct HMACTests {
         let key = "secret"
         let hmacKey = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
 
-        let encrypted = try hmacKey.encrypt(message)
-        let encrypted2 = try hmacKey.encrypt(message)
+        let encrypted = hmacKey.encrypt(message)
+        let encrypted2 = hmacKey.encrypt(message)
 
         #expect(encrypted == encrypted2)
     }
@@ -839,7 +839,7 @@ struct HMACTests {
     @Test func testHMACBaseEncoded() throws {
         let message = "Hello World"
         let key = "secret"
-        let hmac = try LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
+        let hmac = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
 
         print(hmac.asString(base: .base16))
         print(hmac.asString(base: .base32Hex))
@@ -852,7 +852,7 @@ struct HMACTests {
         let hmacKeyLocal = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
         let hmacKeyRemote = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
 
-        let encrypted = try hmacKeyLocal.encrypt(message)
+        let encrypted = hmacKeyLocal.encrypt(message)
 
         // Correct data, hash matches...
         #expect(hmacKeyRemote.verify(message, hash: encrypted))
