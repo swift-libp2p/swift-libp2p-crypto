@@ -14,9 +14,9 @@
 
 import Foundation
 import Multibase
-import P256K
+@preconcurrency import P256K
 
-extension P256K.Signing.PublicKey: CommonPublicKey {
+extension P256K.Signing.PublicKey: CommonPublicKey, @retroactive @unchecked Sendable {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
 
     /// The raw uncompressed public key bytes (without the 0x04 header prefix)
@@ -128,7 +128,7 @@ extension P256K.Signing.PublicKey: CommonPublicKey {
     }
 }
 
-extension P256K.Signing.PrivateKey: CommonPrivateKey {
+extension P256K.Signing.PrivateKey: CommonPrivateKey, @retroactive @unchecked Sendable {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
 
     public init(_ bytes: [UInt8]) throws {
@@ -227,7 +227,7 @@ extension P256K.Signing.PrivateKey: CommonPrivateKey {
     }
 
     public func sign(message data: Data) throws -> Data {
-        self.signature(for: data).dataRepresentation
+        try self.signature(for: data).dataRepresentation
     }
 
     public func marshal() throws -> Data {
