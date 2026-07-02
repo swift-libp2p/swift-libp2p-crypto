@@ -16,6 +16,7 @@ import Crypto
 import Foundation
 import Multibase
 import Multihash
+import P256K
 
 extension LibP2PCrypto.Keys {
     public struct KeyPair: Sendable {
@@ -41,7 +42,7 @@ extension LibP2PCrypto.Keys {
             case .Ed25519:
                 try self.init(privateKey: Curve25519.Signing.PrivateKey())
             case .Secp256k1:
-                try self.init(privateKey: Secp256k1PrivateKey())
+                try self.init(privateKey: P256K.Signing.PrivateKey())
             case .RSA(let keySize):
                 try self.init(privateKey: RSAPrivateKey(keySize: keySize.bits))
             //default:
@@ -170,7 +171,7 @@ extension LibP2PCrypto.Keys {
                 try self.init(publicKey: Curve25519.Signing.PublicKey(marshaledData: proto.data))
 
             case .secp256K1:
-                try self.init(publicKey: Secp256k1PublicKey(marshaledData: proto.data))
+                try self.init(publicKey: P256K.Signing.PublicKey(marshaledData: proto.data))
             }
         }
 
@@ -221,7 +222,7 @@ extension LibP2PCrypto.Keys {
                     throw NSError(domain: "Invalid private key protobuf encoding -> invalid data payload", code: 0)
                 }
             case .secp256K1:
-                try self.init(privateKey: Secp256k1PrivateKey(marshaledData: proto.data))
+                try self.init(privateKey: P256K.Signing.PrivateKey(marshaledData: proto.data))
             }
         }
 
@@ -313,8 +314,8 @@ extension LibP2PCrypto.Keys.KeyPair {
                 try self.init(
                     publicKey: Curve25519.Signing.PublicKey(pem: pemBytes, asType: Curve25519.Signing.PublicKey.self)
                 )
-            } else if ids.contains(Secp256k1PublicKey.primaryObjectIdentifier) {
-                try self.init(publicKey: Secp256k1PublicKey(pem: pemBytes, asType: Secp256k1PublicKey.self))
+            } else if ids.contains(P256K.Signing.PublicKey.primaryObjectIdentifier) {
+                try self.init(publicKey: P256K.Signing.PublicKey(pem: pemBytes, asType: P256K.Signing.PublicKey.self))
             } else {
                 throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
@@ -327,8 +328,10 @@ extension LibP2PCrypto.Keys.KeyPair {
                 try self.init(
                     privateKey: Curve25519.Signing.PrivateKey(pem: pemBytes, asType: Curve25519.Signing.PrivateKey.self)
                 )
-            } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
-                try self.init(privateKey: Secp256k1PrivateKey(pem: pemBytes, asType: Secp256k1PrivateKey.self))
+            } else if ids.contains(P256K.Signing.PrivateKey.primaryObjectIdentifier) {
+                try self.init(
+                    privateKey: P256K.Signing.PrivateKey(pem: pemBytes, asType: P256K.Signing.PrivateKey.self)
+                )
             } else {
                 throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
@@ -379,13 +382,13 @@ extension LibP2PCrypto.Keys.KeyPair {
                     expectedSecondaryObjectIdentifier: Curve25519.Signing.PrivateKey.secondaryObjectIdentifier
                 )
                 try self.init(privateKey: Curve25519.Signing.PrivateKey(privateDER: der))
-            } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
+            } else if ids.contains(P256K.Signing.PrivateKey.primaryObjectIdentifier) {
                 let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
                     Data(decryptedPEM),
-                    expectedPrimaryObjectIdentifier: Secp256k1PrivateKey.primaryObjectIdentifier,
-                    expectedSecondaryObjectIdentifier: Secp256k1PrivateKey.secondaryObjectIdentifier
+                    expectedPrimaryObjectIdentifier: P256K.Signing.PrivateKey.primaryObjectIdentifier,
+                    expectedSecondaryObjectIdentifier: P256K.Signing.PrivateKey.secondaryObjectIdentifier
                 )
-                try self.init(privateKey: Secp256k1PrivateKey(privateDER: der))
+                try self.init(privateKey: P256K.Signing.PrivateKey(privateDER: der))
             } else {
                 print(ids)
                 throw LibP2PCrypto.PEM.Error.unsupportedPEMType
