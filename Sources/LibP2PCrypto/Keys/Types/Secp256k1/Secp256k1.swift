@@ -158,7 +158,7 @@ extension Secp256k1PublicKey: DERCodable {
 
         let base64String = ASN1.Encoder.encode(asnNodes).toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
+        let bodyUTF8Bytes = Array(bodyString.utf8)
 
         if withHeaderAndFooter {
             let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
@@ -209,7 +209,7 @@ extension Secp256k1PrivateKey: DERCodable {
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
         let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
+        let bodyUTF8Bytes = Array(bodyString.utf8)
 
         if withHeaderAndFooter {
             let header = LibP2PCrypto.PEM.PEMType.ecPrivateKey.headerBytes + [0x0a]

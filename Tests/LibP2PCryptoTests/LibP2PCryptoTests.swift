@@ -1085,7 +1085,7 @@ struct DERAndPEMTests {
             -----END PUBLIC KEY-----
             """
 
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(Array(pem.utf8))
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1134,7 +1134,7 @@ struct DERAndPEMTests {
             -----END PRIVATE KEY-----
             """
 
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(Array(pem.utf8))
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1195,7 +1195,7 @@ struct DERAndPEMTests {
             -----END PUBLIC KEY-----
             """
 
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(Array(pem.utf8))
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1252,7 +1252,7 @@ struct DERAndPEMTests {
             -----END EC PRIVATE KEY-----
             """
 
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(Array(pem.utf8))
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1343,7 +1343,7 @@ struct DERAndPEMTests {
         ///     ObjectID: 06052b8104000a
         ///     BitString: 4200042200beb1c3052d405d7773a5328769e926c46811ab1f2cf0c437af8ec6d4d603a1763bbe15065a00bc1f5fb5e6b0784a145358a554b419784c333cc57f52ddef
 
-        let chunks = pemOG.bytes.split(separator: 0x0a)
+        let chunks = Array(pemOG.utf8).split(separator: 0x0a)
         let base64 = String(data: Data(chunks[1..<chunks.count - 1].joined()), encoding: .utf8)!
         let pemData = Data(base64Encoded: base64)!
 
