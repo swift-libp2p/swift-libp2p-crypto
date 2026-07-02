@@ -105,32 +105,8 @@ extension P256K.Signing.PublicKey: CommonPublicKey {
         return try publicKey.serializedData()
     }
 
-    //    public convenience init(pem:String) throws {
-    //        let chunks = pem.split(separator: "\n")
-    //        guard chunks.count > 3,
-    //              let f = chunks.first, f.hasPrefix("-----BEGIN"),
-    //              let l = chunks.last, l.hasSuffix("-----") else {
-    //            throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
-    //        }
-    //
-    //        //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
-    //        let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-    //        //print(raw.data)
-    //
-    //        //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
-    //
-    //        let asn1 = try LibP2PCrypto.Keys.parseASN1(pemData: raw.data)
-    //
-    //        guard asn1.isPrivateKey == false else {
-    //            throw NSError(domain: "The provided PEM isn't a Public Key. Try importPrivatePem() instead...", code: 0, userInfo: nil)
-    //        }
-    //
-    //        if asn1.objectIdentifier.prefix(5) == Data([0x2a, 0x86, 0x48, 0xce, 0x3d]) {
-    //            print("Trying to Init EC Key")
-    //            self = try Secp256k1PublicKey(publicKey: asn1.keyBits.bytes)
-    //        }
-    //
-    //        throw NSError(domain: "Failed to parse PEM into known key type \(asn1)", code: 0, userInfo: nil)
+    //    public init(pem: String) throws {
+    //        try self.init(pemRepresentation: pem)
     //    }
 
     /// Returns this public key serialized as a hex string.
@@ -232,6 +208,10 @@ extension P256K.Signing.PrivateKey: CommonPrivateKey {
 
         try self.init(privateKey: raw)
     }
+
+    //    public init(pem: String) throws {
+    //        try self.init(pemRepresentation: pem)
+    //    }
 
     public var rawRepresentation: Data {
         self.dataRepresentation
