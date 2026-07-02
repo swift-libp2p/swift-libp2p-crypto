@@ -43,7 +43,7 @@ let package = Package(
     ...
     dependencies: [
         ...
-        .package(url: "https://github.com/swift-libp2p/swift-libp2p-crypto.git", .upToNextMajor(from: "0.0.1"))
+        .package(url: "https://github.com/swift-libp2p/swift-libp2p-crypto.git", .upToNextMinor(from: "0.2.0"))
     ],
     ...
         .target(
@@ -228,7 +228,7 @@ Let's make this code better together! 🤝
 
 ## License
 
-[MIT](LICENSE) © 2022 Breth Inc.
+[MIT](LICENSE) © 2026 Breth Inc.
 
 
 
