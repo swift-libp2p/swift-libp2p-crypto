@@ -15,7 +15,7 @@
 import Crypto
 import Foundation
 
-extension Curve25519.Signing.PublicKey: CommonPublicKey, @unchecked Sendable {
+extension Curve25519.Signing.PublicKey: CommonPublicKey, @retroactive @unchecked Sendable {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
 
     init(marshaledData data: Data) throws {
@@ -38,7 +38,7 @@ extension Curve25519.Signing.PublicKey: CommonPublicKey, @unchecked Sendable {
     }
 }
 
-extension Curve25519.Signing.PrivateKey: CommonPrivateKey, @unchecked Sendable {
+extension Curve25519.Signing.PrivateKey: CommonPrivateKey, @retroactive @unchecked Sendable {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
 
     init(marshaledData data: Data) throws {
@@ -109,7 +109,7 @@ extension Curve25519.Signing.PublicKey: DERCodable {
 
         let base64String = ASN1.Encoder.encode(asnNodes).toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
+        let bodyUTF8Bytes = Array(bodyString.utf8)
 
         if withHeaderAndFooter {
             let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
@@ -164,7 +164,7 @@ extension Curve25519.Signing.PrivateKey: DERCodable {
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
         let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
+        let bodyUTF8Bytes = Array(bodyString.utf8)
 
         if withHeaderAndFooter {
             let header = LibP2PCrypto.PEM.PEMType.privateKey.headerBytes + [0x0a]

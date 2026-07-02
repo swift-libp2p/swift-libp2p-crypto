@@ -17,6 +17,7 @@ import CryptoSwift
 import Foundation
 import Multibase
 import Multihash
+import P256K
 import Testing
 
 @testable import LibP2PCrypto
@@ -246,8 +247,8 @@ struct Libp2pCryptoTests {
         let rawPrivateKey = keyPair.privateKey!.rawRepresentation
 
         /// Instantiate the pubkey
-        let recoveredPubKey = try Secp256k1PublicKey(rawRepresentation: rawPublicKey)
-        let recoveredPrivKey = try Secp256k1PrivateKey(rawRepresentation: rawPrivateKey)
+        let recoveredPubKey = try P256K.Signing.PublicKey(rawRepresentation: rawPublicKey)
+        let recoveredPrivKey = try P256K.Signing.PrivateKey(rawRepresentation: rawPrivateKey)
 
         let recoveredPublicKeyPair = try LibP2PCrypto.Keys.KeyPair(publicKey: recoveredPubKey)
         let recoveredPrivateKeyPair = try LibP2PCrypto.Keys.KeyPair(privateKey: recoveredPrivKey)
@@ -315,7 +316,7 @@ struct Libp2pCryptoTests {
         let unmarshaledPubKey = try LibP2PCrypto.Keys.unmarshalPublicKey(buf: marshaledPubKey.byteArray, into: .base16)
 
         print("Compressed Public Key: \(unmarshaledPubKey)")
-        let recoveredPubKey = try Secp256k1PublicKey(hexPublicKey: unmarshaledPubKey)
+        let recoveredPubKey = try P256K.Signing.PublicKey(hexPublicKey: unmarshaledPubKey)
         #expect(recoveredPubKey.hex() == keyPair.publicKey.asString(base: .base16, withMultibasePrefix: false))
 
         let pubKey = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPubKey).publicKey
@@ -328,7 +329,7 @@ struct Libp2pCryptoTests {
 
         let pb = try PublicKey(serializedBytes: Data(hex: marshalledCompressedPublicKey))
 
-        let pubKey = try Secp256k1PublicKey(publicKey: pb.data.byteArray)
+        let pubKey = try P256K.Signing.PublicKey(publicKey: pb.data.byteArray)
 
         let secp256k1PrivateKey = "0802122053DADF1D5A164D6B4ACDB15E24AA4C5B1D3461BDBD42ABEDB0A4404D56CED8FB"
         let kp = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(hex: secp256k1PrivateKey))
@@ -1085,7 +1086,7 @@ struct DERAndPEMTests {
             -----END PUBLIC KEY-----
             """
 
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(Array(pem.utf8))
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1134,7 +1135,7 @@ struct DERAndPEMTests {
             -----END PRIVATE KEY-----
             """
 
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(Array(pem.utf8))
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1195,7 +1196,7 @@ struct DERAndPEMTests {
             -----END PUBLIC KEY-----
             """
 
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(Array(pem.utf8))
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1214,7 +1215,7 @@ struct DERAndPEMTests {
             return
         }
 
-        let pubKey = try Secp256k1PublicKey(pubKeyData.byteArray)
+        let pubKey = try P256K.Signing.PublicKey(pubKeyData.byteArray)
 
         print(pubKey)
 
@@ -1252,7 +1253,7 @@ struct DERAndPEMTests {
             -----END EC PRIVATE KEY-----
             """
 
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(Array(pem.utf8))
 
         let asn = try ASN1.Decoder.decode(data: Data(bytes))
 
@@ -1270,7 +1271,7 @@ struct DERAndPEMTests {
             return
         }
 
-        let privKey = try Secp256k1PrivateKey(privKeyData.byteArray)
+        let privKey = try P256K.Signing.PrivateKey(privKeyData.byteArray)
 
         #expect(
             privKey.rawRepresentation.asString(base: .base64Pad) == "mZunAPeZmGUS2IbOaCuikn+dJ7BzxQ/IET3CJvvjaxo="
@@ -1343,7 +1344,7 @@ struct DERAndPEMTests {
         ///     ObjectID: 06052b8104000a
         ///     BitString: 4200042200beb1c3052d405d7773a5328769e926c46811ab1f2cf0c437af8ec6d4d603a1763bbe15065a00bc1f5fb5e6b0784a145358a554b419784c333cc57f52ddef
 
-        let chunks = pemOG.bytes.split(separator: 0x0a)
+        let chunks = Array(pemOG.utf8).split(separator: 0x0a)
         let base64 = String(data: Data(chunks[1..<chunks.count - 1].joined()), encoding: .utf8)!
         let pemData = Data(base64Encoded: base64)!
 
@@ -1768,16 +1769,16 @@ struct DERAndPEMTests {
     }
 
     @Test func testImportSecp256k1PEM() throws {
-        let secp256k1Public = try Secp256k1PublicKey(
+        let secp256k1Public = try P256K.Signing.PublicKey(
             pem: TestPEMKeys.SECP256k1_KeyPair.PUBLIC,
-            asType: Secp256k1PublicKey.self
+            asType: P256K.Signing.PublicKey.self
         )
 
         print(secp256k1Public)
 
-        let secp256k1Private = try Secp256k1PrivateKey(
+        let secp256k1Private = try P256K.Signing.PrivateKey(
             pem: TestPEMKeys.SECP256k1_KeyPair.PRIVATE,
-            asType: Secp256k1PrivateKey.self
+            asType: P256K.Signing.PrivateKey.self
         )
 
         print(secp256k1Private)
