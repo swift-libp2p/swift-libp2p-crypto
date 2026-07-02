@@ -17,6 +17,7 @@ import CryptoSwift
 import Foundation
 import Multibase
 import Multihash
+import P256K
 import Testing
 
 @testable import LibP2PCrypto
@@ -246,8 +247,8 @@ struct Libp2pCryptoTests {
         let rawPrivateKey = keyPair.privateKey!.rawRepresentation
 
         /// Instantiate the pubkey
-        let recoveredPubKey = try Secp256k1PublicKey(rawRepresentation: rawPublicKey)
-        let recoveredPrivKey = try Secp256k1PrivateKey(rawRepresentation: rawPrivateKey)
+        let recoveredPubKey = try P256K.Signing.PublicKey(rawRepresentation: rawPublicKey)
+        let recoveredPrivKey = try P256K.Signing.PrivateKey(rawRepresentation: rawPrivateKey)
 
         let recoveredPublicKeyPair = try LibP2PCrypto.Keys.KeyPair(publicKey: recoveredPubKey)
         let recoveredPrivateKeyPair = try LibP2PCrypto.Keys.KeyPair(privateKey: recoveredPrivKey)
@@ -315,7 +316,7 @@ struct Libp2pCryptoTests {
         let unmarshaledPubKey = try LibP2PCrypto.Keys.unmarshalPublicKey(buf: marshaledPubKey.byteArray, into: .base16)
 
         print("Compressed Public Key: \(unmarshaledPubKey)")
-        let recoveredPubKey = try Secp256k1PublicKey(hexPublicKey: unmarshaledPubKey)
+        let recoveredPubKey = try P256K.Signing.PublicKey(hexPublicKey: unmarshaledPubKey)
         #expect(recoveredPubKey.hex() == keyPair.publicKey.asString(base: .base16, withMultibasePrefix: false))
 
         let pubKey = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPubKey).publicKey
@@ -328,7 +329,7 @@ struct Libp2pCryptoTests {
 
         let pb = try PublicKey(serializedBytes: Data(hex: marshalledCompressedPublicKey))
 
-        let pubKey = try Secp256k1PublicKey(publicKey: pb.data.byteArray)
+        let pubKey = try P256K.Signing.PublicKey(publicKey: pb.data.byteArray)
 
         let secp256k1PrivateKey = "0802122053DADF1D5A164D6B4ACDB15E24AA4C5B1D3461BDBD42ABEDB0A4404D56CED8FB"
         let kp = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(hex: secp256k1PrivateKey))
@@ -816,9 +817,9 @@ struct HMACTests {
     @Test func testHMAC() throws {
         let message = "Hello World"
         let key = "secret"
-        let hmac = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
-        let hmac2 = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
-        let hmac3 = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: "Secret")
+        let hmac = try LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
+        let hmac2 = try LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
+        let hmac3 = try LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: "Secret")
 
         #expect(hmac == hmac2)  //Same message, same key -> Same hash
         #expect(hmac != hmac3)  //Same message, different key -> Different hash
@@ -829,8 +830,8 @@ struct HMACTests {
         let key = "secret"
         let hmacKey = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
 
-        let encrypted = hmacKey.encrypt(message)
-        let encrypted2 = hmacKey.encrypt(message)
+        let encrypted = try hmacKey.encrypt(message)
+        let encrypted2 = try hmacKey.encrypt(message)
 
         #expect(encrypted == encrypted2)
     }
@@ -838,7 +839,7 @@ struct HMACTests {
     @Test func testHMACBaseEncoded() throws {
         let message = "Hello World"
         let key = "secret"
-        let hmac = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
+        let hmac = try LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
 
         print(hmac.asString(base: .base16))
         print(hmac.asString(base: .base32Hex))
@@ -851,7 +852,7 @@ struct HMACTests {
         let hmacKeyLocal = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
         let hmacKeyRemote = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
 
-        let encrypted = hmacKeyLocal.encrypt(message)
+        let encrypted = try hmacKeyLocal.encrypt(message)
 
         // Correct data, hash matches...
         #expect(hmacKeyRemote.verify(message, hash: encrypted))
@@ -1214,7 +1215,7 @@ struct DERAndPEMTests {
             return
         }
 
-        let pubKey = try Secp256k1PublicKey(pubKeyData.byteArray)
+        let pubKey = try P256K.Signing.PublicKey(pubKeyData.byteArray)
 
         print(pubKey)
 
@@ -1270,7 +1271,7 @@ struct DERAndPEMTests {
             return
         }
 
-        let privKey = try Secp256k1PrivateKey(privKeyData.byteArray)
+        let privKey = try P256K.Signing.PrivateKey(privKeyData.byteArray)
 
         #expect(
             privKey.rawRepresentation.asString(base: .base64Pad) == "mZunAPeZmGUS2IbOaCuikn+dJ7BzxQ/IET3CJvvjaxo="
@@ -1768,16 +1769,16 @@ struct DERAndPEMTests {
     }
 
     @Test func testImportSecp256k1PEM() throws {
-        let secp256k1Public = try Secp256k1PublicKey(
+        let secp256k1Public = try P256K.Signing.PublicKey(
             pem: TestPEMKeys.SECP256k1_KeyPair.PUBLIC,
-            asType: Secp256k1PublicKey.self
+            asType: P256K.Signing.PublicKey.self
         )
 
         print(secp256k1Public)
 
-        let secp256k1Private = try Secp256k1PrivateKey(
+        let secp256k1Private = try P256K.Signing.PrivateKey(
             pem: TestPEMKeys.SECP256k1_KeyPair.PRIVATE,
-            asType: Secp256k1PrivateKey.self
+            asType: P256K.Signing.PrivateKey.self
         )
 
         print(secp256k1Private)
