@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import P256K
 
 /// Conform to this protocol if your type can be instantiated from a ASN1 DER representation
 public protocol DERDecodable {
@@ -37,7 +38,7 @@ extension DERDecodable {
     ///   - password: A password to use to decrypt an encrypted PEM file
     ///   - asType: The underlying DERDecodable Key Type (ex: RSA.self)
     public init<Key: DERDecodable>(pem: String, password: String? = nil, asType: Key.Type = Key.self) throws {
-        try self.init(pem: pem.bytes, password: password, asType: Key.self)
+        try self.init(pem: Array(pem.utf8), password: password, asType: Key.self)
     }
 
     /// Instantiates a DERDecodable Key from ut8 decoded PEM data
@@ -144,7 +145,7 @@ extension DEREncodable {
         let secondaryObject: ASN1.Node?
         if Self.primaryObjectIdentifier == RSAPublicKey.primaryObjectIdentifier {
             secondaryObject = .null
-        } else if Self.primaryObjectIdentifier == Secp256k1PublicKey.primaryObjectIdentifier {
+        } else if Self.primaryObjectIdentifier == P256K.Signing.PublicKey.primaryObjectIdentifier {
             secondaryObject = .objectIdentifier(data: Data(Self.secondaryObjectIdentifier!))
         } else {
             secondaryObject = nil
@@ -174,7 +175,7 @@ extension DEREncodable {
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
         let base64String = try self.exportPublicKeyPEMRaw().toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
+        let bodyUTF8Bytes = Array(bodyString.utf8)
 
         if withHeaderAndFooter {
             let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
@@ -211,7 +212,7 @@ extension DEREncodable {
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
         let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
+        let bodyUTF8Bytes = Array(bodyString.utf8)
 
         if withHeaderAndFooter {
             let header = LibP2PCrypto.PEM.PEMType.privateKey.headerBytes + [0x0a]
