@@ -282,7 +282,7 @@ extension LibP2PCrypto.Keys {
 
 extension LibP2PCrypto.Keys.KeyPair {
     public init(pem: String, password: String? = nil) throws {
-        try self.init(pem: pem.bytes, password: password)
+        try self.init(pem: Array(pem.utf8), password: password)
     }
 
     public init(pem: Data, password: String? = nil) throws {
