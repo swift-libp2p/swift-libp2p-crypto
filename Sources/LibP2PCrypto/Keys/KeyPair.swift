@@ -415,7 +415,6 @@ extension LibP2PCrypto.Keys.KeyPair {
                 )
                 try self.init(privateKey: Secp256k1PrivateKey(privateDER: der))
             } else {
-                print(ids)
                 throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
         }
@@ -433,7 +432,6 @@ extension LibP2PCrypto.Keys.KeyPair {
         guard let privKey = self.privateKey else {
             throw LibP2PCrypto.Keys.KeyError.noPrivateKey
         }
-        //guard let der = privKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
         return try privKey.exportPrivateKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
     }
 
@@ -446,7 +444,6 @@ extension LibP2PCrypto.Keys.KeyPair {
         guard let privKey = self.privateKey else {
             throw LibP2PCrypto.Keys.KeyError.noPrivateKey
         }
-        //guard let der = privKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
         return try privKey.exportPrivateKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
     }
 
