@@ -131,7 +131,7 @@ extension LibP2PCrypto {
             let pubKeyProto = try PublicKey(serializedBytes: buf)
 
             guard !pubKeyProto.data.isEmpty else {
-                throw NSError(domain: "Unable to Unmarshal PublicKey", code: 0, userInfo: nil)
+                throw KeyError.invalidMarshaledData("Public key payload was empty")
             }
             switch pubKeyProto.type {
             case .rsa:
@@ -162,11 +162,8 @@ extension LibP2PCrypto {
                 }
                 return try self.marshalPrivateKey(raw: decoded.data, keyType: asKeyType)
             } catch {
-                print(error)
-                throw NSError(
-                    domain: "Failed to decode raw private key, unknown base encoding.",
-                    code: 0,
-                    userInfo: nil
+                throw KeyError.invalidParameters(
+                    "Failed to decode raw private key, unknown base encoding: \(error)"
                 )
             }
         }
@@ -183,7 +180,7 @@ extension LibP2PCrypto {
             let privKeyProto = try PrivateKey(serializedBytes: buf)
 
             let data = privKeyProto.data
-            guard !data.isEmpty else { throw NSError(domain: "Unable to Unmarshal PrivateKey", code: 0, userInfo: nil) }
+            guard !data.isEmpty else { throw KeyError.invalidMarshaledData("Private key payload was empty") }
 
             return data.asString(base: base)
         }

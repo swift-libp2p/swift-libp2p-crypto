@@ -123,7 +123,7 @@ extension Encryptable {
     /// A default string -> data implementation using .utf8 encoding...
     public func encrypt(_ message: String, encodedUsing encoding: String.Encoding = .utf8) throws -> Data {
         guard let d = message.data(using: encoding) else {
-            throw NSError(domain: "Error: Failed to encode string using \(encoding).", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.invalidParameters("Failed to encode string using \(encoding)")
         }
         return try self.encrypt(d)
     }
@@ -156,7 +156,7 @@ extension Decryptable {
     public func decrypt(_ data: Data, intoString encoding: String.Encoding = .utf8) throws -> String {
         let d = try self.decrypt(data)
         guard let str = String(data: d, encoding: encoding) else {
-            throw NSError(domain: "Error: Failed to encode data using \(encoding).", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.invalidParameters("Failed to decode data using \(encoding)")
         }
         return str
     }
@@ -164,7 +164,7 @@ extension Decryptable {
     public func decrypt(_ bytes: [UInt8], intoString encoding: String.Encoding = .utf8) throws -> String {
         let d = try self.decrypt(bytes)
         guard let str = String(data: d, encoding: encoding) else {
-            throw NSError(domain: "Error: Failed to encode data using \(encoding).", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.invalidParameters("Failed to decode data using \(encoding)")
         }
         return str
     }
@@ -176,7 +176,7 @@ extension Decryptable {
     ) throws -> String {
         let d = try self.decrypt(baseEncoded: baseEncoded, base: base)
         guard let str = String(data: d, encoding: encoding) else {
-            throw NSError(domain: "Error: Failed to encode data using \(encoding).", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.invalidParameters("Failed to decode data using \(encoding)")
         }
         return str
     }
@@ -184,7 +184,7 @@ extension Decryptable {
     public func decrypt(multibaseEncoded: String, intoString encoding: String.Encoding = .utf8) throws -> String {
         let d = try self.decrypt(multibaseEncoded: multibaseEncoded)
         guard let str = String(data: d, encoding: encoding) else {
-            throw NSError(domain: "Error: Failed to encode data using \(encoding).", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.invalidParameters("Failed to decode data using \(encoding)")
         }
         return str
     }

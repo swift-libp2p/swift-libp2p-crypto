@@ -33,19 +33,19 @@ struct RSAPublicKey: CommonPublicKey {
         let asn1 = try ASN1.Decoder.decode(data: raw)
 
         guard case .sequence(let params) = asn1 else {
-            throw NSError(domain: "Invalid ASN1 Encoding -> \(asn1)", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: not an ASN.1 sequence")
         }
 
         /// We have an objectID header....
         if case .sequence(let objectID) = params.first {
             guard case .objectIdentifier(let oid) = objectID.first else {
-                throw NSError(domain: "Invalid ASN1 Encoding -> No ObjectID", code: 0)
+                throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: missing object identifier")
             }
             guard oid.byteArray == RSAPublicKey.RSA_OBJECT_IDENTIFIER else {
-                throw NSError(domain: "Invalid ASN1 Encoding -> ObjectID != Public RSA Key ID", code: 0)
+                throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: unexpected object identifier")
             }
             guard case .bitString(let bits) = params.last else {
-                throw NSError(domain: "Invalid ASN1 Encoding -> No BitString", code: 0)
+                throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: missing key bit string")
             }
 
             self.key = try CryptoSwift.RSA(rawRepresentation: bits)
@@ -60,7 +60,7 @@ struct RSAPublicKey: CommonPublicKey {
 
             self.key = CryptoSwift.RSA(n: n.byteArray, e: e.byteArray)
         } else {
-            throw NSError(domain: "Invalid RSA rawRepresentation", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: unrecognized structure")
         }
     }
 
@@ -90,7 +90,7 @@ struct RSAPublicKey: CommonPublicKey {
     /// - Note: We throw on false to match the SecKey implementation
     func verify(signature: Data, for expectedData: Data) throws -> Bool {
         guard try RSA.verify(signature: signature, fromMessage: expectedData, usingKey: self.key) else {
-            throw NSError(domain: "Invalid signature for expected data", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.signatureFailed("RSA: invalid signature for expected data")
         }
         return true
     }
@@ -126,7 +126,9 @@ struct RSAPrivateKey: CommonPrivateKey {
         case 4096:
             self.key = try CryptoSwift.RSA(keySize: keySize)
         default:
-            throw NSError(domain: "Invalid RSA Key Bit Length. (Use one of 2048, 3072 or 4096)", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.invalidParameters(
+                "Invalid RSA key bit length (use 2048, 3072 or 4096), got \(keySize)"
+            )
         }
     }
 

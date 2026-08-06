@@ -131,7 +131,7 @@ extension LibP2PCrypto.Keys {
         /// Certain asymmetric keys support decrypting data, use this method to decrypt previously encrypted data.
         func decrypt(data: Data) throws -> Data {
             guard let privateKey = privateKey else {
-                throw NSError(domain: "Can't decrypt data without a private key", code: 0)
+                throw LibP2PCrypto.Keys.KeyError.noPrivateKey
             }
             return try privateKey.decrypt(data: data)
         }
@@ -143,7 +143,7 @@ extension LibP2PCrypto.Keys {
         /// - Note: Verify this signature by using the PublicKey and calling `.verify(signature:Data, for:Data) throws -> Bool`
         func sign(message data: Data) throws -> Data {
             guard let privateKey = privateKey else {
-                throw NSError(domain: "Can't sign data without a private key", code: 0)
+                throw LibP2PCrypto.Keys.KeyError.noPrivateKey
             }
             return try privateKey.sign(message: data)
         }
@@ -196,9 +196,8 @@ extension LibP2PCrypto.Keys {
                     // Ensure we can derive the attached public key
                     let privkey = try Curve25519.Signing.PrivateKey(marshaledData: proto.data.prefix(32))
                     guard privkey.publicKey.rawRepresentation == proto.data.suffix(32) else {
-                        throw NSError(
-                            domain: "Invalid private key protobuf encoding -> unable to validate public key",
-                            code: 0
+                        throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                            "Ed25519: unable to validate attached public key"
                         )
                     }
                     try self.init(privateKey: privkey)
@@ -207,18 +206,21 @@ extension LibP2PCrypto.Keys {
                     // Ensure the two pubkeys match and we can derive the attached public key
                     let parts = Array(proto.data.chunks(ofCount: 32))
                     guard parts[1] == parts[2] else {
-                        throw NSError(domain: "Invalid private key protobuf encoding -> pubkeys dont match", code: 0)
+                        throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                            "Ed25519: attached public keys don't match"
+                        )
                     }
                     let privkey = try Curve25519.Signing.PrivateKey(marshaledData: parts[0])
                     guard privkey.publicKey.rawRepresentation == parts[1] else {
-                        throw NSError(
-                            domain: "Invalid private key protobuf encoding -> unable to validate public key",
-                            code: 0
+                        throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                            "Ed25519: unable to validate attached public key"
                         )
                     }
                     try self.init(privateKey: privkey)
                 default:
-                    throw NSError(domain: "Invalid private key protobuf encoding -> invalid data payload", code: 0)
+                    throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                        "Ed25519: invalid data payload length \(proto.data.count)"
+                    )
                 }
             case .secp256K1:
                 try self.init(privateKey: Secp256k1PrivateKey(marshaledData: proto.data))
@@ -403,7 +405,7 @@ extension LibP2PCrypto.Keys.KeyPair {
 
     public func exportPrivatePEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
         guard let privKey = self.privateKey else {
-            throw NSError(domain: "No private key available to export", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.noPrivateKey
         }
         //guard let der = privKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
         return try privKey.exportPrivateKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
@@ -416,7 +418,7 @@ extension LibP2PCrypto.Keys.KeyPair {
 
     public func exportPrivatePEMString(withHeaderAndFooter: Bool = true) throws -> String {
         guard let privKey = self.privateKey else {
-            throw NSError(domain: "No private key available to export", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.noPrivateKey
         }
         //guard let der = privKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
         return try privKey.exportPrivateKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)

@@ -25,7 +25,7 @@ extension RSAPublicKey: DERCodable {
     }
 
     public func privateKeyDER() throws -> [UInt8] {
-        throw NSError(domain: "Public Key doesn't have private DER representation", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("A public key has no private DER representation")
     }
 
     init(publicDER: [UInt8]) throws {
@@ -33,7 +33,9 @@ extension RSAPublicKey: DERCodable {
     }
 
     init(privateDER: [UInt8]) throws {
-        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
+            "Can't instantiate a public key from a private DER representation"
+        )
     }
 
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
@@ -69,7 +71,9 @@ extension RSAPrivateKey: DERCodable {
     }
 
     init(publicDER: [UInt8]) throws {
-        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
+            "Can't instantiate a private key from a public DER representation"
+        )
     }
 
     init(privateDER: [UInt8]) throws {

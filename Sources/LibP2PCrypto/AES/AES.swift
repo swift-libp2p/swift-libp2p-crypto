@@ -43,11 +43,11 @@ extension LibP2PCrypto {
 
             public init(key: Data, iv: Data) throws {
                 guard key.count == kCCKeySizeAES128 || key.count == kCCKeySizeAES256 else {
-                    throw NSError(domain: "Error: Failed to set a key.", code: 0, userInfo: nil)
+                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
                 }
 
                 guard iv.count == kCCBlockSizeAES128 else {
-                    throw NSError(domain: "Error: Failed to set an initial vector.", code: 0, userInfo: nil)
+                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid initial vector")
                 }
                 self.key = key
                 self.iv = iv
@@ -60,7 +60,7 @@ extension LibP2PCrypto {
             /// - Throws: An error if one is encountered along the way
             public init(key: String, iv: String) throws {
                 guard let keyData = key.data(using: .utf8), let ivData = iv.data(using: .utf8) else {
-                    throw NSError(domain: "Error: Failed to set a key.", code: 0, userInfo: nil)
+                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
                 }
 
                 self.key = keyData
@@ -74,7 +74,7 @@ extension LibP2PCrypto {
                 guard key.count == kCCKeySizeAES128 || key.count == kCCKeySizeAES256,
                     let keyData = key.data(using: .utf8)
                 else {
-                    throw NSError(domain: "Error: Failed to set a key.", code: 0, userInfo: nil)
+                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
                 }
                 try self.init(key: keyData, iv: Data(LibP2PCrypto.randomBytes(length: 16)))
             }
@@ -155,7 +155,7 @@ extension LibP2PCrypto {
                 }
 
                 guard UInt32(status) == UInt32(kCCSuccess) else {
-                    throw NSError(domain: "Error: Failed to crypt data. Status \(status)", code: 0, userInfo: nil)
+                    throw LibP2PCrypto.Keys.KeyError.internalError("AES: CCCrypt failed with status \(status)")
                 }
 
                 cryptData.removeSubrange(bytesLength..<cryptData.count)
@@ -195,11 +195,11 @@ extension LibP2PCrypto {
             public init(key: Data, iv: Data) throws {
 
                 guard key.count == 16 || key.count == 32 else {
-                    throw NSError(domain: "Error: Failed to set a key.", code: 0, userInfo: nil)
+                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
                 }
 
                 guard iv.count == 16 else {
-                    throw NSError(domain: "Error: Failed to set an initial vector.", code: 0, userInfo: nil)
+                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid initial vector")
                 }
 
                 self.aes = try CryptoSwift.AES(key: key.byteArray, blockMode: CBC(iv: iv.byteArray), padding: .pkcs5)
@@ -212,7 +212,7 @@ extension LibP2PCrypto {
             /// - Throws: An error if one is encountered along the way
             public init(key: String, iv: String) throws {
                 guard let keyData = key.data(using: .utf8), let ivData = iv.data(using: .utf8) else {
-                    throw NSError(domain: "Error: Failed to set a key.", code: 0, userInfo: nil)
+                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
                 }
 
                 try self.init(key: keyData, iv: ivData)
@@ -223,7 +223,7 @@ extension LibP2PCrypto {
             /// - Throws: An error if one is encountered along the way
             public init(key: String) throws {
                 guard key.count == 16 || key.count == 32, let keyData = key.data(using: .utf8) else {
-                    throw NSError(domain: "Error: Failed to set a key.", code: 0, userInfo: nil)
+                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
                 }
 
                 try self.init(key: keyData, iv: Data(LibP2PCrypto.randomBytes(length: 16)))
