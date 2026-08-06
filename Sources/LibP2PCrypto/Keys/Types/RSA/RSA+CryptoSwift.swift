@@ -41,6 +41,7 @@ struct RSAPublicKey: CommonPublicKey {
             throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: not an ASN.1 sequence")
         }
 
+        let rsaKey: RSA
         /// We have an objectID header....
         if case .sequence(let objectID) = params.first {
             guard case .objectIdentifier(let oid) = objectID.first else {
@@ -53,20 +54,15 @@ struct RSAPublicKey: CommonPublicKey {
                 throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: missing key bit string")
             }
 
-            self.key = try CryptoSwift.RSA(rawRepresentation: bits)
-        } else if params.count == 2, case .integer = params.first {
+            rsaKey = try CryptoSwift.RSA(rawRepresentation: bits)
+        } else if params.count == 2, case .integer(let n) = params.first, case .integer(let e) = params.last {
             /// We have a direct sequence of integers
-            guard case .integer(let n) = params.first else {
-                throw NSError(domain: "Invalid ASN1 Encoding -> No Modulus", code: 0)
-            }
-            guard case .integer(let e) = params.last else {
-                throw NSError(domain: "Invalid ASN1 Encoding -> No Public Exponent", code: 0)
-            }
-
-            self.key = CryptoSwift.RSA(n: n.byteArray, e: e.byteArray)
+            rsaKey = CryptoSwift.RSA(n: n.byteArray, e: e.byteArray)
         } else {
             throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: unrecognized structure")
         }
+
+        try self.init(rsaKey)
     }
 
     init(marshaledData data: Data) throws {
@@ -127,14 +123,9 @@ struct RSAPrivateKey: CommonPrivateKey {
     /// Initializes a new RSA key (backed by CryptoSwift) of the specified bit size
     internal init(keySize: Int) throws {
         switch keySize {
-        case 1024:
-            self.key = try CryptoSwift.RSA(keySize: keySize)
-        case 2048:
-            self.key = try CryptoSwift.RSA(keySize: keySize)
-        case 3072:
-            self.key = try CryptoSwift.RSA(keySize: keySize)
-        case 4096:
-            self.key = try CryptoSwift.RSA(keySize: keySize)
+        case 1024, 2048, 3072, 4096:
+            let rsaKey = try CryptoSwift.RSA(keySize: keySize)
+            try self.init(rsaKey)
         default:
             throw LibP2PCrypto.Keys.KeyError.invalidParameters(
                 "Invalid RSA key bit length (use 2048, 3072 or 4096), got \(keySize)"
