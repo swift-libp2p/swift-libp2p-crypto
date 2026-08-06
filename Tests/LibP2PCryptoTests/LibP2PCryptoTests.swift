@@ -21,6 +21,29 @@ import Testing
 
 @testable import LibP2PCrypto
 
+/// RSA key generation is prohibitively slow only in unoptimized (debug) builds that fall back to
+/// the CryptoSwift implementation (non-Apple platforms). On Apple platforms `SecKey` generation
+/// is fast even in debug, and release builds are fast everywhere, so RSA-generating tests only
+/// skip on debug + non-Apple.
+#if DEBUG && !canImport(Security)
+let runsRSAKeyGenTests = false
+#else
+let runsRSAKeyGenTests = true
+#endif
+
+let rsaTestsDisabledComment: Comment =
+    "RSA key generation is too slow in unoptimized CryptoSwift builds; run with `swift test -c release`."
+
+/// PBKDF2 key derivation at the production default (310k iterations) is slow in unoptimized
+/// builds, so the tests that actually derive a key use this smaller count in debug. The value has
+/// no effect on the encode/decode logic under test — only on how long derivation takes.
+#if DEBUG
+let testPBKDF2Iterations = 2_048
+#else
+let testPBKDF2Iterations = 310_000
+#endif
+
+
 /// Secp - https://techdocs.akamai.com/iot-token-access-control/docs/generate-ecdsa-keys
 /// JWT - https://techdocs.akamai.com/iot-token-access-control/docs/generate-jwt-ecdsa-keys
 /// Fixtures - http://cryptomanager.com/tv.html
@@ -61,7 +84,8 @@ struct Libp2pCryptoTests {
     }
 
     /// These tests are skipped on Linux when using CryptoSwift due to very slow key generation times.
-    @Test func testRSA3072() throws {
+    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
+    func testRSA3072() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B3072))
         print(keyPair)
         #expect(keyPair.keyType == .rsa)
@@ -75,7 +99,9 @@ struct Libp2pCryptoTests {
         #expect(attributes?.isPrivate == true)
     }
 
-    @Test func testRSA4096() throws {
+    /// These tests are skipped on Linux when using CryptoSwift due to very slow key generation times.
+    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
+    func testRSA4096() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B4096))
         print(keyPair)
         #expect(keyPair.keyType == .rsa)
@@ -1662,7 +1688,10 @@ struct DERAndPEMTests {
         #expect(keyPair.keyType == .rsa)
         #expect(keyPair.hasPrivateKey)
 
-        let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(withPassword: "mypassword")
+        let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(
+            withPassword: "mypassword",
+            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations)
+        )
 
         let recoveredKey = try LibP2PCrypto.Keys.KeyPair(pem: exportedPEM, password: "mypassword")
 
