@@ -38,8 +38,10 @@ public func secp256k1_default_ctx_destroy(ctx: OpaquePointer) {
     secp256k1_context_destroy(ctx)
 }
 
-// TODO: Move to P256K implementation and remove @unchecked Sendable
-
+/// - Note: `@unchecked Sendable` is sound here because every stored property is a `let`
+///   (`rawPublicKey`, `key`, and the `secp256k1_context` `ctx`, which is only used for the
+///   thread-safe parse / serialize / verify operations). A future migration to the
+///   `swift-secp256k1` (P256K) package would let us drop `@unchecked` entirely.
 public final class Secp256k1PublicKey: @unchecked Sendable {
 
     static let UNCOMPRESSED_LENGTH = 64

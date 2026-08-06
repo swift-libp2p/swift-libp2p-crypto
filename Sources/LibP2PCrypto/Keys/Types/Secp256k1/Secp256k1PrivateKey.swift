@@ -32,8 +32,12 @@ extension Array where Element == UInt8 {
     }
 }
 
-// TODO: Move to P256K implementation and remove @unchecked Sendable
-
+/// - Note: `@unchecked Sendable` is sound here because every stored property is a `let`:
+///   `rawPrivateKey` and `publicKey` are immutable, and the underlying `secp256k1_context`
+///   (`ctx`) is only ever used for signing / verification, which the secp256k1 library
+///   documents as thread-safe on a shared context (context randomization happens once, at
+///   creation). A future migration to the `swift-secp256k1` (P256K) package would let us drop
+///   `@unchecked` entirely.
 public final class Secp256k1PrivateKey: @unchecked Sendable {
 
     // MARK: - Properties
