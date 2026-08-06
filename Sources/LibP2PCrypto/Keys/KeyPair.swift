@@ -144,12 +144,12 @@ extension LibP2PCrypto.Keys {
         // - MARK: Encryption & Decryption
 
         /// Certain asymmetric keys support encrypting data, use this method to do so.
-        func encrypt(data: Data) throws -> Data {
+        public func encrypt(data: Data) throws -> Data {
             try self.publicKey.encrypt(data: data)
         }
 
         /// Certain asymmetric keys support decrypting data, use this method to decrypt previously encrypted data.
-        func decrypt(data: Data) throws -> Data {
+        public func decrypt(data: Data) throws -> Data {
             guard let privateKey = privateKey else {
                 throw LibP2PCrypto.Keys.KeyError.noPrivateKey
             }
@@ -158,18 +158,19 @@ extension LibP2PCrypto.Keys {
 
         // - MARK: Signature & Verifications
 
-        /// Sign a peice of data for verification by another peer
+        /// Sign a piece of data for verification by another peer.
         ///
-        /// - Note: Verify this signature by using the PublicKey and calling `.verify(signature:Data, for:Data) throws -> Bool`
-        func sign(message data: Data) throws -> Data {
+        /// - Note: Verify this signature by using the public key and calling
+        ///   `verify(signature:for:)`.
+        public func sign(message data: Data) throws -> Data {
             guard let privateKey = privateKey else {
                 throw LibP2PCrypto.Keys.KeyError.noPrivateKey
             }
             return try privateKey.sign(message: data)
         }
 
-        /// Verify a signature for the expected data
-        func verify(signature: Data, for data: Data) throws -> Bool {
+        /// Verify a signature for the expected data.
+        public func verify(signature: Data, for data: Data) throws -> Bool {
             try self.publicKey.verify(signature: signature, for: data)
         }
 
@@ -249,16 +250,21 @@ extension LibP2PCrypto.Keys {
 
         // - MARK: Exports
 
-        func marshalPublicKey() throws -> Data {
+        /// The protobuf-marshaled representation of the public key
+        /// (see the [libp2p peer-id spec](https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md)).
+        public func marshalPublicKey() throws -> Data {
             try publicKey.marshal()
         }
 
-        //func marshalPrivateKey() throws -> Data {
-        //    guard let privateKey = privateKey else {
-        //        throw NSError(domain: "No Private Key", code: 0)
-        //    }
-        //    return try privateKey.marshal()
-        //}
+        /// The protobuf-marshaled representation of the private key.
+        ///
+        /// - Throws: ``LibP2PCrypto/Keys/KeyError/noPrivateKey`` if this `KeyPair` only holds a public key.
+        public func marshalPrivateKey() throws -> Data {
+            guard let privateKey = privateKey else {
+                throw LibP2PCrypto.Keys.KeyError.noPrivateKey
+            }
+            return try privateKey.marshal()
+        }
 
     }
 }
