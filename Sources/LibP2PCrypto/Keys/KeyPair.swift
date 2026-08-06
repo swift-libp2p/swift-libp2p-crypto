@@ -118,6 +118,25 @@ extension LibP2PCrypto.Keys {
             }
         }
 
+        /// Extracts the RSA modulus bit-length from the public key's SubjectPublicKeyInfo DER.
+        ///
+        /// Returns `nil` if the key isn't RSA or the DER can't be parsed as expected.
+        private func rsaModulusBitCount() -> Int? {
+            guard case .rsa = self.keyType else { return nil }
+            guard
+                case .sequence(let top)? = try? ASN1.Decoder.decode(data: self.publicKey.rawRepresentation),
+                top.count >= 2,
+                case .bitString(let pkcs1) = top[1],
+                case .sequence(let numbers)? = try? ASN1.Decoder.decode(data: pkcs1),
+                case .integer(let modulus)? = numbers.first
+            else { return nil }
+            // Strip DER sign-padding / leading zero bytes, then measure the remaining bits.
+            var bytes = modulus.byteArray
+            while bytes.first == 0 { bytes.removeFirst() }
+            guard let msb = bytes.first else { return nil }
+            return bytes.count * 8 - msb.leadingZeroBitCount
+        }
+
         //public func asString(base:BaseEncoding, withMultibasePrefix:Bool = false) -> String {
         //    self.data.asString(base: base, withMultibasePrefix: withMultibasePrefix)
         //}
