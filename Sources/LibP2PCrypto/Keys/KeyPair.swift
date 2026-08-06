@@ -63,7 +63,8 @@ extension LibP2PCrypto.Keys {
             self.privateKey = nil
         }
 
-        var hasPrivateKey: Bool {
+        /// Whether this `KeyPair` carries a private key (and can therefore sign / decrypt).
+        public var hasPrivateKey: Bool {
             privateKey != nil
         }
 
