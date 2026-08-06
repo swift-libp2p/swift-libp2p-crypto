@@ -23,8 +23,13 @@ struct RSAPublicKey: CommonPublicKey {
     /// The underlying SecKey that backs this struct
     private let key: SecKey
 
-    fileprivate init(_ secKey: SecKey) {
+    /// The PKCS#1 DER (`SecKeyCopyExternalRepresentation`) captured at init time so that the
+    /// non-throwing `rawRepresentation` accessor can never crash or silently return empty data.
+    private let externalRepresentationBytes: Data
+
+    fileprivate init(_ secKey: SecKey) throws {
         self.key = secKey
+        self.externalRepresentationBytes = try secKey.rawRepresentation()
     }
 
     init(rawRepresentation raw: Data) throws {
@@ -40,7 +45,7 @@ struct RSAPublicKey: CommonPublicKey {
             throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: \(error.debugDescription)")
         }
 
-        self.key = secKey
+        try self.init(secKey)
     }
 
     init(marshaledData data: Data) throws {
@@ -64,12 +69,12 @@ struct RSAPublicKey: CommonPublicKey {
     }
 
     var rawRepresentation: Data {
-        let asnNodes: ASN1.Node = try! .sequence(nodes: [
+        let asnNodes: ASN1.Node = .sequence(nodes: [
             .sequence(nodes: [
                 .objectIdentifier(data: Data(RSAPublicKey.primaryObjectIdentifier)),
                 .null,
             ]),
-            .bitString(data: self.key.rawRepresentation()),
+            .bitString(data: externalRepresentationBytes),
         ])
 
         return Data(ASN1.Encoder.encode(asnNodes))
@@ -119,8 +124,13 @@ struct RSAPrivateKey: CommonPrivateKey {
     /// The underlying SecKey that backs this struct
     private let key: SecKey
 
-    fileprivate init(_ secKey: SecKey) {
+    /// The PKCS#1 DER (`SecKeyCopyExternalRepresentation`) captured at init time so that the
+    /// non-throwing `rawRepresentation` accessor can never crash or silently return empty data.
+    private let externalRepresentationBytes: Data
+
+    fileprivate init(_ secKey: SecKey) throws {
         self.key = secKey
+        self.externalRepresentationBytes = try secKey.rawRepresentation()
     }
 
     /// Initializes a new RSA key (backed by SecKey) of the specified bit size
@@ -140,7 +150,7 @@ struct RSAPrivateKey: CommonPrivateKey {
             throw LibP2PCrypto.Keys.KeyError.keyGenerationFailed("RSA: \(error.debugDescription)")
         }
 
-        self.key = privKey
+        try self.init(privKey)
     }
 
     init(rawRepresentation raw: Data) throws {
@@ -156,7 +166,7 @@ struct RSAPrivateKey: CommonPrivateKey {
             throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA private key: \(error.debugDescription)")
         }
 
-        self.key = secKey
+        try self.init(secKey)
     }
 
     init(marshaledData data: Data) throws {
@@ -164,20 +174,14 @@ struct RSAPrivateKey: CommonPrivateKey {
     }
 
     var rawRepresentation: Data {
-        var error: Unmanaged<CFError>?
-        if let cfdata = SecKeyCopyExternalRepresentation(self.key, &error) {
-            return cfdata as Data
-        } else {
-            //throw NSError(domain: "RawKeyError: \(error.debugDescription)", code: 0, userInfo: nil)
-            return Data()
-        }
+        externalRepresentationBytes
     }
 
     func derivePublicKey() throws -> CommonPublicKey {
         guard let pubKey = SecKeyCopyPublicKey(self.key) else {
             throw LibP2PCrypto.Keys.KeyError.publicKeyDerivationFailed("RSA")
         }
-        return RSAPublicKey(pubKey)
+        return try RSAPublicKey(pubKey)
     }
 
     func decrypt(data: Data) throws -> Data {

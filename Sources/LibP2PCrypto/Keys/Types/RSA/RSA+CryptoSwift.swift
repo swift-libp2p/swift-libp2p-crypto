@@ -25,8 +25,13 @@ struct RSAPublicKey: CommonPublicKey {
     /// The underlying CryptoSwift RSA Key that backs this struct
     private let key: RSA
 
-    fileprivate init(_ rsa: RSA) {
+    /// The PKCS#1 DER (`externalRepresentation()`) captured at init time so that the
+    /// non-throwing `rawRepresentation` accessor can never crash or silently return empty data.
+    private let externalRepresentationBytes: Data
+
+    fileprivate init(_ rsa: RSA) throws {
         self.key = rsa
+        self.externalRepresentationBytes = try rsa.externalRepresentation()
     }
 
     init(rawRepresentation raw: Data) throws {
@@ -70,12 +75,12 @@ struct RSAPublicKey: CommonPublicKey {
 
     /// We return the ASN1 Encoded DER Representation of the public key because that's what the rawRepresentation of RSA SecKey return
     var rawRepresentation: Data {
-        let asnNodes: ASN1.Node = try! .sequence(nodes: [
+        let asnNodes: ASN1.Node = .sequence(nodes: [
             .sequence(nodes: [
                 .objectIdentifier(data: Data(RSAPublicKey.primaryObjectIdentifier)),
                 .null,
             ]),
-            .bitString(data: self.key.externalRepresentation()),
+            .bitString(data: externalRepresentationBytes),
         ])
 
         return Data(ASN1.Encoder.encode(asnNodes))
@@ -110,8 +115,13 @@ struct RSAPrivateKey: CommonPrivateKey {
     /// The underlying CryptoSwift RSA key that backs this struct
     private let key: RSA
 
-    fileprivate init(_ rsa: RSA) {
+    /// The PKCS#1 DER (`externalRepresentation()`) captured at init time so that the
+    /// non-throwing `rawRepresentation` accessor can never crash or silently return empty data.
+    private let externalRepresentationBytes: Data
+
+    fileprivate init(_ rsa: RSA) throws {
         self.key = rsa
+        self.externalRepresentationBytes = try rsa.externalRepresentation()
     }
 
     /// Initializes a new RSA key (backed by CryptoSwift) of the specified bit size
@@ -138,8 +148,11 @@ struct RSAPrivateKey: CommonPrivateKey {
 
     /// Expects the ASN1 Encoding of the DER formatted RSA Private Key
     init(rawRepresentation raw: Data) throws {
-        self.key = try RSA(rawRepresentation: raw)
-        guard self.key.d != nil else { throw NSError(domain: "Invalid Private Key", code: 0) }
+        let rsaKey = try RSA(rawRepresentation: raw)
+        guard rsaKey.d != nil else {
+            throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding("RSA: missing private exponent")
+        }
+        try self.init(rsaKey)
     }
 
     init(marshaledData data: Data) throws {
@@ -147,13 +160,14 @@ struct RSAPrivateKey: CommonPrivateKey {
     }
 
     var rawRepresentation: Data {
-        guard key.d != nil, let raw = try? self.key.externalRepresentation() else { return Data() }
-        return raw
+        externalRepresentationBytes
     }
 
     func derivePublicKey() throws -> CommonPublicKey {
-        guard key.d != nil else { throw NSError(domain: "Unable to extract public key", code: 0) }
-        return RSAPublicKey(CryptoSwift.RSA(n: key.n, e: key.e))
+        guard key.d != nil else {
+            throw LibP2PCrypto.Keys.KeyError.publicKeyDerivationFailed("RSA: no private exponent")
+        }
+        return try RSAPublicKey(CryptoSwift.RSA(n: key.n, e: key.e))
     }
 
     func decrypt(data: Data) throws -> Data {
