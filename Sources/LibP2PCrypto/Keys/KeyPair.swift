@@ -92,29 +92,29 @@ extension LibP2PCrypto.Keys {
         }
 
         /// Misc KeyPair Attributes (type, size, isPrivate)
+        ///
+        /// For RSA keys the size is derived from the actual modulus bit-length rather than a
+        /// table of expected DER byte-counts, so non-standard key sizes are reported correctly.
         public func attributes() -> Attributes? {
+            let isPrivate = self.privateKey != nil
             switch self.keyType {
             case .rsa:
-                let count = self.publicKey.rawRepresentation.count
-                switch self.publicKey.rawRepresentation.count {
-                case 140, 161, 162:
-                    return Attributes(type: .RSA(bits: .B1024), size: 1024, isPrivate: (self.privateKey != nil))
-                case 270, 293, 294:
-                    return Attributes(type: .RSA(bits: .B2048), size: 2048, isPrivate: (self.privateKey != nil))
-                case 398, 421, 422:
-                    return Attributes(type: .RSA(bits: .B3072), size: 3072, isPrivate: (self.privateKey != nil))
-                case 526, 549, 550, 560:
-                    return Attributes(type: .RSA(bits: .B4096), size: 4096, isPrivate: (self.privateKey != nil))
-                default:
-                    print("PubKey Data Count: \(count)")
-                    return nil
+                guard let bits = rsaModulusBitCount() else { return nil }
+                let type: LibP2PCrypto.Keys.KeyPairType
+                switch bits {
+                case 1024: type = .RSA(bits: .B1024)
+                case 2048: type = .RSA(bits: .B2048)
+                case 3072: type = .RSA(bits: .B3072)
+                case 4096: type = .RSA(bits: .B4096)
+                default: type = .RSA(bits: .custom(bits: bits))
                 }
+                return Attributes(type: type, size: bits, isPrivate: isPrivate)
 
             case .ed25519:
-                return Attributes(type: .Ed25519, size: 32, isPrivate: (self.privateKey != nil))
+                return Attributes(type: .Ed25519, size: 32, isPrivate: isPrivate)
 
             case .secp256k1:
-                return Attributes(type: .Secp256k1, size: 64, isPrivate: (self.privateKey != nil))
+                return Attributes(type: .Secp256k1, size: 64, isPrivate: isPrivate)
             }
         }
 
