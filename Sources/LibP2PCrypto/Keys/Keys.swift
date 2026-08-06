@@ -126,6 +126,17 @@ extension LibP2PCrypto {
             try LibP2PCrypto.Keys.KeyPair(type)
         }
 
+        /// Asynchronously generates a new key pair off the calling thread.
+        ///
+        /// Prefer this over the synchronous initializer for large RSA keys (3072 / 4096 bit),
+        /// where generation can take a noticeable amount of time and would otherwise block the
+        /// current task/actor.
+        public static func generateKeyPair(_ type: KeyPairType) async throws -> KeyPair {
+            try await Task.detached(priority: .userInitiated) {
+                try LibP2PCrypto.Keys.KeyPair(type)
+            }.value
+        }
+
         /// Converts a protobuf serialized public key into its representative object.
         public static func unmarshalPublicKey(buf: [UInt8], into base: BaseEncoding = .base16) throws -> String {
             let pubKeyProto = try PublicKey(serializedBytes: buf)
