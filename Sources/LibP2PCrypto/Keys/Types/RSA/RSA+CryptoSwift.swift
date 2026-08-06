@@ -48,7 +48,9 @@ struct RSAPublicKey: CommonPublicKey {
                 throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: missing object identifier")
             }
             guard oid.byteArray == RSAPublicKey.RSA_OBJECT_IDENTIFIER else {
-                throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: unexpected object identifier")
+                throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation(
+                    "RSA public key: unexpected object identifier"
+                )
             }
             guard case .bitString(let bits) = params.last else {
                 throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: missing key bit string")

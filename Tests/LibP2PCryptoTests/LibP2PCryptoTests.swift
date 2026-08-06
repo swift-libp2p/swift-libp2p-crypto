@@ -43,7 +43,6 @@ let testPBKDF2Iterations = 2_048
 let testPBKDF2Iterations = 310_000
 #endif
 
-
 /// Secp - https://techdocs.akamai.com/iot-token-access-control/docs/generate-ecdsa-keys
 /// JWT - https://techdocs.akamai.com/iot-token-access-control/docs/generate-jwt-ecdsa-keys
 /// Fixtures - http://cryptomanager.com/tv.html
