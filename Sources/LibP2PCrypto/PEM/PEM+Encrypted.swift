@@ -19,6 +19,17 @@ import Foundation
 
 extension LibP2PCrypto.PEM {
 
+    /// Default PBKDF2 iteration count used when encrypting a new PEM.
+    ///
+    /// Raised from the legacy `2048` to follow modern guidance for PBKDF2. Decoding stays
+    /// parameter-driven (the iteration count is read from the PEM), so previously-encrypted
+    /// PEMs with any iteration count still import.
+    internal static let defaultPBKDF2Iterations = 310_000
+    /// Default PBKDF2 salt length in bytes used when encrypting a new PEM (raised from 8).
+    internal static let defaultPBKDF2SaltLength = 16
+    /// Default IV length in bytes for the default AES-128-CBC cipher.
+    internal static let defaultCipherIVLength = 16
+
     internal struct EncryptedPEM {
         let objectIdentifer: [UInt8]
         let ciphertext: [UInt8]
@@ -94,9 +105,17 @@ extension LibP2PCrypto.PEM {
     internal static func encryptPEM(
         _ pem: Data,
         withPassword password: String,
-        usingPBKDF pbkdf: PBKDFAlgorithm = .pbkdf2(salt: try! LibP2PCrypto.randomBytes(length: 8), iterations: 2048),
-        andCipher cipher: CipherAlgorithm = .aes_128_cbc(iv: try! LibP2PCrypto.randomBytes(length: 16))
+        usingPBKDF pbkdf: PBKDFAlgorithm? = nil,
+        andCipher cipher: CipherAlgorithm? = nil
     ) throws -> Data {
+
+        let cipher = try cipher ?? .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
+        let pbkdf =
+            try pbkdf
+            ?? .pbkdf2(
+                salt: LibP2PCrypto.randomBytes(length: defaultPBKDF2SaltLength),
+                iterations: defaultPBKDF2Iterations
+            )
 
         // Generate Encryption Key from Password
         let key = try pbkdf.deriveKey(password: password, ofLength: cipher.desiredKeyLength)
@@ -129,10 +148,13 @@ extension LibP2PCrypto.PEM {
     internal static func encryptPEMString(
         _ pem: Data,
         withPassword password: String,
-        usingPBKDF pbkdf: PBKDFAlgorithm = .pbkdf2(salt: try! LibP2PCrypto.randomBytes(length: 8), iterations: 2048),
-        andCipher cipher: CipherAlgorithm = .aes_128_cbc(iv: try! LibP2PCrypto.randomBytes(length: 16))
+        usingPBKDF pbkdf: PBKDFAlgorithm? = nil,
+        andCipher cipher: CipherAlgorithm? = nil
     ) throws -> String {
         let data = try LibP2PCrypto.PEM.encryptPEM(pem, withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
-        return String(data: data, encoding: .utf8)!
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw Error.encodingError
+        }
+        return string
     }
 }

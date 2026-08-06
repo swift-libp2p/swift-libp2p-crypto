@@ -448,11 +448,7 @@ extension LibP2PCrypto.Keys.KeyPair {
     }
 
     public func exportEncryptedPrivatePEMString(withPassword password: String) throws -> String {
-        try self.exportEncryptedPrivatePEMString(
-            withPassword: password,
-            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 8), iterations: 2048),
-            andCipher: .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
-        )
+        try self.exportEncryptedPrivatePEMString(withPassword: password, usingPBKDF: nil, andCipher: nil)
     }
 
     internal func exportEncryptedPrivatePEM(
@@ -460,11 +456,12 @@ extension LibP2PCrypto.Keys.KeyPair {
         usingPBKDF pbkdf: LibP2PCrypto.PEM.PBKDFAlgorithm? = nil,
         andCipher cipher: LibP2PCrypto.PEM.CipherAlgorithm? = nil
     ) throws -> [UInt8] {
-        let cipher = try cipher ?? .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
-        let pbkdf = try pbkdf ?? .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 8), iterations: 2048)
+        guard let privateKey = self.privateKey else {
+            throw LibP2PCrypto.Keys.KeyError.noPrivateKey
+        }
 
         return try LibP2PCrypto.PEM.encryptPEM(
-            Data(self.privateKey!.exportPrivateKeyPEMRaw()),
+            Data(privateKey.exportPrivateKeyPEMRaw()),
             withPassword: password,
             usingPBKDF: pbkdf,
             andCipher: cipher
@@ -477,7 +474,10 @@ extension LibP2PCrypto.Keys.KeyPair {
         andCipher cipher: LibP2PCrypto.PEM.CipherAlgorithm? = nil
     ) throws -> String {
         let data = try self.exportEncryptedPrivatePEM(withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
-        return String(data: Data(data), encoding: .utf8)!
+        guard let string = String(data: Data(data), encoding: .utf8) else {
+            throw LibP2PCrypto.PEM.Error.encodingError
+        }
+        return string
     }
 
 }
