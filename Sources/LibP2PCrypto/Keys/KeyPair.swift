@@ -118,7 +118,8 @@ extension LibP2PCrypto.Keys {
             }
         }
 
-        /// Extracts the RSA modulus bit-length from the public key's SubjectPublicKeyInfo DER.
+        /// Extracts the RSA modulus size (in bits, rounded up to a whole byte) from the
+        /// public key's SubjectPublicKeyInfo DER.
         ///
         /// Returns `nil` if the key isn't RSA or the DER can't be parsed as expected.
         private func rsaModulusBitCount() -> Int? {
@@ -130,11 +131,15 @@ extension LibP2PCrypto.Keys {
                 case .sequence(let numbers)? = try? ASN1.Decoder.decode(data: pkcs1),
                 case .integer(let modulus)? = numbers.first
             else { return nil }
-            // Strip DER sign-padding / leading zero bytes, then measure the remaining bits.
+            // Strip the DER sign byte / leading-zero padding, then report the modulus size
+            // rounded up to a whole byte. Some backends (notably CryptoSwift on Linux)
+            // occasionally emit a modulus whose top bit is clear, making the exact bit-count
+            // one short (e.g. 2047 for a 2048-bit key); byte-aligning classifies these the
+            // same as a fully-populated modulus of the same key size.
             var bytes = modulus.byteArray
             while bytes.first == 0 { bytes.removeFirst() }
-            guard let msb = bytes.first else { return nil }
-            return bytes.count * 8 - msb.leadingZeroBitCount
+            guard bytes.isEmpty == false else { return nil }
+            return bytes.count * 8
         }
 
         //public func asString(base:BaseEncoding, withMultibasePrefix:Bool = false) -> String {
