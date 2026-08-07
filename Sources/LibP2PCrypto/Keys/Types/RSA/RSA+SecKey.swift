@@ -23,8 +23,13 @@ struct RSAPublicKey: CommonPublicKey {
     /// The underlying SecKey that backs this struct
     private let key: SecKey
 
-    fileprivate init(_ secKey: SecKey) {
+    /// The PKCS#1 DER (`SecKeyCopyExternalRepresentation`) captured at init time so that the
+    /// non-throwing `rawRepresentation` accessor can never crash or silently return empty data.
+    private let externalRepresentationBytes: Data
+
+    fileprivate init(_ secKey: SecKey) throws {
         self.key = secKey
+        self.externalRepresentationBytes = try secKey.rawRepresentation()
     }
 
     init(rawRepresentation raw: Data) throws {
@@ -37,43 +42,39 @@ struct RSAPublicKey: CommonPublicKey {
 
         var error: Unmanaged<CFError>? = nil
         guard let secKey = SecKeyCreateWithData(raw as CFData, attributes as CFDictionary, &error) else {
-            throw NSError(
-                domain: "Error constructing SecKey from raw key data: \(error.debugDescription)",
-                code: 0,
-                userInfo: nil
-            )
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: \(error.debugDescription)")
         }
 
-        self.key = secKey
+        try self.init(secKey)
     }
 
     init(marshaledData data: Data) throws {
         let asn = try ASN1.Decoder.decode(data: data)
-        guard case .sequence(let nodes) = asn else {
-            throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0)
+        guard case .sequence(let nodes) = asn, nodes.count >= 2 else {
+            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: expected a 2-element sequence")
         }
         guard case .sequence(let subjectInfo) = nodes[0] else {
-            throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: missing algorithm sequence")
         }
         guard case .objectIdentifier(let objID) = subjectInfo.first else {
-            throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: missing object identifier")
         }
         guard objID.byteArray == RSAPublicKey.primaryObjectIdentifier else {
-            throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: unexpected object identifier")
         }
         guard case .bitString(let bits) = nodes[1] else {
-            throw NSError(domain: "RSAPublicKey Invalid marshaled data", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: missing key bit string")
         }
         try self.init(rawRepresentation: bits)
     }
 
     var rawRepresentation: Data {
-        let asnNodes: ASN1.Node = try! .sequence(nodes: [
+        let asnNodes: ASN1.Node = .sequence(nodes: [
             .sequence(nodes: [
                 .objectIdentifier(data: Data(RSAPublicKey.primaryObjectIdentifier)),
                 .null,
             ]),
-            .bitString(data: self.key.rawRepresentation()),
+            .bitString(data: externalRepresentationBytes),
         ])
 
         return Data(ASN1.Encoder.encode(asnNodes))
@@ -83,7 +84,7 @@ struct RSAPublicKey: CommonPublicKey {
         var error: Unmanaged<CFError>?
         guard let encryptedData = SecKeyCreateEncryptedData(self.key, .rsaEncryptionPKCS1, data as CFData, &error)
         else {
-            throw NSError(domain: "Error Encrypting Data: \(error.debugDescription)", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.encryptionFailed("RSA: \(error.debugDescription)")
         }
         return encryptedData as Data
     }
@@ -123,13 +124,20 @@ struct RSAPrivateKey: CommonPrivateKey {
     /// The underlying SecKey that backs this struct
     private let key: SecKey
 
-    fileprivate init(_ secKey: SecKey) {
+    /// The PKCS#1 DER (`SecKeyCopyExternalRepresentation`) captured at init time so that the
+    /// non-throwing `rawRepresentation` accessor can never crash or silently return empty data.
+    private let externalRepresentationBytes: Data
+
+    fileprivate init(_ secKey: SecKey) throws {
         self.key = secKey
+        self.externalRepresentationBytes = try secKey.rawRepresentation()
     }
 
     /// Initializes a new RSA key (backed by SecKey) of the specified bit size
     init(keySize: Int) throws {
-        guard keySize >= 1024 else { throw NSError(domain: "Invalid RSA Bit Size", code: 0) }
+        guard keySize >= 1024 else {
+            throw LibP2PCrypto.Keys.KeyError.invalidParameters("RSA bit size must be at least 1024, got \(keySize)")
+        }
 
         let parameters: [CFString: Any] = [
             kSecAttrKeyType: kSecAttrKeyTypeRSA,
@@ -139,11 +147,10 @@ struct RSAPrivateKey: CommonPrivateKey {
         var error: Unmanaged<CFError>? = nil
 
         guard let privKey = SecKeyCreateRandomKey(parameters as CFDictionary, &error) else {
-            print(error.debugDescription)
-            throw NSError(domain: "Key Generation Error: \(error.debugDescription)", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.keyGenerationFailed("RSA: \(error.debugDescription)")
         }
 
-        self.key = privKey
+        try self.init(privKey)
     }
 
     init(rawRepresentation raw: Data) throws {
@@ -156,14 +163,10 @@ struct RSAPrivateKey: CommonPrivateKey {
 
         var error: Unmanaged<CFError>? = nil
         guard let secKey = SecKeyCreateWithData(raw as CFData, attributes as CFDictionary, &error) else {
-            throw NSError(
-                domain: "Error constructing SecKey from raw key data: \(error.debugDescription)",
-                code: 0,
-                userInfo: nil
-            )
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA private key: \(error.debugDescription)")
         }
 
-        self.key = secKey
+        try self.init(secKey)
     }
 
     init(marshaledData data: Data) throws {
@@ -171,27 +174,21 @@ struct RSAPrivateKey: CommonPrivateKey {
     }
 
     var rawRepresentation: Data {
-        var error: Unmanaged<CFError>?
-        if let cfdata = SecKeyCopyExternalRepresentation(self.key, &error) {
-            return cfdata as Data
-        } else {
-            //throw NSError(domain: "RawKeyError: \(error.debugDescription)", code: 0, userInfo: nil)
-            return Data()
-        }
+        externalRepresentationBytes
     }
 
     func derivePublicKey() throws -> CommonPublicKey {
         guard let pubKey = SecKeyCopyPublicKey(self.key) else {
-            throw NSError(domain: "Public Key Extraction Error", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.publicKeyDerivationFailed("RSA")
         }
-        return RSAPublicKey(pubKey)
+        return try RSAPublicKey(pubKey)
     }
 
     func decrypt(data: Data) throws -> Data {
         var error: Unmanaged<CFError>?
         guard let decryptedData = SecKeyCreateDecryptedData(self.key, .rsaEncryptionPKCS1, data as CFData, &error)
         else {
-            throw NSError(domain: "Error Decrypting Data: \(error.debugDescription)", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.decryptionFailed("RSA: \(error.debugDescription)")
         }
         return decryptedData as Data
     }
@@ -207,7 +204,7 @@ struct RSAPrivateKey: CommonPrivateKey {
                 message as CFData,
                 &error
             ) as Data?
-        else { throw NSError(domain: "Encountered NIL Signature Value", code: 0) }
+        else { throw LibP2PCrypto.Keys.KeyError.signatureFailed("RSA: encountered a nil signature value") }
 
         // Throw the error if we encountered one
         if let error = error { throw error.takeRetainedValue() as Error }
@@ -244,7 +241,7 @@ extension SecKey {
 
     func extractPubKey() throws -> SecKey {
         guard let pubKey = SecKeyCopyPublicKey(self) else {
-            throw NSError(domain: "Public Key Extraction Error", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.publicKeyDerivationFailed("SecKey")
         }
         return pubKey
     }
@@ -256,7 +253,7 @@ extension SecKey {
         if let cfdata = SecKeyCopyExternalRepresentation(self, &error) {
             return cfdata as Data
         } else {
-            throw NSError(domain: "RawKeyError: \(error.debugDescription)", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("SecKey: \(error.debugDescription)")
         }
     }
 

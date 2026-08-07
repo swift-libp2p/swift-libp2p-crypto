@@ -82,9 +82,22 @@ extension LibP2PCrypto.PEM {
                 .objectIdentifier(data: Data(self.objectIdentifier)),
                 .sequence(nodes: [
                     .octetString(data: Data(self.salt)),
-                    .integer(data: Data(self.iterations.bytes(totalBytes: 2))),
+                    .integer(data: Data(Self.encodeIterationCount(self.iterations))),
                 ]),
             ])
+        }
+
+        /// Encodes the PBKDF2 iteration count as the content octets of a DER `INTEGER`.
+        ///
+        /// The previous implementation hard-coded a 2-byte width, which silently truncated
+        /// iteration counts above 65535. This produces a minimal big-endian encoding and
+        /// prepends a `0x00` byte when the most significant bit is set so the value is never
+        /// misinterpreted as negative by strict DER parsers (e.g. OpenSSL).
+        static func encodeIterationCount(_ value: Int) -> [UInt8] {
+            var bytes = withUnsafeBytes(of: value.bigEndian, Array<UInt8>.init)
+            while bytes.count > 1, bytes.first == 0 { bytes.removeFirst() }
+            if let first = bytes.first, first & 0x80 != 0 { bytes.insert(0, at: 0) }
+            return bytes
         }
     }
 

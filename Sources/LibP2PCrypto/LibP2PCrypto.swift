@@ -45,7 +45,7 @@ extension String {
     /// * algorithm = 'aes-128-gcm'
     public func encryptGCM(password: String) throws -> Data {
         guard let data = self.data(using: .utf8) else {
-            throw NSError(domain: "Failed to decode string into data", code: 0, userInfo: nil)
+            throw LibP2PCrypto.Keys.KeyError.invalidParameters("Failed to encode string into UTF-8 data")
         }
         return try data.encryptGCM(password: password)
     }
@@ -126,10 +126,8 @@ extension Array where Element == UInt8 {
         // Attempt to derive the aes encryption key from the password and salt
         // PBKDF2-SHA256
         guard let key = PBKDF2.SHA256(password: password, salt: Data(salt), keyByteCount: 16, rounds: 32767) else {
-            throw NSError(
-                domain: "Failed to derive AESGCM encryption key from plaintext password",
-                code: 0,
-                userInfo: nil
+            throw LibP2PCrypto.Keys.KeyError.encryptionFailed(
+                "Failed to derive AES-GCM encryption key from plaintext password"
             )
         }
 
@@ -150,10 +148,8 @@ extension Array where Element == UInt8 {
         // Attempt to derive the aes encryption key from the password and salt
         // PBKDF2-SHA256
         guard let key = PBKDF2.SHA256(password: password, salt: Data(salt), keyByteCount: 16, rounds: 32767) else {
-            throw NSError(
-                domain: "Failed to derive AESGCM encryption key from plaintext password",
-                code: 0,
-                userInfo: nil
+            throw LibP2PCrypto.Keys.KeyError.decryptionFailed(
+                "Failed to derive AES-GCM encryption key from plaintext password"
             )
         }
 

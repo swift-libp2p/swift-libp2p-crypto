@@ -63,7 +63,8 @@ extension LibP2PCrypto.Keys {
             self.privateKey = nil
         }
 
-        var hasPrivateKey: Bool {
+        /// Whether this `KeyPair` carries a private key (and can therefore sign / decrypt).
+        public var hasPrivateKey: Bool {
             privateKey != nil
         }
 
@@ -91,30 +92,54 @@ extension LibP2PCrypto.Keys {
         }
 
         /// Misc KeyPair Attributes (type, size, isPrivate)
+        ///
+        /// For RSA keys the size is derived from the actual modulus bit-length rather than a
+        /// table of expected DER byte-counts, so non-standard key sizes are reported correctly.
         public func attributes() -> Attributes? {
+            let isPrivate = self.privateKey != nil
             switch self.keyType {
             case .rsa:
-                let count = self.publicKey.rawRepresentation.count
-                switch self.publicKey.rawRepresentation.count {
-                case 140, 161, 162:
-                    return Attributes(type: .RSA(bits: .B1024), size: 1024, isPrivate: (self.privateKey != nil))
-                case 270, 293, 294:
-                    return Attributes(type: .RSA(bits: .B2048), size: 2048, isPrivate: (self.privateKey != nil))
-                case 398, 421, 422:
-                    return Attributes(type: .RSA(bits: .B3072), size: 3072, isPrivate: (self.privateKey != nil))
-                case 526, 549, 550, 560:
-                    return Attributes(type: .RSA(bits: .B4096), size: 4096, isPrivate: (self.privateKey != nil))
-                default:
-                    print("PubKey Data Count: \(count)")
-                    return nil
+                guard let bits = rsaModulusBitCount() else { return nil }
+                let type: LibP2PCrypto.Keys.KeyPairType
+                switch bits {
+                case 1024: type = .RSA(bits: .B1024)
+                case 2048: type = .RSA(bits: .B2048)
+                case 3072: type = .RSA(bits: .B3072)
+                case 4096: type = .RSA(bits: .B4096)
+                default: type = .RSA(bits: .custom(bits: bits))
                 }
+                return Attributes(type: type, size: bits, isPrivate: isPrivate)
 
             case .ed25519:
-                return Attributes(type: .Ed25519, size: 32, isPrivate: (self.privateKey != nil))
+                return Attributes(type: .Ed25519, size: 32, isPrivate: isPrivate)
 
             case .secp256k1:
-                return Attributes(type: .Secp256k1, size: 64, isPrivate: (self.privateKey != nil))
+                return Attributes(type: .Secp256k1, size: 64, isPrivate: isPrivate)
             }
+        }
+
+        /// Extracts the RSA modulus size (in bits, rounded up to a whole byte) from the
+        /// public key's SubjectPublicKeyInfo DER.
+        ///
+        /// Returns `nil` if the key isn't RSA or the DER can't be parsed as expected.
+        private func rsaModulusBitCount() -> Int? {
+            guard case .rsa = self.keyType else { return nil }
+            guard
+                case .sequence(let top)? = try? ASN1.Decoder.decode(data: self.publicKey.rawRepresentation),
+                top.count >= 2,
+                case .bitString(let pkcs1) = top[1],
+                case .sequence(let numbers)? = try? ASN1.Decoder.decode(data: pkcs1),
+                case .integer(let modulus)? = numbers.first
+            else { return nil }
+            // Strip the DER sign byte / leading-zero padding, then report the modulus size
+            // rounded up to a whole byte. Some backends (notably CryptoSwift on Linux)
+            // occasionally emit a modulus whose top bit is clear, making the exact bit-count
+            // one short (e.g. 2047 for a 2048-bit key); byte-aligning classifies these the
+            // same as a fully-populated modulus of the same key size.
+            var bytes = modulus.byteArray
+            while bytes.first == 0 { bytes.removeFirst() }
+            guard bytes.isEmpty == false else { return nil }
+            return bytes.count * 8
         }
 
         //public func asString(base:BaseEncoding, withMultibasePrefix:Bool = false) -> String {
@@ -124,32 +149,33 @@ extension LibP2PCrypto.Keys {
         // - MARK: Encryption & Decryption
 
         /// Certain asymmetric keys support encrypting data, use this method to do so.
-        func encrypt(data: Data) throws -> Data {
+        public func encrypt(data: Data) throws -> Data {
             try self.publicKey.encrypt(data: data)
         }
 
         /// Certain asymmetric keys support decrypting data, use this method to decrypt previously encrypted data.
-        func decrypt(data: Data) throws -> Data {
+        public func decrypt(data: Data) throws -> Data {
             guard let privateKey = privateKey else {
-                throw NSError(domain: "Can't decrypt data without a private key", code: 0)
+                throw LibP2PCrypto.Keys.KeyError.noPrivateKey
             }
             return try privateKey.decrypt(data: data)
         }
 
         // - MARK: Signature & Verifications
 
-        /// Sign a peice of data for verification by another peer
+        /// Sign a piece of data for verification by another peer.
         ///
-        /// - Note: Verify this signature by using the PublicKey and calling `.verify(signature:Data, for:Data) throws -> Bool`
-        func sign(message data: Data) throws -> Data {
+        /// - Note: Verify this signature by using the public key and calling
+        ///   `verify(signature:for:)`.
+        public func sign(message data: Data) throws -> Data {
             guard let privateKey = privateKey else {
-                throw NSError(domain: "Can't sign data without a private key", code: 0)
+                throw LibP2PCrypto.Keys.KeyError.noPrivateKey
             }
             return try privateKey.sign(message: data)
         }
 
-        /// Verify a signature for the expected data
-        func verify(signature: Data, for data: Data) throws -> Bool {
+        /// Verify a signature for the expected data.
+        public func verify(signature: Data, for data: Data) throws -> Bool {
             try self.publicKey.verify(signature: signature, for: data)
         }
 
@@ -196,9 +222,8 @@ extension LibP2PCrypto.Keys {
                     // Ensure we can derive the attached public key
                     let privkey = try Curve25519.Signing.PrivateKey(marshaledData: proto.data.prefix(32))
                     guard privkey.publicKey.rawRepresentation == proto.data.suffix(32) else {
-                        throw NSError(
-                            domain: "Invalid private key protobuf encoding -> unable to validate public key",
-                            code: 0
+                        throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                            "Ed25519: unable to validate attached public key"
                         )
                     }
                     try self.init(privateKey: privkey)
@@ -207,18 +232,21 @@ extension LibP2PCrypto.Keys {
                     // Ensure the two pubkeys match and we can derive the attached public key
                     let parts = Array(proto.data.chunks(ofCount: 32))
                     guard parts[1] == parts[2] else {
-                        throw NSError(domain: "Invalid private key protobuf encoding -> pubkeys dont match", code: 0)
+                        throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                            "Ed25519: attached public keys don't match"
+                        )
                     }
                     let privkey = try Curve25519.Signing.PrivateKey(marshaledData: parts[0])
                     guard privkey.publicKey.rawRepresentation == parts[1] else {
-                        throw NSError(
-                            domain: "Invalid private key protobuf encoding -> unable to validate public key",
-                            code: 0
+                        throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                            "Ed25519: unable to validate attached public key"
                         )
                     }
                     try self.init(privateKey: privkey)
                 default:
-                    throw NSError(domain: "Invalid private key protobuf encoding -> invalid data payload", code: 0)
+                    throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                        "Ed25519: invalid data payload length \(proto.data.count)"
+                    )
                 }
             case .secp256K1:
                 try self.init(privateKey: Secp256k1PrivateKey(marshaledData: proto.data))
@@ -227,16 +255,21 @@ extension LibP2PCrypto.Keys {
 
         // - MARK: Exports
 
-        func marshalPublicKey() throws -> Data {
+        /// The protobuf-marshaled representation of the public key
+        /// (see the [libp2p peer-id spec](https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md)).
+        public func marshalPublicKey() throws -> Data {
             try publicKey.marshal()
         }
 
-        //func marshalPrivateKey() throws -> Data {
-        //    guard let privateKey = privateKey else {
-        //        throw NSError(domain: "No Private Key", code: 0)
-        //    }
-        //    return try privateKey.marshal()
-        //}
+        /// The protobuf-marshaled representation of the private key.
+        ///
+        /// - Throws: ``LibP2PCrypto/Keys/KeyError/noPrivateKey`` if this `KeyPair` only holds a public key.
+        public func marshalPrivateKey() throws -> Data {
+            guard let privateKey = privateKey else {
+                throw LibP2PCrypto.Keys.KeyError.noPrivateKey
+            }
+            return try privateKey.marshal()
+        }
 
     }
 }
@@ -387,7 +420,6 @@ extension LibP2PCrypto.Keys.KeyPair {
                 )
                 try self.init(privateKey: Secp256k1PrivateKey(privateDER: der))
             } else {
-                print(ids)
                 throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
         }
@@ -403,9 +435,8 @@ extension LibP2PCrypto.Keys.KeyPair {
 
     public func exportPrivatePEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
         guard let privKey = self.privateKey else {
-            throw NSError(domain: "No private key available to export", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.noPrivateKey
         }
-        //guard let der = privKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
         return try privKey.exportPrivateKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
     }
 
@@ -416,18 +447,13 @@ extension LibP2PCrypto.Keys.KeyPair {
 
     public func exportPrivatePEMString(withHeaderAndFooter: Bool = true) throws -> String {
         guard let privKey = self.privateKey else {
-            throw NSError(domain: "No private key available to export", code: 0)
+            throw LibP2PCrypto.Keys.KeyError.noPrivateKey
         }
-        //guard let der = privKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
         return try privKey.exportPrivateKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
     }
 
     public func exportEncryptedPrivatePEMString(withPassword password: String) throws -> String {
-        try self.exportEncryptedPrivatePEMString(
-            withPassword: password,
-            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 8), iterations: 2048),
-            andCipher: .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
-        )
+        try self.exportEncryptedPrivatePEMString(withPassword: password, usingPBKDF: nil, andCipher: nil)
     }
 
     internal func exportEncryptedPrivatePEM(
@@ -435,11 +461,12 @@ extension LibP2PCrypto.Keys.KeyPair {
         usingPBKDF pbkdf: LibP2PCrypto.PEM.PBKDFAlgorithm? = nil,
         andCipher cipher: LibP2PCrypto.PEM.CipherAlgorithm? = nil
     ) throws -> [UInt8] {
-        let cipher = try cipher ?? .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
-        let pbkdf = try pbkdf ?? .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 8), iterations: 2048)
+        guard let privateKey = self.privateKey else {
+            throw LibP2PCrypto.Keys.KeyError.noPrivateKey
+        }
 
         return try LibP2PCrypto.PEM.encryptPEM(
-            Data(self.privateKey!.exportPrivateKeyPEMRaw()),
+            Data(privateKey.exportPrivateKeyPEMRaw()),
             withPassword: password,
             usingPBKDF: pbkdf,
             andCipher: cipher
@@ -452,7 +479,10 @@ extension LibP2PCrypto.Keys.KeyPair {
         andCipher cipher: LibP2PCrypto.PEM.CipherAlgorithm? = nil
     ) throws -> String {
         let data = try self.exportEncryptedPrivatePEM(withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
-        return String(data: Data(data), encoding: .utf8)!
+        guard let string = String(data: Data(data), encoding: .utf8) else {
+            throw LibP2PCrypto.PEM.Error.encodingError
+        }
+        return string
     }
 
 }

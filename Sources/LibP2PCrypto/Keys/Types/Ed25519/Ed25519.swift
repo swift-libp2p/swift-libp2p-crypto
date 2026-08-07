@@ -23,7 +23,7 @@ extension Curve25519.Signing.PublicKey: CommonPublicKey, @unchecked Sendable {
     }
 
     public func encrypt(data: Data) throws -> Data {
-        throw NSError(domain: "Ed25519 Keys don't support encryption", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("Ed25519 keys don't support encryption")
     }
 
     public func verify(signature: Data, for expectedData: Data) throws -> Bool {
@@ -50,7 +50,7 @@ extension Curve25519.Signing.PrivateKey: CommonPrivateKey, @unchecked Sendable {
     }
 
     public func decrypt(data: Data) throws -> Data {
-        throw NSError(domain: "ED25519 keys don't support decryption", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("Ed25519 keys don't support decryption")
     }
 
     public func sign(message data: Data) throws -> Data {
@@ -86,7 +86,9 @@ extension Curve25519.Signing.PublicKey: DERCodable {
     }
 
     public init(privateDER: [UInt8]) throws {
-        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
+            "Can't instantiate a public key from a private DER representation"
+        )
     }
 
     public func publicKeyDER() throws -> [UInt8] {
@@ -94,7 +96,7 @@ extension Curve25519.Signing.PublicKey: DERCodable {
     }
 
     public func privateKeyDER() throws -> [UInt8] {
-        throw NSError(domain: "Public Key doesn't have private DER representation", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("A public key has no private DER representation")
     }
 
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
@@ -127,7 +129,9 @@ extension Curve25519.Signing.PrivateKey: DERCodable {
     public static var secondaryObjectIdentifier: [UInt8]? { nil }
 
     public init(publicDER: [UInt8]) throws {
-        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
+            "Can't instantiate a private key from a public DER representation"
+        )
     }
 
     public init(privateDER: [UInt8]) throws {

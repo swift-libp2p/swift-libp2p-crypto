@@ -21,6 +21,28 @@ import Testing
 
 @testable import LibP2PCrypto
 
+/// RSA key generation is prohibitively slow only in unoptimized (debug) builds that fall back to
+/// the CryptoSwift implementation (non-Apple platforms). On Apple platforms `SecKey` generation
+/// is fast even in debug, and release builds are fast everywhere, so RSA-generating tests only
+/// skip on debug + non-Apple.
+#if DEBUG && !canImport(Security)
+let runsRSAKeyGenTests = false
+#else
+let runsRSAKeyGenTests = true
+#endif
+
+let rsaTestsDisabledComment: Comment =
+    "RSA key generation is too slow in unoptimized CryptoSwift builds; run with `swift test -c release`."
+
+/// PBKDF2 key derivation at the production default (310k iterations) is slow in unoptimized
+/// builds, so the tests that actually derive a key use this smaller count in debug. The value has
+/// no effect on the encode/decode logic under test — only on how long derivation takes.
+#if DEBUG
+let testPBKDF2Iterations = 2_048
+#else
+let testPBKDF2Iterations = 310_000
+#endif
+
 /// Secp - https://techdocs.akamai.com/iot-token-access-control/docs/generate-ecdsa-keys
 /// JWT - https://techdocs.akamai.com/iot-token-access-control/docs/generate-jwt-ecdsa-keys
 /// Fixtures - http://cryptomanager.com/tv.html
@@ -61,7 +83,8 @@ struct Libp2pCryptoTests {
     }
 
     /// These tests are skipped on Linux when using CryptoSwift due to very slow key generation times.
-    @Test func testRSA3072() throws {
+    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
+    func testRSA3072() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B3072))
         print(keyPair)
         #expect(keyPair.keyType == .rsa)
@@ -75,7 +98,9 @@ struct Libp2pCryptoTests {
         #expect(attributes?.isPrivate == true)
     }
 
-    @Test func testRSA4096() throws {
+    /// These tests are skipped on Linux when using CryptoSwift due to very slow key generation times.
+    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
+    func testRSA4096() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B4096))
         print(keyPair)
         #expect(keyPair.keyType == .rsa)
@@ -705,9 +730,8 @@ struct SignAndVerifyTests {
         #expect(try secp.publicKey.verify(signature: signedData, for: message))
 
         var alertedSignedData = signedData
-        alertedSignedData[32] = 0
-        // We dont simply shuffle the data because it will most likely throw an error
-        // (due to invalid first byte 'v')
+        // Flip the final byte of `r` to a guaranteed-different (still in-range) value.
+        alertedSignedData[32] = alertedSignedData[32] == 0 ? 1 : 0
         #expect(try secp.publicKey.verify(signature: alertedSignedData, for: message) == false)
         // Invalid length will throw error...
         #expect(throws: Error.self) { try secp.publicKey.verify(signature: Data(signedData.dropFirst()), for: message) }
@@ -1662,7 +1686,10 @@ struct DERAndPEMTests {
         #expect(keyPair.keyType == .rsa)
         #expect(keyPair.hasPrivateKey)
 
-        let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(withPassword: "mypassword")
+        let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(
+            withPassword: "mypassword",
+            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations)
+        )
 
         let recoveredKey = try LibP2PCrypto.Keys.KeyPair(pem: exportedPEM, password: "mypassword")
 
@@ -1783,5 +1810,220 @@ struct DERAndPEMTests {
         print(secp256k1Private)
 
         #expect(secp256k1Private.publicKey == secp256k1Public)
+    }
+}
+
+/// Regression and enhancement coverage added alongside the bug-fix / modernization pass.
+///
+/// These tests focus on the gaps identified during review: public-only `KeyPair` guards
+/// (previously a force-unwrap crash), the newly-public sign/verify/marshal API, the
+/// modulus-derived `attributes()`, the raised encrypted-PEM defaults (and the PBKDF2
+/// iteration-encoding fix that made them safe), and malformed-input handling.
+@Suite("Regression Tests")
+struct RegressionTests {
+
+    /// Builds a public-only `KeyPair` by round-tripping the marshaled public key.
+    private func publicOnly(_ type: LibP2PCrypto.Keys.KeyPairType = .Ed25519) throws -> LibP2PCrypto.Keys.KeyPair {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(type)
+        return try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: kp.marshalPublicKey())
+    }
+
+    // MARK: - Public-only KeyPair guards
+
+    @Test func publicOnlyKeyPairReportsNoPrivateKey() throws {
+        let pub = try publicOnly()
+        #expect(pub.hasPrivateKey == false)
+        #expect(pub.privateKey == nil)
+    }
+
+    /// Regression: `exportEncryptedPrivatePEMString` used to force-unwrap `privateKey!` and crash.
+    @Test func exportEncryptedPrivatePEMOnPublicKeyThrowsInsteadOfCrashing() throws {
+        let pub = try publicOnly()
+        #expect(throws: LibP2PCrypto.Keys.KeyError.noPrivateKey) {
+            _ = try pub.exportEncryptedPrivatePEMString(withPassword: "hunter2")
+        }
+    }
+
+    @Test func privateOnlyOperationsThrowWithoutPrivateKey() throws {
+        let pub = try publicOnly()
+        let message = Data("libp2p".utf8)
+        #expect(throws: LibP2PCrypto.Keys.KeyError.noPrivateKey) { _ = try pub.sign(message: message) }
+        #expect(throws: LibP2PCrypto.Keys.KeyError.noPrivateKey) { _ = try pub.marshalPrivateKey() }
+        #expect(throws: LibP2PCrypto.Keys.KeyError.noPrivateKey) { _ = try pub.exportPrivatePEM() }
+        #expect(throws: LibP2PCrypto.Keys.KeyError.noPrivateKey) { _ = try pub.exportPrivatePEMString() }
+    }
+
+    // MARK: - Newly-public KeyPair API (fast key types; RSA is covered separately below)
+
+    @Test func keyPairSignAndVerifyRoundTrip() throws {
+        let message = Data("sign me".utf8)
+        for type: LibP2PCrypto.Keys.KeyPairType in [.Ed25519, .Secp256k1] {
+            let kp = try LibP2PCrypto.Keys.generateKeyPair(type)
+            let signature = try kp.sign(message: message)
+            #expect(try kp.verify(signature: signature, for: message))
+        }
+    }
+
+    @Test func marshalPrivateKeyRoundTrips() throws {
+        for type: LibP2PCrypto.Keys.KeyPairType in [.Ed25519, .Secp256k1] {
+            let kp = try LibP2PCrypto.Keys.generateKeyPair(type)
+            let marshaled = try kp.marshalPrivateKey()
+            #expect(marshaled.isEmpty == false)
+            let restored = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaled)
+            #expect(restored.keyType == kp.keyType)
+            #expect(restored.privateKey != nil)
+            #expect(restored.publicKey.data == kp.publicKey.data)
+        }
+    }
+
+    // MARK: - RSA-specific coverage (skips only on debug + non-Apple, where keygen is slow)
+
+    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
+    func rsaSignVerifyAndMarshalPrivateKeyRoundTrip() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B1024))
+
+        let message = Data("sign me".utf8)
+        let signature = try kp.sign(message: message)
+        #expect(try kp.verify(signature: signature, for: message))
+
+        let marshaled = try kp.marshalPrivateKey()
+        #expect(marshaled.isEmpty == false)
+        let restored = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaled)
+        #expect(restored.keyType == kp.keyType)
+        #expect(restored.privateKey != nil)
+        #expect(restored.publicKey.data == kp.publicKey.data)
+    }
+
+    /// `attributes()` derives the RSA size from the modulus bit-length rather than a byte-count table.
+    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
+    func rsaAttributesReportModulusBitLength() throws {
+        for (type, expected) in [
+            (LibP2PCrypto.Keys.KeyPairType.RSA(bits: .B1024), 1024),
+            (LibP2PCrypto.Keys.KeyPairType.RSA(bits: .B2048), 2048),
+        ] {
+            let kp = try LibP2PCrypto.Keys.generateKeyPair(type)
+            #expect(kp.attributes()?.size == expected)
+            #expect(kp.attributes()?.isPrivate == true)
+        }
+    }
+
+    /// Regression: the SecKey/CryptoSwift RSA `rawRepresentation` used to either crash (`try!`)
+    /// or silently return empty `Data`. It must now be non-empty and round-trip.
+    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
+    func rsaRawRepresentationIsNonEmptyAndRoundTrips() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
+        #expect(kp.publicKey.rawRepresentation.isEmpty == false)
+        let marshaled = try kp.marshalPrivateKey()
+        let restored = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaled)
+        #expect(restored.publicKey.data == kp.publicKey.data)
+    }
+
+    // MARK: - Encrypted PEM: raised defaults and the iteration-encoding fix
+
+    /// Regression: `encodePBKDF()` previously encoded the iteration count in a fixed 2 bytes,
+    /// silently truncating any value above 65535. This exercises a genuinely large value; it only
+    /// encodes/decodes an ASN.1 integer, so it does no key derivation and is cheap in any build.
+    @Test func pbkdf2IterationEncodingSurvivesLargeValues() throws {
+        let salt = try LibP2PCrypto.randomBytes(length: 16)
+        let pbkdf = LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(salt: salt, iterations: 310_000)
+        let encoded = ASN1.Encoder.encode(try pbkdf.encodePBKDF())
+        let decoded = try LibP2PCrypto.PEM.decodePBKFD(ASN1.Decoder.decode(data: Data(encoded)))
+        #expect(decoded.iterations == 310_000)
+        #expect(decoded.salt == salt)
+    }
+
+    /// The production defaults must stay strong regardless of build configuration. The cheap
+    /// constant checks run everywhere; the full-strength derivation (slow in debug) only in release.
+    @Test func defaultPBKDF2ParametersAreStrong() throws {
+        #expect(LibP2PCrypto.PEM.defaultPBKDF2Iterations >= 310_000)
+        #expect(LibP2PCrypto.PEM.defaultPBKDF2SaltLength >= 16)
+
+        #if !DEBUG
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let pemString = try kp.exportEncryptedPrivatePEMString(withPassword: "pw")
+        let (type, bytes, _) = try LibP2PCrypto.PEM.pemToData(Array(pemString.utf8))
+        #expect(type == .encryptedPrivateKey)
+        let decoded = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(bytes))
+        #expect(decoded.pbkdfAlgorithm.iterations == LibP2PCrypto.PEM.defaultPBKDF2Iterations)
+        #expect(decoded.pbkdfAlgorithm.salt.count == LibP2PCrypto.PEM.defaultPBKDF2SaltLength)
+        #endif
+    }
+
+    @Test func encryptedPEMRoundTripsForFastKeyTypes() throws {
+        let password = "correct horse battery staple"
+        for type: LibP2PCrypto.Keys.KeyPairType in [.Ed25519, .Secp256k1] {
+            let kp = try LibP2PCrypto.Keys.generateKeyPair(type)
+            let pemBytes = try kp.exportEncryptedPrivatePEM(
+                withPassword: password,
+                usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations)
+            )
+            let restored = try LibP2PCrypto.Keys.KeyPair(pem: pemBytes, password: password)
+            #expect(restored.keyType == kp.keyType)
+            #expect(restored.publicKey.data == kp.publicKey.data)
+        }
+    }
+
+    @Test func encryptedPEMWithAES256CBCRoundTrips() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let password = "pw"
+        let pemBytes = try kp.exportEncryptedPrivatePEM(
+            withPassword: password,
+            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations),
+            andCipher: .aes_256_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
+        )
+        let restored = try LibP2PCrypto.Keys.KeyPair(pem: pemBytes, password: password)
+        #expect(restored.publicKey.data == kp.publicKey.data)
+    }
+
+    @Test func decryptingEncryptedPEMWithWrongPasswordFails() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let pemBytes = try kp.exportEncryptedPrivatePEM(
+            withPassword: "right",
+            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations)
+        )
+        #expect(throws: (any Error).self) {
+            _ = try LibP2PCrypto.Keys.KeyPair(pem: pemBytes, password: "wrong")
+        }
+    }
+
+    // MARK: - Malformed input handling
+
+    @Test func malformedPEMThrows() {
+        let junk = "-----BEGIN PUBLIC KEY-----\nnot valid base64 @@@\n-----END PUBLIC KEY-----"
+        #expect(throws: (any Error).self) {
+            _ = try LibP2PCrypto.Keys.KeyPair(pem: junk)
+        }
+    }
+
+    @Test func malformedMarshaledKeysThrow() {
+        #expect(throws: (any Error).self) {
+            _ = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: Data([0x01, 0x02, 0x03]))
+        }
+        #expect(throws: (any Error).self) {
+            _ = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data([0x01, 0x02, 0x03]))
+        }
+    }
+
+    @Test func truncatedASN1SequenceThrows() {
+        // Tag 0x30 (SEQUENCE) declares 5 content bytes but supplies none.
+        #expect(throws: (any Error).self) {
+            _ = try ASN1.Decoder.decode(data: Data([0x30, 0x05]))
+        }
+    }
+
+    @Test func shortSecp256k1SignatureThrowsInvalidLength() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
+        #expect(throws: (any Error).self) {
+            _ = try kp.verify(signature: Data([0x00, 0x01, 0x02]), for: Data("msg".utf8))
+        }
+    }
+
+    // MARK: - Async key generation
+
+    @Test func asyncKeyGenerationProducesUsableKeyPair() async throws {
+        let kp = try await LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let message = Data("async".utf8)
+        let signature = try kp.sign(message: message)
+        #expect(try kp.verify(signature: signature, for: message))
     }
 }

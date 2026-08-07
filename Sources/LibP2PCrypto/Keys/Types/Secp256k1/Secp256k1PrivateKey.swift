@@ -32,8 +32,12 @@ extension Array where Element == UInt8 {
     }
 }
 
-// TODO: Move to P256K implementation and remove @unchecked Sendable
-
+/// - Note: `@unchecked Sendable` is sound here because every stored property is a `let`:
+///   `rawPrivateKey` and `publicKey` are immutable, and the underlying `secp256k1_context`
+///   (`ctx`) is only ever used for signing / verification, which the secp256k1 library
+///   documents as thread-safe on a shared context (context randomization happens once, at
+///   creation). A future migration to the `swift-secp256k1` (P256K) package would let us drop
+///   `@unchecked` entirely.
 public final class Secp256k1PrivateKey: @unchecked Sendable {
 
     // MARK: - Properties
@@ -136,6 +140,7 @@ public final class Secp256k1PrivateKey: @unchecked Sendable {
             free(pubKey)
         }
         var secret = privateKey
+        defer { Secp256k1PrivateKey.secureWipe(&secret) }
         if secp256k1_ec_pubkey_create(finalCtx, pubKey, &secret) != 1 {
             throw Error.pubKeyGenerationFailed
         }
@@ -242,6 +247,7 @@ public final class Secp256k1PrivateKey: @unchecked Sendable {
         }
 
         var seckey = rawPrivateKey
+        defer { Secp256k1PrivateKey.secureWipe(&seckey) }
 
         guard secp256k1_ecdsa_sign_recoverable(ctx, sig, &hash, &seckey, nil, nil) == 1 else {
             throw Error.internalError
@@ -274,9 +280,20 @@ public final class Secp256k1PrivateKey: @unchecked Sendable {
 
     private func verifyPrivateKey() throws {
         var secret = rawPrivateKey
+        defer { Secp256k1PrivateKey.secureWipe(&secret) }
         guard secp256k1_ec_seckey_verify(ctx, &secret) == 1 else {
             throw Error.keyMalformed
         }
+    }
+
+    /// Best-effort zeroing of a transient copy of secret key material.
+    ///
+    /// These copies exist only to satisfy the secp256k1 C API's non-`const` (`inout`) pointer
+    /// parameters; the library does not mutate the key. `@inline(never)` reduces the chance the
+    /// optimizer treats the final writes as a dead store and elides them.
+    @inline(never)
+    private static func secureWipe(_ bytes: inout [UInt8]) {
+        for i in bytes.indices { bytes[i] = 0 }
     }
 
     // MARK: - Errors

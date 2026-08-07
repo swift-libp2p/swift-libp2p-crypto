@@ -106,7 +106,6 @@ extension LibP2PCrypto {
                     self = .ecPrivateKey
 
                 default:
-                    print("Unsupported PEM Type: \(Data(bytes).toHexString())")
                     throw PEM.Error.unsupportedPEMType
                 }
             }

@@ -31,16 +31,12 @@ extension Secp256k1PublicKey: CommonPublicKey {
     }
 
     public func encrypt(data: Data) throws -> Data {
-        throw NSError(domain: "Secp256k1 Keys don't support encryption", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("Secp256k1 keys don't support encryption")
     }
 
     public func verify(signature: Data, for expectedData: Data) throws -> Bool {
         guard signature.count >= 32 + 32 + 1 else {
-            throw NSError(
-                domain: "Invalid Signature Length, expected at least 65 bytes, got \(signature.count)",
-                code: 0,
-                userInfo: nil
-            )
+            throw LibP2PCrypto.Keys.KeyError.invalidSignatureLength(expected: 65, got: signature.count)
         }
         let bytes = signature.byteArray
         let v: [UInt8] = [UInt8](bytes[0..<1])  //First byte
@@ -107,7 +103,7 @@ extension Secp256k1PrivateKey: CommonPrivateKey {
     }
 
     public func decrypt(data: Data) throws -> Data {
-        throw NSError(domain: "Secp256k1 Keys don't support decryption", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("Secp256k1 keys don't support decryption")
     }
 
     public func sign(message data: Data) throws -> Data {
@@ -134,7 +130,9 @@ extension Secp256k1PublicKey: DERCodable {
     }
 
     public convenience init(privateDER: [UInt8]) throws {
-        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
+            "Can't instantiate a private key from a public DER representation"
+        )
     }
 
     public func publicKeyDER() throws -> [UInt8] {
@@ -142,7 +140,7 @@ extension Secp256k1PublicKey: DERCodable {
     }
 
     public func privateKeyDER() throws -> [UInt8] {
-        throw NSError(domain: "Public Key doesn't have private DER representation", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("A public key has no private DER representation")
     }
 
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
@@ -176,7 +174,9 @@ extension Secp256k1PrivateKey: DERCodable {
     public static var secondaryObjectIdentifier: [UInt8]? { nil }
 
     public convenience init(publicDER: [UInt8]) throws {
-        throw NSError(domain: "Can't instantiate private key from public DER representation", code: 0)
+        throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
+            "Can't instantiate a private key from a public DER representation"
+        )
     }
 
     public convenience init(privateDER: [UInt8]) throws {

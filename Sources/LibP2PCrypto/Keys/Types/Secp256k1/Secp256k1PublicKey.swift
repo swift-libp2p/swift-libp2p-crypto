@@ -38,8 +38,10 @@ public func secp256k1_default_ctx_destroy(ctx: OpaquePointer) {
     secp256k1_context_destroy(ctx)
 }
 
-// TODO: Move to P256K implementation and remove @unchecked Sendable
-
+/// - Note: `@unchecked Sendable` is sound here because every stored property is a `let`
+///   (`rawPublicKey`, `key`, and the `secp256k1_context` `ctx`, which is only used for the
+///   thread-safe parse / serialize / verify operations). A future migration to the
+///   `swift-secp256k1` (P256K) package would let us drop `@unchecked` entirely.
 public final class Secp256k1PublicKey: @unchecked Sendable {
 
     static let UNCOMPRESSED_LENGTH = 64
@@ -110,7 +112,7 @@ public final class Secp256k1PublicKey: @unchecked Sendable {
         let res = secp256k1_ec_pubkey_parse(finalCtx, &pubKey, &rawPublicKeyData, rawPublicKeyData.count)
         // Check for parsing errors
         guard res == 1 else {
-            throw NSError(domain: "Secp256k1::ParsePublicKey::Unable to parse public key", code: 0)
+            throw Error.keyMalformed
         }
 
         // Attempt to serialize the pubkey in it's uncompressed form
@@ -125,7 +127,7 @@ public final class Secp256k1PublicKey: @unchecked Sendable {
         )
         // Check for serialization errors
         guard res2 == 1 else {
-            throw NSError(domain: "Secp256k1::ParsePublicKey::Unable to serialize uncompressed public key", code: 0)
+            throw Error.internalError
         }
 
         // Store the uncompressed public key in our rawPublicKey field
@@ -145,15 +147,12 @@ public final class Secp256k1PublicKey: @unchecked Sendable {
             UInt32(SECP256K1_EC_COMPRESSED)
         )
         guard res == 1 else {
-            throw NSError(domain: "Unable to uncompress pubkey", code: 0)
+            throw Error.internalError
         }
         guard compressedPubKey.count == pubKeyLength,
             compressedPubKey.count == Secp256k1PublicKey.COMPRESSED_LENGTH_WITH_HEADER
         else {
-            throw NSError(
-                domain: "Uncompressed Key Length Mismatch \(compressedPubKey.count) != \(pubKeyLength)",
-                code: 0
-            )
+            throw Error.internalError
         }
         return compressedPubKey
     }
@@ -199,7 +198,6 @@ public final class Secp256k1PublicKey: @unchecked Sendable {
 
         // Ensure the provided V value is valid
         guard let vInt = Int32(v.asString(base: .base16), radix: 16), vInt >= 0, vInt <= 3 else {
-            print("Invalid v param")
             throw Error.signatureMalformed
         }
 
