@@ -730,9 +730,8 @@ struct SignAndVerifyTests {
         #expect(try secp.publicKey.verify(signature: signedData, for: message))
 
         var alertedSignedData = signedData
-        alertedSignedData[32] = 0
-        // We dont simply shuffle the data because it will most likely throw an error
-        // (due to invalid first byte 'v')
+        // Flip the final byte of `r` to a guaranteed-different (still in-range) value.
+        alertedSignedData[32] = alertedSignedData[32] == 0 ? 1 : 0
         #expect(try secp.publicKey.verify(signature: alertedSignedData, for: message) == false)
         // Invalid length will throw error...
         #expect(throws: Error.self) { try secp.publicKey.verify(signature: Data(signedData.dropFirst()), for: message) }
