@@ -19,22 +19,31 @@ import Foundation
 
 extension LibP2PCrypto.PEM {
     // MARK: Add support for new Cipher Algorithms here...
-    internal enum CipherAlgorithm {
+    public enum CipherAlgorithm {
         case aes_128_cbc(iv: [UInt8])
         case aes_256_cbc(iv: [UInt8])
         //case des3(iv: [UInt8])
 
         init(objID: [UInt8], iv: [UInt8]) throws {
+            let algorithm: CipherAlgorithm
             switch objID {
             case [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x02]:  // aes-128-cbc
-                self = .aes_128_cbc(iv: iv)
+                algorithm = .aes_128_cbc(iv: iv)
             case [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x2a]:  // aes-256-cbc
-                self = .aes_256_cbc(iv: iv)
+                algorithm = .aes_256_cbc(iv: iv)
             //case [42, 134, 72, 134, 247, 13, 3, 7]:
-            //  self = .des3(iv: iv)
+            //  algorithm = .des3(iv: iv)
             default:
                 throw Error.unsupportedCipherAlgorithm(objID)
             }
+            // Validate the IV length up front so a malformed PEM fails here with a clear
+            // error rather than deep inside CryptoSwift's CBC block-mode at decrypt time.
+            guard iv.count == algorithm.expectedIVLength else {
+                throw Error.invalidPEMFormat(
+                    "EncryptedPrivateKey::CIPHER::IV length \(iv.count), expected \(algorithm.expectedIVLength)"
+                )
+            }
+            self = algorithm
         }
 
         func decrypt(bytes: [UInt8], withKey key: [UInt8]) throws -> [UInt8] {
@@ -65,6 +74,14 @@ extension LibP2PCrypto.PEM {
             switch self {
             case .aes_128_cbc: return 16
             case .aes_256_cbc: return 32
+            }
+        }
+
+        /// The initialization-vector length required by this Cipher strategy.
+        /// - Note: AES-CBC uses a 16-byte IV (one AES block) for both the 128- and 256-bit key sizes.
+        var expectedIVLength: Int {
+            switch self {
+            case .aes_128_cbc, .aes_256_cbc: return 16
             }
         }
 

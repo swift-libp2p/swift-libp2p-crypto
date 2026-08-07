@@ -433,6 +433,8 @@ extension LibP2PCrypto.Keys.KeyPair {
         try publicKey.exportPublicKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
     }
 
+    /// - Warning:
+    /// Exporting unencrypted private keys is usually a bad idea. Use `exportEncryptedPrivatePEM(withPassword:String)` instead when possible.
     public func exportPrivatePEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
         guard let privKey = self.privateKey else {
             throw LibP2PCrypto.Keys.KeyError.noPrivateKey
@@ -445,6 +447,8 @@ extension LibP2PCrypto.Keys.KeyPair {
         try publicKey.exportPublicKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
     }
 
+    /// - Warning:
+    /// Exporting unencrypted private keys is usually a bad idea. Use `exportEncryptedPrivatePEMString(withPassword:String)` instead when possible.
     public func exportPrivatePEMString(withHeaderAndFooter: Bool = true) throws -> String {
         guard let privKey = self.privateKey else {
             throw LibP2PCrypto.Keys.KeyError.noPrivateKey
@@ -452,11 +456,7 @@ extension LibP2PCrypto.Keys.KeyPair {
         return try privKey.exportPrivateKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
     }
 
-    public func exportEncryptedPrivatePEMString(withPassword password: String) throws -> String {
-        try self.exportEncryptedPrivatePEMString(withPassword: password, usingPBKDF: nil, andCipher: nil)
-    }
-
-    internal func exportEncryptedPrivatePEM(
+    public func exportEncryptedPrivatePEM(
         withPassword password: String,
         usingPBKDF pbkdf: LibP2PCrypto.PEM.PBKDFAlgorithm? = nil,
         andCipher cipher: LibP2PCrypto.PEM.CipherAlgorithm? = nil
@@ -473,7 +473,7 @@ extension LibP2PCrypto.Keys.KeyPair {
         ).byteArray
     }
 
-    internal func exportEncryptedPrivatePEMString(
+    public func exportEncryptedPrivatePEMString(
         withPassword password: String,
         usingPBKDF pbkdf: LibP2PCrypto.PEM.PBKDFAlgorithm? = nil,
         andCipher cipher: LibP2PCrypto.PEM.CipherAlgorithm? = nil

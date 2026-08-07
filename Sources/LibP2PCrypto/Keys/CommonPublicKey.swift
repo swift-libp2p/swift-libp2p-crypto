@@ -54,12 +54,20 @@ public protocol CommonPublicKey: DERCodable, Sendable {
 extension CommonPublicKey {
     var keyType: LibP2PCrypto.Keys.GenericKeyType { Self.keyType }
 
+    /// The multihash of the marshaled public key, per the libp2p peer-id spec.
+    ///
+    /// Keys whose marshaled (protobuf) form is 42 bytes or smaller are inlined verbatim using the
+    /// `identity` multihash; larger keys are condensed with `sha2-256`. This is a size rule, not a
+    /// per-key-type rule, and mirrors go-libp2p's `maxInlineKeyLength` behavior. In practice
+    /// Ed25519 (~36 bytes) and Secp256k1 (~37 bytes) keys are inlined while RSA keys are hashed.
+    ///
+    /// - Reference: https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md
     public func multihash() throws -> Multihash {
-        switch self.keyType {
-        case .ed25519:
-            return try Multihash(raw: self.marshal(), hashedWith: .identity)
-        default:
-            return try Multihash(raw: self.marshal(), hashedWith: .sha2_256)
+        let marshaled = try self.marshal()
+        if marshaled.count <= 42 {
+            return try Multihash(raw: marshaled, hashedWith: .identity)
+        } else {
+            return try Multihash(raw: marshaled, hashedWith: .sha2_256)
         }
     }
 

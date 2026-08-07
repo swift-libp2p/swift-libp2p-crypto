@@ -17,14 +17,37 @@ import Foundation
 
 // MARK: Encrypted PEM PBKDF Algorithms
 
+extension LibP2PCrypto {
+    public static func random8ByteSalt() throws -> [UInt8] {
+        try LibP2PCrypto.randomBytes(length: 8)
+    }
+
+    public static func random16ByteSalt() throws -> [UInt8] {
+        try LibP2PCrypto.randomBytes(length: 16)
+    }
+}
+
 extension LibP2PCrypto.PEM {
     // MARK: Add support for new PBKDF Algorithms here...
-    internal enum PBKDFAlgorithm {
+    public enum PBKDFAlgorithm {
+        /// - Note:
+        /// Salt is usually 8 or 16 bytes of secure random bytes (consider using `LibP2PCrypto.randomBytes()`)
+        /// - Note:
+        /// Iterations *should* be in the 100's of thousands (the default is 310_000) lower values are less secure, but faster to compute.
         case pbkdf2(salt: [UInt8], iterations: Int)
+
+        /// Minimum accepted salt length in bytes (PKCS#5 / RFC 8018 recommend at least 64 bits).
+        /// Kept at 8 so previously-encrypted PEMs (whose legacy default salt was 8 bytes) still import.
+        static let minimumSaltLength = 8
 
         init(objID: [UInt8], salt: [UInt8], iterations: [UInt8]) throws {
             guard let iterations = Int(iterations.toHexString(), radix: 16) else {
                 throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF")
+            }
+            guard salt.count >= Self.minimumSaltLength else {
+                throw Error.invalidPEMFormat(
+                    "EncryptedPrivateKey::PBKDF::salt too short (\(salt.count) < \(Self.minimumSaltLength))"
+                )
             }
             switch objID {
             case [42, 134, 72, 134, 247, 13, 1, 5, 12]:  // pbkdf2
