@@ -143,14 +143,14 @@ extension Decryptable {
 
     /// Attempts to decode a base encoded string into the encrypted data to be decrypted...
     public func decrypt(baseEncoded: String, base: BaseEncoding) throws -> Data {
-        let d = try Multibase.BaseEncoding.decode(baseEncoded, as: base)
-        return try self.decrypt(d.data)
+        let bytes = try Multibase.BaseEncoding.decode(baseEncoded.utf8, as: base)
+        return try self.decrypt(bytes)
     }
 
     /// Attempts to decode a multibase compliant string into the encrypted data to be decrypted...
     public func decrypt(multibaseEncoded: String) throws -> Data {
-        let d = try Multibase.BaseEncoding.decode(multibaseEncoded)
-        return try self.decrypt(d.data)
+        let (_, bytes) = try multibaseEncoded.multibase()
+        return try self.decrypt(bytes)
     }
 
     public func decrypt(_ data: Data, intoString encoding: String.Encoding = .utf8) throws -> String {

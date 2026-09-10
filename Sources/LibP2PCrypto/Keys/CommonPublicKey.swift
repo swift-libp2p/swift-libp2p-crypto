@@ -65,9 +65,9 @@ extension CommonPublicKey {
     public func multihash() throws -> Multihash {
         let marshaled = try self.marshal()
         if marshaled.count <= 42 {
-            return try Multihash(raw: marshaled, hashedWith: .identity)
+            return try Multihash(hashing: marshaled, codec: .identity)
         } else {
-            return try Multihash(raw: marshaled, hashedWith: .sha2_256)
+            return try Multihash(hashing: marshaled, codec: .sha2_256)
         }
     }
 
@@ -82,9 +82,9 @@ extension CommonPublicKey {
     /// The public key is a protobuf encoding (marshaled) containing a type and the DER encoding
     /// of the PKCS SubjectPublicKeyInfo.
     public func id(withMultibasePrefix: Bool = true) throws -> String {
-        //let mh = try Multihash(raw: self.marshal(), hashedWith: .sha2_256)
+        //let mh = try Multihash(hashing: self.marshal(), codec: .sha2_256)
         let mh = try self.multihash()
-        return withMultibasePrefix ? mh.asMultibase(.base58btc) : mh.asString(base: .base58btc)
+        return mh.asString(base: .base58btc, withMultibasePrefix: withMultibasePrefix)
     }
 
     public func asString(base: BaseEncoding, withMultibasePrefix: Bool = false) -> String {
