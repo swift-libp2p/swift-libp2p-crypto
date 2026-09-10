@@ -166,7 +166,7 @@ public final class Secp256k1PublicKey: @unchecked Sendable {
             throw Error.keyMalformed
         }
 
-        try self.init(publicKey: Array(try BaseEncoding.decode(hexPublicKey, as: .base16).data))
+        try self.init(publicKey: try BaseEncoding.decode(hexPublicKey, as: .base16))
     }
 
     // MARK: - Signatures

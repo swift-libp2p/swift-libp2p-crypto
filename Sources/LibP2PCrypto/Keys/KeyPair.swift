@@ -86,9 +86,9 @@ extension LibP2PCrypto.Keys {
         /// The public key is a protobuf encoding (marshaled) containing a type and the DER encoding
         /// of the PKCS SubjectPublicKeyInfo.
         public func id(withMultibasePrefix: Bool = true) throws -> String {
-            //let mh = try Multihash(raw: self.marshal(), hashedWith: .sha2_256)
+            //let mh = try Multihash(hashing: self.marshal(), codec: .sha2_256)
             let mh = try self.multihash()
-            return withMultibasePrefix ? mh.asMultibase(.base58btc) : mh.asString(base: .base58btc)
+            return mh.asString(base: .base58btc, withMultibasePrefix: withMultibasePrefix)
         }
 
         /// Misc KeyPair Attributes (type, size, isPrivate)
@@ -183,7 +183,7 @@ extension LibP2PCrypto.Keys {
 
         /// Instantiate a KeyPair from a marshaled public key
         public init(marshaledPublicKey str: String, base: BaseEncoding) throws {
-            try self.init(marshaledPublicKey: BaseEncoding.decode(str, as: base).data)
+            try self.init(marshaledPublicKey: Data(BaseEncoding.decode(str, as: base)))
         }
         /// Instantiate a KeyPair from a marshaled public key
         public init(marshaledPublicKey data: Data) throws {
@@ -202,7 +202,7 @@ extension LibP2PCrypto.Keys {
 
         /// Instantiate a KeyPair from a marshaled private key
         public init(marshaledPrivateKey str: String, base: BaseEncoding) throws {
-            try self.init(marshaledPrivateKey: BaseEncoding.decode(str, as: base).data)
+            try self.init(marshaledPrivateKey: Data(BaseEncoding.decode(str, as: base)))
         }
 
         /// Instantiate a KeyPair from a marshaled private key

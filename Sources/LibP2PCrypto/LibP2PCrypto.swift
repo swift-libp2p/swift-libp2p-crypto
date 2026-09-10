@@ -52,7 +52,8 @@ extension String {
 
     /// Decryptes a BaseEncoded string via AES-GCM password encrypted data and attempts to return the plaintext message...
     public func decryptGCM(password: String, base: BaseEncoding) throws -> String? {
-        try String(data: BaseEncoding.decode(self, as: base).data.decryptGCM(password: password), encoding: .utf8)
+        let decoded = Data(try BaseEncoding.decode(self, as: base))
+        return try String(data: decoded.decryptGCM(password: password), encoding: .utf8)
     }
 
     public func encrypt(withKey key: Encryptable, encodedUsing encoding: String.Encoding = .utf8) throws -> Data {

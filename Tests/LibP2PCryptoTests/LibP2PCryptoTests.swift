@@ -375,13 +375,15 @@ struct Libp2pCryptoTests {
     /// Provided: Qmbp3SxL2SYcH6Ly4r5SGQwfxkDCJPuhJG35GCZimcTiBc
     ///           Qmbp3SxL2SYcH6Ly4r5SGQwfxkDCJPuhJG35GCZimcTiBc
     @Test func testEmbeddedEd25519PublicKey() throws {
-        let multi = try Multihash(b58String: "12D3KooWF5Qbrbvhhha1AcqRULWAfYzFEnKvWVGBUjw489hpo5La")
+        let multi = try Multihash(
+            BaseEncoding.decode("12D3KooWF5Qbrbvhhha1AcqRULWAfYzFEnKvWVGBUjw489hpo5La", as: .base58btc)
+        )
         print(multi)
         print("\(multi.value) (\(multi.value.count))")
-        print("\(multi.digest!) (\(multi.digest!.count))")
+        print("\(multi.digest) (\(multi.digest.count))")
 
         /// Ensure we can instantiate a ED25519 Public Key from the multihash's digest (identity)
-        let key = try Curve25519.Signing.PublicKey(rawRepresentation: multi.digest!.dropFirst(4))
+        let key = try Curve25519.Signing.PublicKey(rawRepresentation: multi.digest.dropFirst(4))
         print(key)
 
         /// Ensure we can instantiate a KeyPair with the public key
@@ -392,7 +394,7 @@ struct Libp2pCryptoTests {
         print(try kp.id(withMultibasePrefix: false))
 
         /// Ensure we can instantiate a key pair directly from the Multihash's Digest (Identity)
-        let marshed = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: Data(multi.digest!))
+        let marshed = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: Data(multi.digest))
         print(marshed)
 
         print(marshed.keyType)
@@ -459,8 +461,8 @@ struct MarshallingTests {
 
     // Manual
     @Test func testImportFromMarshalledPublicKey_Manual() throws {
-        let marshaledData = try BaseEncoding.decode(MarshaledData.PUBLIC_RSA_KEY_1024, as: .base64Pad)
-        let pubKey = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledData.data)
+        let marshaledData: [UInt8] = try BaseEncoding.decode(MarshaledData.PUBLIC_RSA_KEY_1024, as: .base64Pad)
+        let pubKey = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: Data(marshaledData))
 
         /// We've imported a Public Key!  🥳
         print(pubKey)
@@ -528,9 +530,9 @@ struct MarshallingTests {
     }
 
     @Test func testImportFromMarshalledPrivateKey_Manual() throws {
-        let marshaledData = try BaseEncoding.decode(MarshaledData.PRIVATE_RSA_KEY_1024, as: .base64Pad)
-        //LibP2PCrypto.Keys.importMarshaledPrivateKey(marshaledData.data.bytes)
-        let privKey = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaledData.data)
+        let marshaledData: [UInt8] = try BaseEncoding.decode(MarshaledData.PRIVATE_RSA_KEY_1024, as: .base64Pad)
+        //LibP2PCrypto.Keys.importMarshaledPrivateKey(marshaledData)
+        let privKey = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(marshaledData))
 
         print(privKey)
     }
