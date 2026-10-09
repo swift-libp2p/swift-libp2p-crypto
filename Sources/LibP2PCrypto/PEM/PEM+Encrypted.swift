@@ -14,6 +14,7 @@
 
 import CryptoSwift
 import Foundation
+import SwiftASN1
 
 // MARK: Encrypted PEM
 
@@ -31,7 +32,7 @@ extension LibP2PCrypto.PEM {
     internal static let defaultCipherIVLength = 16
 
     internal struct EncryptedPEM {
-        let objectIdentifer: [UInt8]
+        let objectIdentifer: ASN1ObjectIdentifier
         let ciphertext: [UInt8]
         let pbkdfAlgorithm: PBKDFAlgorithm
         let cipherAlgorithm: CipherAlgorithm
@@ -50,55 +51,34 @@ extension LibP2PCrypto.PEM {
     /// 6) The decrypted octet string can now be handled like any other Private Key PEM
     ///
     /// ```
-    /// sequence(nodes: [
-    ///   ASN1.Parser.Node.sequence(nodes: [
-    ///       ASN1.Parser.Node.objectIdentifier(data: 9 bytes),              // PEM's ObjectIdentifier
-    ///       ASN1.Parser.Node.sequence(nodes: [
-    ///           ASN1.Parser.Node.sequence(nodes: [
-    ///               ASN1.Parser.Node.objectIdentifier(data: 9 bytes),      // PBKDF Algorithm
-    ///               ASN1.Parser.Node.sequence(nodes: [
-    ///                   ASN1.Parser.Node.octetString(data: 8 bytes),       // SALT
-    ///                   ASN1.Parser.Node.integer(data: 2 bytes)            // ITERATIONS
-    ///               ])
-    ///           ]),
-    ///           ASN1.Parser.Node.sequence(nodes: [
-    ///               ASN1.Parser.Node.objectIdentifier(data: 9 bytes),      // Cipher Algorithm (ex: des-ede3-cbc)
-    ///               ASN1.Parser.Node.octetString(data: 16 bytes)           // Initial Vector (IV)
-    ///           ])
-    ///       ])
-    ///   ]),
-    ///   ASN1.Parser.Node.octetString(data: 640 bytes)
-    /// ])
+    /// SEQUENCE {
+    ///   SEQUENCE {
+    ///       OBJECT IDENTIFIER                 // PEM's ObjectIdentifier (PBES2)
+    ///       SEQUENCE {
+    ///           SEQUENCE {
+    ///               OBJECT IDENTIFIER         // PBKDF Algorithm
+    ///               SEQUENCE {
+    ///                   OCTET STRING          // SALT
+    ///                   INTEGER               // ITERATIONS
+    ///               }
+    ///           }
+    ///           SEQUENCE {
+    ///               OBJECT IDENTIFIER         // Cipher Algorithm (ex: aes-128-cbc)
+    ///               OCTET STRING              // Initial Vector (IV)
+    ///           }
+    ///       }
+    ///   }
+    ///   OCTET STRING                          // Ciphertext
+    /// }
     /// ```
     internal static func decodeEncryptedPEM(_ encryptedPEM: Data) throws -> EncryptedPEM {
-        let asn = try ASN1.Decoder.decode(data: encryptedPEM)
-
-        guard case .sequence(let encryptedPEMWrapper) = asn else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::")
-        }
-        guard encryptedPEMWrapper.count == 2 else { throw Error.invalidPEMFormat("EncryptedPrivateKey::") }
-        guard case .sequence(let encryptionInfoWrapper) = encryptedPEMWrapper.first else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::")
-        }
-        guard encryptionInfoWrapper.count == 2 else { throw Error.invalidPEMFormat("EncryptedPrivateKey::") }
-        guard case .objectIdentifier(let objID) = encryptionInfoWrapper.first else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::")
-        }
-        guard case .sequence(let encryptionAlgorithmsWrapper) = encryptionInfoWrapper.last else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::")
-        }
-        guard encryptionAlgorithmsWrapper.count == 2 else { throw Error.invalidPEMFormat("EncryptedPrivateKey::") }
-        let pbkdf = try decodePBKFD(encryptionAlgorithmsWrapper.first!)
-        let cipher = try decodeCipher(encryptionAlgorithmsWrapper.last!)
-        guard case .octetString(let octets) = encryptedPEMWrapper.last else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::")
-        }
+        let encryptedPrivateKeyInfo = try EncryptedPrivateKeyInfo(derEncoded: encryptedPEM.byteArray)
 
         return EncryptedPEM(
-            objectIdentifer: objID.byteArray,
-            ciphertext: octets.byteArray,
-            pbkdfAlgorithm: pbkdf,
-            cipherAlgorithm: cipher
+            objectIdentifer: encryptedPrivateKeyInfo.encryptionAlgorithm,
+            ciphertext: Array(encryptedPrivateKeyInfo.encryptedData.bytes),
+            pbkdfAlgorithm: try decodePBKFD(encryptedPrivateKeyInfo.keyDerivationFunction),
+            cipherAlgorithm: try decodeCipher(encryptedPrivateKeyInfo.encryptionScheme)
         )
     }
 
@@ -124,18 +104,11 @@ extension LibP2PCrypto.PEM {
         let ciphertext = try cipher.encrypt(bytes: pem.byteArray, withKey: key)
 
         // Encode Encrypted PEM (including pbkdf and cipher algos used)
-        let nodes: ASN1.Node = .sequence(nodes: [
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(hex: "2a864886f70d01050d")),
-                .sequence(nodes: [
-                    try pbkdf.encodePBKDF(),
-                    try cipher.encodeCipher(),
-                ]),
-            ]),
-            .octetString(data: Data(ciphertext)),
-        ])
-
-        let encoded = ASN1.Encoder.encode(nodes)
+        let encoded = try EncryptedPrivateKeyInfo(
+            keyDerivationFunction: pbkdf.encodePBKDF(),
+            encryptionScheme: cipher.encodeCipher(),
+            encryptedData: ciphertext
+        ).serializedDERBytes()
 
         let base64 = "\n" + encoded.toBase64().split(intoChunksOfLength: 64).joined(separator: "\n") + "\n"
 
