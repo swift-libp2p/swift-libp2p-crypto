@@ -47,6 +47,12 @@ extension LibP2PCrypto.Keys {
                 try self.init(privateKey: Secp256k1PrivateKey())
             case .RSA(let keySize):
                 try self.init(privateKey: RSAPrivateKey(keySize: keySize.bits))
+            case .ECDSA(let curve):
+                switch curve {
+                case .P256: try self.init(privateKey: P256.Signing.PrivateKey())
+                case .P384: try self.init(privateKey: P384.Signing.PrivateKey())
+                case .P521: try self.init(privateKey: P521.Signing.PrivateKey())
+                }
             //default:
             //    throw NSError(domain: "Unsupported Key Type", code: 0)
             }
@@ -118,6 +124,11 @@ extension LibP2PCrypto.Keys {
 
             case .secp256k1:
                 return Attributes(type: .Secp256k1, size: 64, isPrivate: isPrivate)
+
+            case .ecdsa:
+                guard let ecdsaKey = self.publicKey as? any ECDSAPublicKeyBacking else { return nil }
+                let curve = type(of: ecdsaKey).curve
+                return Attributes(type: .ECDSA(curve: curve), size: curve.bits, isPrivate: isPrivate)
             }
         }
 
@@ -197,6 +208,9 @@ extension LibP2PCrypto.Keys {
 
             case .secp256K1:
                 try self.init(publicKey: Secp256k1PublicKey(marshaledData: proto.data))
+
+            case .ecdsa:
+                try self.init(publicKey: ECDSAKeys.anyPublicKey(fromSPKI: proto.data))
             }
         }
 
@@ -250,6 +264,9 @@ extension LibP2PCrypto.Keys {
                 }
             case .secp256K1:
                 try self.init(privateKey: Secp256k1PrivateKey(marshaledData: proto.data))
+
+            case .ecdsa:
+                try self.init(privateKey: ECDSAKeys.anyPrivateKey(fromSEC1: proto.data))
             }
         }
 
@@ -279,6 +296,7 @@ extension LibP2PCrypto.Keys {
         case rsa
         case ed25519
         case secp256k1
+        case ecdsa
 
         internal var toProtoType: KeyType {
             switch self {
@@ -288,6 +306,8 @@ extension LibP2PCrypto.Keys {
                 return .ed25519
             case .secp256k1:
                 return .secp256K1
+            case .ecdsa:
+                return .ecdsa
             }
         }
 
@@ -299,6 +319,8 @@ extension LibP2PCrypto.Keys {
                 self = .ed25519
             case .secp256K1:
                 self = .secp256k1
+            case .ecdsa:
+                self = .ecdsa
             }
         }
 
@@ -346,8 +368,19 @@ extension LibP2PCrypto.Keys.KeyPair {
                 try self.init(
                     publicKey: Curve25519.Signing.PublicKey(pem: pemBytes, asType: Curve25519.Signing.PublicKey.self)
                 )
-            } else if ids.contains(Secp256k1PublicKey.primaryObjectIdentifier) {
-                try self.init(publicKey: Secp256k1PublicKey(pem: pemBytes, asType: Secp256k1PublicKey.self))
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.idEcPublicKey) {
+                // EC keys all share the id-ecPublicKey algorithm, classify them by their named curve
+                if ids.contains(ASN1ObjectIdentifier.LibP2P.secp256k1) {
+                    try self.init(publicKey: Secp256k1PublicKey(pem: pemBytes, asType: Secp256k1PublicKey.self))
+                } else if ids.contains(ASN1ObjectIdentifier.LibP2P.prime256v1) {
+                    try self.init(publicKey: P256.Signing.PublicKey(pem: pemBytes, asType: P256.Signing.PublicKey.self))
+                } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp384r1) {
+                    try self.init(publicKey: P384.Signing.PublicKey(pem: pemBytes, asType: P384.Signing.PublicKey.self))
+                } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp521r1) {
+                    try self.init(publicKey: P521.Signing.PublicKey(pem: pemBytes, asType: P521.Signing.PublicKey.self))
+                } else {
+                    throw LibP2PCrypto.PEM.Error.unsupportedPEMType
+                }
             } else {
                 throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
@@ -362,6 +395,12 @@ extension LibP2PCrypto.Keys.KeyPair {
                 )
             } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
                 try self.init(privateKey: Secp256k1PrivateKey(pem: pemBytes, asType: Secp256k1PrivateKey.self))
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.prime256v1) {
+                try self.init(privateKey: P256.Signing.PrivateKey(pem: pemBytes, asType: P256.Signing.PrivateKey.self))
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp384r1) {
+                try self.init(privateKey: P384.Signing.PrivateKey(pem: pemBytes, asType: P384.Signing.PrivateKey.self))
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp521r1) {
+                try self.init(privateKey: P521.Signing.PrivateKey(pem: pemBytes, asType: P521.Signing.PrivateKey.self))
             } else {
                 throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
@@ -417,10 +456,26 @@ extension LibP2PCrypto.Keys.KeyPair {
                     expectedSecondaryObjectIdentifier: Secp256k1PrivateKey.secondaryObjectIdentifier
                 )
                 try self.init(privateKey: Secp256k1PrivateKey(privateDER: der))
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.prime256v1) {
+                try self.init(privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P256.Signing.PrivateKey.self))
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp384r1) {
+                try self.init(privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P384.Signing.PrivateKey.self))
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp521r1) {
+                try self.init(privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P521.Signing.PrivateKey.self))
             } else {
                 throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
         }
+    }
+
+    /// Decodes a decrypted (PKCS #8 or SEC1) private key PEM body into the specified key type
+    private static func privateKey<Key: CommonPrivateKey>(fromDecryptedPEM decryptedPEM: [UInt8], as: Key.Type) throws -> Key {
+        let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
+            Data(decryptedPEM),
+            expectedPrimaryObjectIdentifier: Key.primaryObjectIdentifier,
+            expectedSecondaryObjectIdentifier: Key.secondaryObjectIdentifier
+        )
+        return try Key(privateDER: der)
     }
 }
 
