@@ -212,32 +212,3 @@ extension DEREncodable {
 
 /// Conform to this protocol if your type can both be instantiated and expressed as an ASN1 DER representation.
 public protocol DERCodable: DERDecodable, DEREncodable {}
-
-struct DER {
-    /// Integer to Octet String Primitive
-    /// - Parameters:
-    ///   - x: nonnegative integer to be converted
-    ///   - size: intended length of the resulting octet string
-    /// - Returns: corresponding octet string of length xLen
-    /// - Note: https://datatracker.ietf.org/doc/html/rfc3447#section-4.1
-    internal static func i2osp(x: [UInt8], size: Int) -> [UInt8] {
-        var modulus = x
-        while modulus.count < size {
-            modulus.insert(0x00, at: 0)
-        }
-        if modulus[0] >= 0x80 {
-            modulus.insert(0x00, at: 0)
-        }
-        return modulus
-    }
-
-    /// Integer to Octet String Primitive
-    /// - Parameters:
-    ///   - x: nonnegative integer to be converted
-    ///   - size: intended length of the resulting octet string
-    /// - Returns: corresponding octet string of length xLen
-    /// - Note: https://datatracker.ietf.org/doc/html/rfc3447#section-4.1
-    internal static func i2ospData(x: [UInt8], size: Int) -> Data {
-        Data(DER.i2osp(x: x, size: size))
-    }
-}
