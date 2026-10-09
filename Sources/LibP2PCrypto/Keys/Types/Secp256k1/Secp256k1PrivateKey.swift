@@ -2,7 +2,7 @@
 //
 // This source file is part of the swift-libp2p open source project
 //
-// Copyright (c) 2022-2025 swift-libp2p project authors
+// Copyright (c) 2022-2026 swift-libp2p project authors
 // Licensed under MIT
 //
 // See LICENSE for license information
@@ -12,33 +12,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CryptoSwift
 import Foundation
 import Multibase
-import secp256k1
+import P256K
 
-extension Array where Element == UInt8 {
-
-    fileprivate var bigEndianUInt: UInt? {
-        guard self.count <= MemoryLayout<UInt>.size else {
-            return nil
-        }
-        var number: UInt = 0
-        for i in (0..<self.count).reversed() {
-            number = number | (UInt(self[self.count - i - 1]) << (i * 8))
-        }
-
-        return number
-    }
-}
-
-/// - Note: `@unchecked Sendable` is sound here because every stored property is a `let`:
-///   `rawPrivateKey` and `publicKey` are immutable, and the underlying `secp256k1_context`
-///   (`ctx`) is only ever used for signing / verification, which the secp256k1 library
-///   documents as thread-safe on a shared context (context randomization happens once, at
-///   creation). A future migration to the `swift-secp256k1` (P256K) package would let us drop
-///   `@unchecked` entirely.
-public final class Secp256k1PrivateKey: @unchecked Sendable {
+public final class Secp256k1PrivateKey: Sendable {
 
     // MARK: - Properties
 
@@ -48,40 +26,20 @@ public final class Secp256k1PrivateKey: @unchecked Sendable {
     /// The public key associated with this private key
     public let publicKey: Secp256k1PublicKey
 
-    /// Returns the ethereum address representing the public key associated with this private key.
-    //public var address: EthereumAddress {
-    //    return publicKey.address
-    //}
-
-    /// True iff ctx should not be freed on deinit
-    private let ctxSelfManaged: Bool
-
-    /// Internal context for secp256k1 library calls
-    private let ctx: OpaquePointer
+    /// The underlying P256K private key
+    let key: P256K.Signing.PrivateKey
 
     // MARK: - Initialization
 
-    /// Initializes a new cryptographically secure `EthereumPrivateKey` from random noise.
-    ///
-    /// The process of generating the new private key is as follows:
-    ///
-    /// - Generate a secure random number between 55 and 65.590. Call it `rand`.
-    /// - Read `rand` bytes from `/dev/urandom` and call it `bytes`.
-    /// - Create the keccak256 hash of `bytes` and initialize this private key with the generated hash.
+    /// Initializes a new cryptographically secure, randomly generated `Secp256k1PrivateKey`.
     public convenience init() throws {
-        guard var rand = try? LibP2PCrypto.randomBytes(length: 2).bigEndianUInt else {
-            //guard var rand = [UInt8].secureRandom(count: 2)?.bigEndianUInt else {
+        let key: P256K.Signing.PrivateKey
+        do {
+            key = try P256K.Signing.PrivateKey(format: .compressed)
+        } catch {
             throw Error.internalError
         }
-        rand += 55
-
-        guard let bytes = try? LibP2PCrypto.randomBytes(length: Int(rand)) else {
-            //guard let bytes = [UInt8].secureRandom(count: Int(rand)) else {
-            throw Error.internalError
-        }
-        let bytesHash = SHA3(variant: .keccak256).calculate(for: bytes)
-
-        try self.init(privateKey: bytesHash)
+        try self.init(key: key)
     }
 
     /// Convenience initializer for `init(privateKey:)`
@@ -93,18 +51,8 @@ public final class Secp256k1PrivateKey: @unchecked Sendable {
     ///
     /// - Parameters:
     ///   - privateKey: The private key bytes. Must be exactly a big endian 32 Byte array representing the private key.
-    ///   - ctx: An optional self managed context. If you have specific requirements and
-    ///          your app performs not as fast as you want it to, you can manage the
-    ///          `secp256k1_context` yourself with the public methods
-    ///          `secp256k1_default_ctx_create` and `secp256k1_default_ctx_destroy`.
-    ///          If you do this, we will not be able to free memory automatically and you
-    ///          __have__ to destroy the context yourself once your app is closed or
-    ///          you are sure it will not be used any longer. Only use this optional
-    ///          context management if you know exactly what you are doing and you really
-    ///          need it.
-    /// - throws: EthereumPrivateKey.Error.keyMalformed if the restrictions described above are not met.
-    ///           EthereumPrivateKey.Error.internalError if a secp256k1 library call or another internal call fails.
-    ///           EthereumPrivateKey.Error.pubKeyGenerationFailed if the public key extraction from the private key fails.
+    /// - throws: Secp256k1PrivateKey.Error.keyMalformed if the restrictions described above are not met.
+    ///           Secp256k1PrivateKey.Error.pubKeyGenerationFailed if the public key extraction from the private key fails.
     /// - Note: `privateKey` must be in the secp256k1 range as described in: https://en.bitcoin.it/wiki/Private_key
     /// ```
     /// So any number between
@@ -113,71 +61,37 @@ public final class Secp256k1PrivateKey: @unchecked Sendable {
     /// 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140
     /// is considered to be a valid secp256k1 private key.
     ///  ```
-    public init(privateKey: [UInt8], ctx: OpaquePointer? = nil) throws {
+    public convenience init(privateKey: [UInt8]) throws {
         guard privateKey.count == 32 else {
             throw Error.keyMalformed
         }
-        self.rawPrivateKey = privateKey
 
-        let finalCtx: OpaquePointer
-        if let ctx = ctx {
-            finalCtx = ctx
-            self.ctxSelfManaged = true
-        } else {
-            let ctx = try secp256k1_default_ctx_create(errorThrowable: Error.internalError)
-            finalCtx = ctx
-            self.ctxSelfManaged = false
+        let key: P256K.Signing.PrivateKey
+        do {
+            key = try P256K.Signing.PrivateKey(dataRepresentation: privateKey, format: .compressed)
+        } catch {
+            throw Error.keyMalformed
         }
-        self.ctx = finalCtx
-
-        // Generate public key
-        guard let pubKey = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self)
-        else {
-            throw Error.internalError
-        }
-        // Cleanup
-        defer {
-            free(pubKey)
-        }
-        var secret = privateKey
-        defer { Secp256k1PrivateKey.secureWipe(&secret) }
-        if secp256k1_ec_pubkey_create(finalCtx, pubKey, &secret) != 1 {
-            throw Error.pubKeyGenerationFailed
-        }
-
-        var pubOut = [UInt8](repeating: 0, count: 65)
-        var pubOutLen = 65
-        _ = secp256k1_ec_pubkey_serialize(finalCtx, &pubOut, &pubOutLen, pubKey, UInt32(SECP256K1_EC_UNCOMPRESSED))
-        guard pubOutLen == 65 else {
-            throw Error.pubKeyGenerationFailed
-        }
-
-        // First byte is header byte 0x04
-        pubOut.remove(at: 0)
-
-        self.publicKey = try Secp256k1PublicKey(publicKey: pubOut, ctx: ctx)
-        // End Generate public key
-
-        // Verify private key
-        try verifyPrivateKey()
+        try self.init(key: key)
     }
 
-    /// Initializes a new instance of `EthereumPrivateKey` with the given `hexPrivateKey` hex string.
+    /// Designated initializer wrapping an already validated P256K private key.
+    init(key: P256K.Signing.PrivateKey) throws {
+        self.key = key
+        self.rawPrivateKey = [UInt8](key.dataRepresentation)
+        do {
+            self.publicKey = try Secp256k1PublicKey(key: key.publicKey)
+        } catch {
+            throw Error.pubKeyGenerationFailed
+        }
+    }
+
+    /// Initializes a new instance of `Secp256k1PrivateKey` with the given `hexPrivateKey` hex string.
     ///
     /// - Parameters:
     ///   - hexPrivateKey: must be either 64 characters long or 66 characters (with the hex prefix 0x).
-    ///   - ctx: An optional self managed context. If you have specific requirements and
-    ///          your app performs not as fast as you want it to, you can manage the
-    ///          `secp256k1_context` yourself with the public methods
-    ///          `secp256k1_default_ctx_create` and `secp256k1_default_ctx_destroy`.
-    ///          If you do this, we will not be able to free memory automatically and you
-    ///          __have__ to destroy the context yourself once your app is closed or
-    ///          you are sure it will not be used any longer. Only use this optional
-    ///          context management if you know exactly what you are doing and you really
-    ///          need it.
-    /// - throws: EthereumPrivateKey.Error.keyMalformed if the restrictions described above are not met.
-    ///           EthereumPrivateKey.Error.internalError if a secp256k1 library call or another internal call fails.
-    ///           EthereumPrivateKey.Error.pubKeyGenerationFailed if the public key extraction from the private key fails.
+    /// - throws: Secp256k1PrivateKey.Error.keyMalformed if the restrictions described above are not met.
+    ///           Secp256k1PrivateKey.Error.pubKeyGenerationFailed if the public key extraction from the private key fails.
     /// - Note: `privateKey` must be in the secp256k1 range as described in: https://en.bitcoin.it/wiki/Private_key
     /// ```
     /// So any number between
@@ -186,7 +100,7 @@ public final class Secp256k1PrivateKey: @unchecked Sendable {
     /// 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140
     /// is considered to be a valid secp256k1 private key.
     ///  ```
-    public convenience init(hexPrivateKey: String, ctx: OpaquePointer? = nil) throws {
+    public convenience init(hexPrivateKey: String) throws {
         guard hexPrivateKey.count == 64 || hexPrivateKey.count == 66 else {
             throw Error.keyMalformed
         }
@@ -206,9 +120,6 @@ public final class Secp256k1PrivateKey: @unchecked Sendable {
             hexPrivateKey = String(hexPrivateKey[e...])
         }
 
-        //guard let raw = try? BaseEncoding.decode(hexPrivateKey, as: .base16) else {
-        //    throw Error.keyMalformed
-        //}
         var raw = [UInt8]()
         for i in stride(from: 0, to: hexPrivateKey.count, by: 2) {
             let s = hexPrivateKey.index(hexPrivateKey.startIndex, offsetBy: i)
@@ -220,80 +131,20 @@ public final class Secp256k1PrivateKey: @unchecked Sendable {
             raw.append(b)
         }
 
-        try self.init(privateKey: raw, ctx: ctx)
+        try self.init(privateKey: raw)
     }
 
-    // MARK: - Convenient functions
+    // MARK: - Signatures
 
-    public func sign(message: [UInt8]) throws -> (v: UInt, r: [UInt8], s: [UInt8]) {
-        let hash = SHA3(variant: .keccak256).calculate(for: message)
-        return try sign(hash: hash)
-    }
-
-    public func sign(hash _hash: [UInt8]) throws -> (v: UInt, r: [UInt8], s: [UInt8]) {
-        var hash = _hash
-        guard hash.count == 32 else {
-            throw Error.internalError
-        }
-        guard
-            let sig = malloc(MemoryLayout<secp256k1_ecdsa_recoverable_signature>.size)?.assumingMemoryBound(
-                to: secp256k1_ecdsa_recoverable_signature.self
-            )
-        else {
-            throw Error.internalError
-        }
-        defer {
-            free(sig)
-        }
-
-        var seckey = rawPrivateKey
-        defer { Secp256k1PrivateKey.secureWipe(&seckey) }
-
-        guard secp256k1_ecdsa_sign_recoverable(ctx, sig, &hash, &seckey, nil, nil) == 1 else {
-            throw Error.internalError
-        }
-
-        var output64 = [UInt8](repeating: 0, count: 64)
-        var recid: Int32 = 0
-        secp256k1_ecdsa_recoverable_signature_serialize_compact(ctx, &output64, &recid, sig)
-
-        guard recid == 0 || recid == 1 else {
-            // Well I guess this one should never happen but to avoid bigger problems...
-            throw Error.internalError
-        }
-
-        return (v: UInt(recid), r: Array(output64[0..<32]), s: Array(output64[32..<64]))
+    /// Signs the SHA-256 hash of `message` and returns the DER encoded ECDSA signature (as specified by libp2p).
+    /// - Note: Signatures are deterministic (RFC6979) and always low-S normalized.
+    func signatureDER(for message: Data) -> Data {
+        self.key.signature(for: message).derRepresentation
     }
 
     /// Returns this private key serialized as a hex string.
     public func hex() -> String {
         rawPrivateKey.asString(base: .base16)
-        //        var h = "0x"
-        //        for b in rawPrivateKey {
-        //            h += String(format: "%02x", b)
-        //        }
-        //
-        //        return h
-    }
-
-    // MARK: - Helper functions
-
-    private func verifyPrivateKey() throws {
-        var secret = rawPrivateKey
-        defer { Secp256k1PrivateKey.secureWipe(&secret) }
-        guard secp256k1_ec_seckey_verify(ctx, &secret) == 1 else {
-            throw Error.keyMalformed
-        }
-    }
-
-    /// Best-effort zeroing of a transient copy of secret key material.
-    ///
-    /// These copies exist only to satisfy the secp256k1 C API's non-`const` (`inout`) pointer
-    /// parameters; the library does not mutate the key. `@inline(never)` reduces the chance the
-    /// optimizer treats the final writes as a dead store and elides them.
-    @inline(never)
-    private static func secureWipe(_ bytes: inout [UInt8]) {
-        for i in bytes.indices { bytes[i] = 0 }
     }
 
     // MARK: - Errors
@@ -303,14 +154,6 @@ public final class Secp256k1PrivateKey: @unchecked Sendable {
         case internalError
         case keyMalformed
         case pubKeyGenerationFailed
-    }
-
-    // MARK: - Deinitialization
-
-    deinit {
-        if !ctxSelfManaged {
-            secp256k1_context_destroy(ctx)
-        }
     }
 }
 
