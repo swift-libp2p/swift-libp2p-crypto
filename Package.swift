@@ -40,6 +40,8 @@ let package = Package(
         // 🔑 Hashing (BCrypt, SHA2, HMAC), encryption (AES), public-key (RSA), PEM and DER file handling, and random data generation.
         .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "4.3.0")),
         .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.9.0")),
+        // ASN.1 / DER Parsing and Serialization
+        .package(url: "https://github.com/apple/swift-asn1.git", .upToNextMajor(from: "1.7.1")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -53,6 +55,7 @@ let package = Package(
                 .product(name: "secp256k1", package: "secp256k1.swift"),
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "CryptoSwift", package: "CryptoSwift"),
+                .product(name: "SwiftASN1", package: "swift-asn1"),
             ],
             exclude: [
                 "Protobufs/keys.proto"
