@@ -239,7 +239,9 @@ enum ECDSAKeys {
         do {
             info = try SubjectPublicKeyInfo(derEncoded: Array(spki))
         } catch {
-            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("ECDSA: public key is not a valid SubjectPublicKeyInfo")
+            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData(
+                "ECDSA: public key is not a valid SubjectPublicKeyInfo"
+            )
         }
         guard info.algorithmIdentifier.algorithm == ASN1ObjectIdentifier.LibP2P.idEcPublicKey else {
             throw LibP2PCrypto.PEM.Error.objectIdentifierMismatch(

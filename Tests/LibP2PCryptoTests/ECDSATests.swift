@@ -135,7 +135,9 @@ struct ECDSATests {
         let ecPrivateKey = try ECPrivateKey(derEncoded: proto.data.byteArray)
         #expect(Data(ecPrivateKey.privateKey.bytes) == keyPair.privateKey?.rawRepresentation)
         #expect(ecPrivateKey.namedCurve == curve.objectIdentifier)
-        #expect(ecPrivateKey.publicKey.map { Array($0.bytes) } == [0x04] + keyPair.publicKey.rawRepresentation.byteArray)
+        #expect(
+            ecPrivateKey.publicKey.map { Array($0.bytes) } == [0x04] + keyPair.publicKey.rawRepresentation.byteArray
+        )
 
         let recovered = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaled)
         #expect(recovered.keyType == .ecdsa)
@@ -326,8 +328,12 @@ struct ECDSATests {
                 namedCurve: curve.objectIdentifier,
                 publicKey: point
             ).serializedDERBytes(),
-            "SEC1 with curve only": try ECPrivateKey(privateKey: raw, namedCurve: curve.objectIdentifier, publicKey: nil)
-                .serializedDERBytes(),
+            "SEC1 with curve only": try ECPrivateKey(
+                privateKey: raw,
+                namedCurve: curve.objectIdentifier,
+                publicKey: nil
+            )
+            .serializedDERBytes(),
             "SEC1 without parameters": try ECPrivateKey(privateKey: raw, namedCurve: nil, publicKey: nil)
                 .serializedDERBytes(),
         ]

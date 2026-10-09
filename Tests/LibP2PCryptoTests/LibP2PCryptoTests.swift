@@ -798,7 +798,8 @@ struct SignAndVerifyTests {
         let rLength = Int(der[3])
         let r = der[4..<(4 + rLength)].suffix(32)
         let s = der[(6 + rLength)...].suffix(32)
-        let legacy = Data([0x00]) + Data(repeating: 0, count: 32 - r.count) + r + Data(repeating: 0, count: 32 - s.count) + s
+        let legacy =
+            Data([0x00]) + Data(repeating: 0, count: 32 - r.count) + r + Data(repeating: 0, count: 32 - s.count) + s
         #expect(legacy.count == 65)
 
         #expect(throws: Error.self) { try kp.publicKey.verify(signature: legacy, for: message) }
