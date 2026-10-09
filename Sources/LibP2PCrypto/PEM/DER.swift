@@ -140,36 +140,20 @@ public protocol DEREncodable {
 
 extension DEREncodable {
 
+    /// The DER encoded SubjectPublicKeyInfo for this key
     internal func exportPublicKeyPEMRaw() throws -> [UInt8] {
-        let publicDER = try self.publicKeyDER()
-        let secondaryObject: ASN1.Node?
-        if Self.primaryObjectIdentifier == RSAPublicKey.primaryObjectIdentifier {
-            secondaryObject = .null
-        } else if Self.primaryObjectIdentifier == Secp256k1PublicKey.primaryObjectIdentifier {
-            secondaryObject = .objectIdentifier(data: Data(Self.secondaryObjectIdentifier!))
+        let parameters: AlgorithmIdentifier.Parameters?
+        if Self.primaryObjectIdentifier == ASN1ObjectIdentifier.LibP2P.rsaEncryption {
+            // RSA requires an explicit NULL parameter (RFC 3279 §2.3.1)
+            parameters = .null
         } else {
-            secondaryObject = nil
+            parameters = Self.secondaryObjectIdentifier.map { .objectIdentifier($0) }
         }
 
-        let asnNodes: ASN1.Node
-        if let secObj = secondaryObject {
-            asnNodes = .sequence(nodes: [
-                .sequence(nodes: [
-                    .objectIdentifier(data: Data(Self.primaryObjectIdentifier)),
-                    secObj,
-                ]),
-                .bitString(data: Data(publicDER)),
-            ])
-        } else {
-            asnNodes = .sequence(nodes: [
-                .sequence(nodes: [
-                    .objectIdentifier(data: Data(Self.primaryObjectIdentifier))
-                ]),
-                .bitString(data: Data(publicDER)),
-            ])
-        }
-
-        return ASN1.Encoder.encode(asnNodes)
+        return try SubjectPublicKeyInfo(
+            algorithmIdentifier: AlgorithmIdentifier(algorithm: Self.primaryObjectIdentifier, parameters: parameters),
+            key: self.publicKeyDER()
+        ).serializedDERBytes()
     }
 
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
@@ -196,17 +180,10 @@ extension DEREncodable {
     }
 
     public func exportPrivateKeyPEMRaw() throws -> [UInt8] {
-        let privateDER = try self.privateKeyDER()
-        let asnNodes: ASN1.Node = .sequence(nodes: [
-            .integer(data: Data(hex: "0x00")),
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(Self.primaryObjectIdentifier))
-                //.null
-            ]),
-            .octetString(data: Data(privateDER)),
-        ])
-
-        return ASN1.Encoder.encode(asnNodes)
+        try PrivateKeyInfo(
+            algorithmIdentifier: AlgorithmIdentifier(algorithm: Self.primaryObjectIdentifier),
+            privateKey: self.privateKeyDER()
+        ).serializedDERBytes()
     }
 
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
