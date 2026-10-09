@@ -24,13 +24,19 @@
 ## Overview
 LibP2PCrypto is an API / abstraction layer for commonly used cryptography within the LibP2P ecosystem. 
 This library...
-- Wraps Public Private Key Pairs such as RSA, ED25519, Secp256k1 and EC keys in a common KeyPair class that can perform signing and signature verification without having to worry about the nuances of each algorithm. 
+- Wraps Public Private Key Pairs such as RSA, ED25519, Secp256k1 and ECDSA (P-256, P-384 & P-521) keys in a common KeyPair class that can perform signing and signature verification without having to worry about the nuances of each algorithm. 
 - Tries to make importing PEM, CERTIFICATES and DER files a little easier. 
 - Provides methods for Marshaling Public and Private Keys for use in LibP2P PeerIDs and CIDs. 
 - Makes various HMAC and AES Ciphers available under a common API as well.
 
 #### Note:
 This package currently doesn't support Blake2b, Blake2s & Blake3. If you're up for the challenge, please feel free to add support!
+
+#### Secp256k1 Signatures:
+As specified by libp2p, Secp256k1 signatures are ECDSA signatures over the SHA-256 hash of the message, DER encoded, and non-canonical (high-S) signatures are rejected. The pre 0.3.0 releases produced keccak256 hashed, 65 byte `v || r || s` recoverable signatures, which aren't compatible with other libp2p implementations and are no longer accepted.
+
+#### ECDSA Keys:
+ECDSA keys follow the libp2p spec and go-libp2p, public keys are marshaled as DER encoded SubjectPublicKeyInfo structures, private keys as DER encoded SEC1 ECPrivateKey structures, and messages are hashed with SHA-256 (regardless of the curve) before being signed, producing DER encoded signatures. P-256 is the default curve.
 
 ## Disclaimer
 ‼️ This is a work in progress ‼️ 
@@ -73,9 +79,10 @@ rsaKeyPair.publicKey.data   // -> raw public key data
 rsaKeyPair.privateKey       // -> optional(PrivateKey)
 
 /// Key Types
-try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))   // RSA w/ Bit Options... 1024, 2048, 3072, 4096 
-try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)             // Ed25519 Elliptic Key
-try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)           // Secp256k1 Key
+try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))    // RSA w/ Bit Options... 1024, 2048, 3072, 4096 
+try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)              // Ed25519 Elliptic Key
+try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)            // Secp256k1 Key
+try LibP2PCrypto.Keys.generateKeyPair(.ECDSA(curve: .P256))  // ECDSA w/ Curve Options... P256 (default), P384, P521
 
 
 /// Importing Marshalled Keys 
