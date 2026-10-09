@@ -14,52 +14,61 @@
 
 #if !canImport(Security)
 import Foundation
+import SwiftASN1
 @preconcurrency import CryptoSwift
 
 struct RSAPublicKey: CommonPublicKey {
     static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
 
-    /// RSA Object Identifier Bytes
-    private static let RSA_OBJECT_IDENTIFIER = [UInt8](arrayLiteral: 42, 134, 72, 134, 247, 13, 1, 1, 1)
-
     /// The underlying CryptoSwift RSA Key that backs this struct
     private let key: RSA
 
-    /// The PKCS#1 DER (`externalRepresentation()`) captured at init time so that the
-    /// non-throwing `rawRepresentation` accessor can never crash or silently return empty data.
-    private let externalRepresentationBytes: Data
+    /// The DER encoded SubjectPublicKeyInfo (wrapping the PKCS#1 DER from `externalRepresentation()`)
+    /// captured at init time so that the non-throwing `rawRepresentation` accessor can never crash or silently return empty data.
+    private let subjectPublicKeyInfoBytes: Data
 
     fileprivate init(_ rsa: RSA) throws {
         self.key = rsa
-        self.externalRepresentationBytes = try rsa.externalRepresentation()
+        self.subjectPublicKeyInfoBytes = try Data(
+            SubjectPublicKeyInfo(
+                algorithmIdentifier: .rsaEncryption,
+                key: rsa.externalRepresentation().byteArray
+            ).serializedDERBytes()
+        )
     }
 
     init(rawRepresentation raw: Data) throws {
-        let asn1 = try ASN1.Decoder.decode(data: raw)
+        let node: ASN1Node
+        do {
+            node = try DER.parse(raw.byteArray)
+        } catch {
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: \(error)")
+        }
 
-        guard case .sequence(let params) = asn1 else {
+        guard node.identifier == .sequence, case .constructed(let children) = node.content else {
             throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: not an ASN.1 sequence")
         }
 
+        var childIterator = children.makeIterator()
         let rsaKey: RSA
-        /// We have an objectID header....
-        if case .sequence(let objectID) = params.first {
-            guard case .objectIdentifier(let oid) = objectID.first else {
-                throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: missing object identifier")
+        if childIterator.next()?.identifier == .sequence {
+            /// We have an AlgorithmIdentifier header (SubjectPublicKeyInfo)....
+            let spki: SubjectPublicKeyInfo
+            do {
+                spki = try SubjectPublicKeyInfo(derEncoded: node)
+            } catch {
+                throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: \(error)")
             }
-            guard oid.byteArray == RSAPublicKey.RSA_OBJECT_IDENTIFIER else {
+            guard spki.algorithmIdentifier.algorithm == RSAPublicKey.primaryObjectIdentifier else {
                 throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation(
                     "RSA public key: unexpected object identifier"
                 )
             }
-            guard case .bitString(let bits) = params.last else {
-                throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: missing key bit string")
-            }
 
-            rsaKey = try CryptoSwift.RSA(rawRepresentation: bits)
-        } else if params.count == 2, case .integer(let n) = params.first, case .integer(let e) = params.last {
-            /// We have a direct sequence of integers
-            rsaKey = CryptoSwift.RSA(n: n.byteArray, e: e.byteArray)
+            rsaKey = try CryptoSwift.RSA(rawRepresentation: Data(spki.key.bytes))
+        } else if let pkcs1 = try? RSAPublicKeyPKCS1(derEncoded: node) {
+            /// We have a direct sequence of integers (PKCS#1 RSAPublicKey)
+            rsaKey = CryptoSwift.RSA(n: Array(pkcs1.modulus), e: Array(pkcs1.publicExponent))
         } else {
             throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("RSA public key: unrecognized structure")
         }
@@ -73,15 +82,7 @@ struct RSAPublicKey: CommonPublicKey {
 
     /// We return the ASN1 Encoded DER Representation of the public key because that's what the rawRepresentation of RSA SecKey return
     var rawRepresentation: Data {
-        let asnNodes: ASN1.Node = .sequence(nodes: [
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(RSAPublicKey.primaryObjectIdentifier)),
-                .null,
-            ]),
-            .bitString(data: externalRepresentationBytes),
-        ])
-
-        return Data(ASN1.Encoder.encode(asnNodes))
+        subjectPublicKeyInfoBytes
     }
 
     func encrypt(data: Data) throws -> Data {
