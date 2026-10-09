@@ -1,9 +1,9 @@
-// swift-tools-version:6.0
+// swift-tools-version:6.1
 //===----------------------------------------------------------------------===//
 //
 // This source file is part of the swift-libp2p open source project
 //
-// Copyright (c) 2022-2025 swift-libp2p project authors
+// Copyright (c) 2022-2026 swift-libp2p project authors
 // Licensed under MIT
 //
 // See LICENSE for license information
@@ -18,8 +18,8 @@ import PackageDescription
 let package = Package(
     name: "swift-libp2p-crypto",
     platforms: [
-        .macOS(.v10_15),
-        .iOS(.v13),
+        .macOS(.v13),
+        .iOS(.v16),
     ],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
@@ -54,8 +54,8 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "CryptoSwift", package: "CryptoSwift"),
             ],
-            resources: [
-                .copy("Protobufs/keys.proto")
+            exclude: [
+                "Protobufs/keys.proto"
             ]
         ),
         .testTarget(
