@@ -34,6 +34,15 @@ extension ASN1ObjectIdentifier {
         /// secp256k1 named curve (1.3.132.0.10) [SEC 2]
         public static let secp256k1: ASN1ObjectIdentifier = [1, 3, 132, 0, 10]
 
+        /// prime256v1 / secp256r1 / NIST P-256 named curve (1.2.840.10045.3.1.7) [RFC 5480]
+        public static let prime256v1: ASN1ObjectIdentifier = ASN1ObjectIdentifier.NamedCurves.secp256r1
+
+        /// secp384r1 / NIST P-384 named curve (1.3.132.0.34) [RFC 5480]
+        public static let secp384r1: ASN1ObjectIdentifier = ASN1ObjectIdentifier.NamedCurves.secp384r1
+
+        /// secp521r1 / NIST P-521 named curve (1.3.132.0.35) [RFC 5480]
+        public static let secp521r1: ASN1ObjectIdentifier = ASN1ObjectIdentifier.NamedCurves.secp521r1
+
         /// id-PBES2 (1.2.840.113549.1.5.13) [RFC 8018]
         public static let pbes2: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 1, 5, 13]
 
