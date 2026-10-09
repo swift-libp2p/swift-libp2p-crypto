@@ -457,11 +457,17 @@ extension LibP2PCrypto.Keys.KeyPair {
                 )
                 try self.init(privateKey: Secp256k1PrivateKey(privateDER: der))
             } else if ids.contains(ASN1ObjectIdentifier.LibP2P.prime256v1) {
-                try self.init(privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P256.Signing.PrivateKey.self))
+                try self.init(
+                    privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P256.Signing.PrivateKey.self)
+                )
             } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp384r1) {
-                try self.init(privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P384.Signing.PrivateKey.self))
+                try self.init(
+                    privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P384.Signing.PrivateKey.self)
+                )
             } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp521r1) {
-                try self.init(privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P521.Signing.PrivateKey.self))
+                try self.init(
+                    privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P521.Signing.PrivateKey.self)
+                )
             } else {
                 throw LibP2PCrypto.PEM.Error.unsupportedPEMType
             }
@@ -469,7 +475,10 @@ extension LibP2PCrypto.Keys.KeyPair {
     }
 
     /// Decodes a decrypted (PKCS #8 or SEC1) private key PEM body into the specified key type
-    private static func privateKey<Key: CommonPrivateKey>(fromDecryptedPEM decryptedPEM: [UInt8], as: Key.Type) throws -> Key {
+    private static func privateKey<Key: CommonPrivateKey>(
+        fromDecryptedPEM decryptedPEM: [UInt8],
+        as: Key.Type
+    ) throws -> Key {
         let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
             Data(decryptedPEM),
             expectedPrimaryObjectIdentifier: Key.primaryObjectIdentifier,
