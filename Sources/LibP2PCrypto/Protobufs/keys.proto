@@ -2,7 +2,7 @@
 //
 // This source file is part of the swift-libp2p open source project
 //
-// Copyright (c) 2022-2025 swift-libp2p project authors
+// Copyright (c) 2022-2026 swift-libp2p project authors
 // Licensed under MIT
 //
 // See LICENSE for license information
@@ -24,6 +24,7 @@ enum KeyType {
   RSA = 0;
   Ed25519 = 1;
   Secp256k1 = 2;
+  ECDSA = 3;
 }
 message PublicKey {
   required KeyType Type = 1;
