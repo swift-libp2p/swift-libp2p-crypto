@@ -199,29 +199,9 @@ extension LibP2PCrypto {
             )
         }
 
-        /// Traverses a Node tree and returns all instances of objectIds
-        internal static func objIdsInSequence(_ node: ASN1.Node) -> [Data] {
-            if case .objectIdentifier(let id) = node {
-                return [id]
-            } else if case .sequence(let nodes) = node {
-                return objIdsInSequence(nodes)
-            }
-            return []
-        }
-
-        /// Traverses a Node tree and returns all instances of objectIds
-        internal static func objIdsInSequence(_ nodes: [ASN1.Node]) -> [Data] {
-            var objs: [Data] = []
-
-            for node in nodes {
-                if case .objectIdentifier(let id) = node {
-                    objs.append(id)
-                } else if case .sequence(let nodes) = node {
-                    objs.append(contentsOf: objIdsInSequence(nodes))
-                }
-            }
-
-            return objs
+        /// Parses DER encoded data and returns all instances of objectIds contained within it
+        internal static func objIdsInSequence(_ der: [UInt8]) throws -> [ASN1ObjectIdentifier] {
+            try DER.parse(der).containedObjectIdentifiers
         }
 
         /// Decodes an ASN1 formatted Public Key into it's raw DER representation
