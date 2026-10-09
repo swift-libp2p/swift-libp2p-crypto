@@ -33,10 +33,12 @@ let package = Package(
         .package(url: "https://github.com/swift-libp2p/swift-multibase.git", .upToNextMinor(from: "0.3.0")),
         // Multihash Support
         .package(url: "https://github.com/swift-libp2p/swift-multihash.git", .upToNextMinor(from: "0.3.0")),
+        // Multicodec Support
+        .package(url: "https://github.com/swift-libp2p/swift-multicodec.git", .upToNextMinor(from: "0.3.0")),
         // Protobuf Marshaling
         .package(url: "https://github.com/apple/swift-protobuf.git", .upToNextMajor(from: "1.33.3")),
         // Secp256k1 Support
-        .package(url: "https://github.com/Boilertalk/secp256k1.swift.git", .upToNextMinor(from: "0.1.7")),
+        .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", .upToNextMinor(from: "0.23.2")),
         // 🔑 Hashing (BCrypt, SHA2, HMAC), encryption (AES), public-key (RSA), PEM and DER file handling, and random data generation.
         .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "4.3.0")),
         .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.9.0")),
@@ -51,19 +53,28 @@ let package = Package(
             dependencies: [
                 .product(name: "Multibase", package: "swift-multibase"),
                 .product(name: "Multihash", package: "swift-multihash"),
+                .product(name: "Multicodec", package: "swift-multicodec"),
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-                .product(name: "secp256k1", package: "secp256k1.swift"),
+                .product(name: "P256K", package: "swift-secp256k1"),
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "CryptoSwift", package: "CryptoSwift"),
                 .product(name: "SwiftASN1", package: "swift-asn1"),
             ],
             exclude: [
                 "Protobufs/keys.proto"
+            ],
+            swiftSettings: [
+                // P256K vends public extensions that collide with CryptoSwift's (ex: a throwing, hex decoding `String.bytes`).
+                // Restrict extension members to the files that explicitly import their module.
+                .enableUpcomingFeature("MemberImportVisibility")
             ]
         ),
         .testTarget(
             name: "LibP2PCryptoTests",
-            dependencies: ["LibP2PCrypto"]
+            dependencies: ["LibP2PCrypto"],
+            swiftSettings: [
+                .enableUpcomingFeature("MemberImportVisibility")
+            ]
         ),
     ]
 )
