@@ -18,38 +18,38 @@ import SwiftASN1
 // MARK: Object Identifiers
 
 extension ASN1ObjectIdentifier {
-    
+
     /// Object identifiers used by the key and PEM encodings supported by LibP2PCrypto
     public enum LibP2P {
-        
+
         /// rsaEncryption (1.2.840.113549.1.1.1)
         public static let rsaEncryption: ASN1ObjectIdentifier = ASN1ObjectIdentifier.AlgorithmIdentifier.rsaEncryption
-        
+
         /// id-ecPublicKey (1.2.840.10045.2.1)
         public static let idEcPublicKey: ASN1ObjectIdentifier = ASN1ObjectIdentifier.AlgorithmIdentifier.idEcPublicKey
-        
+
         /// id-Ed25519 (1.3.101.112) [RFC 8410]
         public static let ed25519: ASN1ObjectIdentifier = [1, 3, 101, 112]
-        
+
         /// secp256k1 named curve (1.3.132.0.10) [SEC 2]
         public static let secp256k1: ASN1ObjectIdentifier = [1, 3, 132, 0, 10]
-        
+
         /// id-PBES2 (1.2.840.113549.1.5.13) [RFC 8018]
         public static let pbes2: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 1, 5, 13]
-        
+
         /// id-PBKDF2 (1.2.840.113549.1.5.12) [RFC 8018]
         public static let pbkdf2: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 1, 5, 12]
-        
+
         /// aes128-CBC-PAD (2.16.840.1.101.3.4.1.2)
         public static let aes128CBC: ASN1ObjectIdentifier = [2, 16, 840, 1, 101, 3, 4, 1, 2]
-        
+
         /// aes256-CBC-PAD (2.16.840.1.101.3.4.1.42)
         public static let aes256CBC: ASN1ObjectIdentifier = [2, 16, 840, 1, 101, 3, 4, 1, 42]
     }
 }
 
 extension DERSerializable {
-    
+
     /// Returns the DER encoding of this value
     func serializedDERBytes() throws -> [UInt8] {
         var serializer = DER.Serializer()

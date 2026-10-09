@@ -17,7 +17,6 @@
 import Crypto
 import Foundation
 import Multibase
-
 /// Re-exported so consumers can use `ASN1ObjectIdentifier` (used by `DERDecodable` / `DEREncodable`)
 @_exported import SwiftASN1
 
