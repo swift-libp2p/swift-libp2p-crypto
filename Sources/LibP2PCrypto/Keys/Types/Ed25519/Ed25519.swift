@@ -18,7 +18,7 @@ import Foundation
 import SwiftASN1
 import SwiftProtobuf
 
-extension Curve25519.Signing.PublicKey: CommonPublicKey, @retroactive @unchecked Sendable {
+extension Curve25519.Signing.PublicKey: CommonPublicKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
 
     init(marshaledData data: Data) throws {
@@ -41,7 +41,7 @@ extension Curve25519.Signing.PublicKey: CommonPublicKey, @retroactive @unchecked
     }
 }
 
-extension Curve25519.Signing.PrivateKey: CommonPrivateKey, @retroactive @unchecked Sendable {
+extension Curve25519.Signing.PrivateKey: CommonPrivateKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
 
     init(marshaledData data: Data) throws {
