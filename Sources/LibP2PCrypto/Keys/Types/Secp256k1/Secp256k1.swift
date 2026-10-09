@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import SwiftASN1
 
 extension Secp256k1PublicKey: CommonPublicKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
@@ -121,8 +122,10 @@ extension Secp256k1PrivateKey: CommonPrivateKey {
 }
 
 extension Secp256k1PublicKey: DERCodable {
-    public static var primaryObjectIdentifier: [UInt8] { [0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01] }
-    public static var secondaryObjectIdentifier: [UInt8]? { [0x2B, 0x81, 0x04, 0x00, 0x0A] }
+    /// id-ecPublicKey (1.2.840.10045.2.1)
+    public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.idEcPublicKey }
+    /// secp256k1 named curve (1.3.132.0.10)
+    public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { ASN1ObjectIdentifier.LibP2P.secp256k1 }
 
     public convenience init(publicDER: [UInt8]) throws {
         /// Expects a 0x0422 32byte long octetString as the rawRepresentation
@@ -144,17 +147,15 @@ extension Secp256k1PublicKey: DERCodable {
     }
 
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let publicDER = try self.publicKeyDER()
+        let spki = try SubjectPublicKeyInfo(
+            algorithmIdentifier: AlgorithmIdentifier(
+                algorithm: Self.primaryObjectIdentifier,
+                parameters: .objectIdentifier(ASN1ObjectIdentifier.LibP2P.secp256k1)
+            ),
+            key: self.publicKeyDER()
+        )
 
-        let asnNodes: ASN1.Node = .sequence(nodes: [
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(Self.primaryObjectIdentifier)),
-                .objectIdentifier(data: Data(Self.secondaryObjectIdentifier!)),
-            ]),
-            .bitString(data: Data(publicDER)),
-        ])
-
-        let base64String = ASN1.Encoder.encode(asnNodes).toBase64()
+        let base64String = try spki.serializedDERBytes().toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
         let bodyUTF8Bytes = bodyString.bytes
 
@@ -170,8 +171,9 @@ extension Secp256k1PublicKey: DERCodable {
 }
 
 extension Secp256k1PrivateKey: DERCodable {
-    public static var primaryObjectIdentifier: [UInt8] { [0x06, 0x05, 0x2B, 0x81, 0x04, 0x00, 0x0A] }
-    public static var secondaryObjectIdentifier: [UInt8]? { nil }
+    /// secp256k1 named curve (1.3.132.0.10)
+    public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.secp256k1 }
+    public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
 
     public convenience init(publicDER: [UInt8]) throws {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
@@ -192,18 +194,11 @@ extension Secp256k1PrivateKey: DERCodable {
     }
 
     public func exportPrivateKeyPEMRaw() throws -> [UInt8] {
-        let publicDER = try self.publicKeyDER()
-
-        let pubKeyBitString: ASN1.Node = .bitString(data: Data(publicDER))
-
-        let asnNodes: ASN1.Node = .sequence(nodes: [
-            .integer(data: Data(hex: "0x01")),
-            .octetString(data: self.rawRepresentation),
-            .ecObject(data: Data(Self.primaryObjectIdentifier)),
-            .ecBits(data: Data(ASN1.Encoder.encode(pubKeyBitString))),
-        ])
-
-        return ASN1.Encoder.encode(asnNodes)
+        try ECPrivateKey(
+            privateKey: self.rawRepresentation.byteArray,
+            namedCurve: Self.primaryObjectIdentifier,
+            publicKey: self.publicKeyDER()
+        ).serializedDERBytes()
     }
 
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
