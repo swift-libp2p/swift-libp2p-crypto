@@ -12,8 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+import CryptoSwift
 import Foundation
 import SwiftASN1
+import SwiftProtobuf
 
 extension Secp256k1PublicKey: CommonPublicKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }

@@ -17,6 +17,7 @@ import CryptoSwift
 import Foundation
 import Multibase
 import Multihash
+import SwiftProtobuf
 import Testing
 
 @testable import LibP2PCrypto

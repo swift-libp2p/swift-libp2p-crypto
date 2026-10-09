@@ -13,8 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
+import CryptoSwift
 import Foundation
 import Multibase
+import SwiftProtobuf
 
 extension LibP2PCrypto {
     public enum Keys {

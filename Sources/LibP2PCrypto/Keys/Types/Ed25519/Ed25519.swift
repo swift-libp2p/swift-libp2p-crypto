@@ -13,8 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
+import CryptoSwift
 import Foundation
 import SwiftASN1
+import SwiftProtobuf
 
 extension Curve25519.Signing.PublicKey: CommonPublicKey, @retroactive @unchecked Sendable {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }

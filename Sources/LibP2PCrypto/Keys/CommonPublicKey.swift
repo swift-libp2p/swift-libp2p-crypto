@@ -14,6 +14,7 @@
 
 import Foundation
 import Multibase
+import Multicodec
 import Multihash
 
 public protocol CommonPublicKey: DERCodable, Sendable {

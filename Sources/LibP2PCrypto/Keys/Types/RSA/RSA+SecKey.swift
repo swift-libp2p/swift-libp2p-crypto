@@ -13,8 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 #if canImport(Security)
+import CryptoSwift
 import Foundation
 import SwiftASN1
+import SwiftProtobuf
 import Multibase
 @preconcurrency import Security
 

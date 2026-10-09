@@ -13,10 +13,12 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
+import CryptoSwift
 import Foundation
 import Multibase
 import Multihash
 import SwiftASN1
+import SwiftProtobuf
 
 extension LibP2PCrypto.Keys {
     public struct KeyPair: Sendable {
