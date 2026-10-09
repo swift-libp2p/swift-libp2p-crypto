@@ -13,13 +13,14 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import SwiftASN1
 
 /// Conform to this protocol if your type can be instantiated from a ASN1 DER representation
 public protocol DERDecodable {
-    /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> [0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01])
-    static var primaryObjectIdentifier: [UInt8] { get }
-    /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> [0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01])
-    static var secondaryObjectIdentifier: [UInt8]? { get }
+    /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> 1.2.840.113549.1.1.1)
+    static var primaryObjectIdentifier: ASN1ObjectIdentifier { get }
+    /// The keys secondary ASN1 object identifier, if any (ex: Secp256k1 public key --> secp256k1 --> 1.3.132.0.10)
+    static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { get }
     /// Instantiates an instance of your Public Key when given a DER representation of your Public Key
     init(publicDER: [UInt8]) throws
     /// Instantiates an instance of your Private Key when given a DER representation of your Private Key
@@ -117,10 +118,10 @@ extension DERDecodable {
 
 /// Conform to this protocol if your type can be described in an ASN1 DER representation
 public protocol DEREncodable {
-    /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> [0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01])
-    static var primaryObjectIdentifier: [UInt8] { get }
-    /// The keys ASN1 object identifier (ex: RSA --> null --> nil)
-    static var secondaryObjectIdentifier: [UInt8]? { get }
+    /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> 1.2.840.113549.1.1.1)
+    static var primaryObjectIdentifier: ASN1ObjectIdentifier { get }
+    /// The keys secondary ASN1 object identifier, if any (ex: RSA --> nil)
+    static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { get }
 
     func publicKeyDER() throws -> [UInt8]
     func privateKeyDER() throws -> [UInt8]
