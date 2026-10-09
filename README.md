@@ -206,7 +206,7 @@ Let's make this code better together! 🤝
 ## Credits
 
 - [krzyzanowskim - CryptoSwift](https://github.com/krzyzanowskim/CryptoSwift)
-- [Koray Koska - Secp256k1](https://github.com/bitcoin-core/secp256k1)
+- [21-DOT-DEV - swift-secp256k1](https://github.com/21-DOT-DEV/swift-secp256k1)
 - [siemensikkema - JWT-Kit](https://github.com/vapor/jwt-kit.git) 
 - [RSA Import/Export](https://github.com/nextincrement/rsa-public-key-importer-exporter.git)
 - [CommonCrypto, Crypto-Kit and swift-crypto libraries]
