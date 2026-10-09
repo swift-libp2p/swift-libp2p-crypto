@@ -14,6 +14,7 @@
 
 import Crypto
 import Foundation
+import SwiftASN1
 
 extension Curve25519.Signing.PublicKey: CommonPublicKey, @retroactive @unchecked Sendable {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
@@ -78,8 +79,9 @@ extension Curve25519.Signing.PrivateKey: @retroactive Equatable {
 }
 
 extension Curve25519.Signing.PublicKey: DERCodable {
-    public static var primaryObjectIdentifier: [UInt8] { [0x2B, 0x65, 0x70] }
-    public static var secondaryObjectIdentifier: [UInt8]? { nil }
+    /// id-Ed25519 (1.3.101.112)
+    public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.ed25519 }
+    public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
 
     public init(publicDER: [UInt8]) throws {
         try self.init(rawRepresentation: publicDER)
@@ -100,16 +102,13 @@ extension Curve25519.Signing.PublicKey: DERCodable {
     }
 
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let publicDER = try self.publicKeyDER()
+        // Ed25519 AlgorithmIdentifiers have no parameters (RFC 8410 §3)
+        let spki = try SubjectPublicKeyInfo(
+            algorithmIdentifier: AlgorithmIdentifier(algorithm: Self.primaryObjectIdentifier),
+            key: self.publicKeyDER()
+        )
 
-        let asnNodes: ASN1.Node = .sequence(nodes: [
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(Self.primaryObjectIdentifier))
-            ]),
-            .bitString(data: Data(publicDER)),
-        ])
-
-        let base64String = ASN1.Encoder.encode(asnNodes).toBase64()
+        let base64String = try spki.serializedDERBytes().toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
         let bodyUTF8Bytes = bodyString.bytes
 
@@ -125,8 +124,9 @@ extension Curve25519.Signing.PublicKey: DERCodable {
 }
 
 extension Curve25519.Signing.PrivateKey: DERCodable {
-    public static var primaryObjectIdentifier: [UInt8] { [0x2B, 0x65, 0x70] }
-    public static var secondaryObjectIdentifier: [UInt8]? { nil }
+    /// id-Ed25519 (1.3.101.112)
+    public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.ed25519 }
+    public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
 
     public init(publicDER: [UInt8]) throws {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
@@ -135,10 +135,11 @@ extension Curve25519.Signing.PrivateKey: DERCodable {
     }
 
     public init(privateDER: [UInt8]) throws {
-        guard case .octetString(let rawData) = try ASN1.Decoder.decode(data: Data(privateDER)) else {
+        // CurvePrivateKey ::= OCTET STRING (RFC 8410 §7)
+        guard let curvePrivateKey = try? ASN1OctetString(derEncoded: privateDER) else {
             throw LibP2PCrypto.PEM.Error.invalidParameters
         }
-        try self.init(rawRepresentation: rawData)
+        try self.init(rawRepresentation: curvePrivateKey.bytes)
     }
 
     public func publicKeyDER() throws -> [UInt8] {
@@ -146,23 +147,15 @@ extension Curve25519.Signing.PrivateKey: DERCodable {
     }
 
     public func privateKeyDER() throws -> [UInt8] {
-        ASN1.Encoder.encode(
-            ASN1.Node.octetString(data: Data(self.rawRepresentation))
-        )
+        // CurvePrivateKey ::= OCTET STRING (RFC 8410 §7)
+        try ASN1OctetString(contentBytes: self.rawRepresentation.byteArray[...]).serializedDERBytes()
     }
 
     public func exportPrivateKeyPEMRaw() throws -> [UInt8] {
-        let privKey = try privateKeyDER()
-
-        let asnNodes: ASN1.Node = .sequence(nodes: [
-            .integer(data: Data(hex: "0x00")),
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(Self.primaryObjectIdentifier))
-            ]),
-            .octetString(data: Data(privKey)),
-        ])
-
-        return ASN1.Encoder.encode(asnNodes)
+        try PrivateKeyInfo(
+            algorithmIdentifier: AlgorithmIdentifier(algorithm: Self.primaryObjectIdentifier),
+            privateKey: self.privateKeyDER()
+        ).serializedDERBytes()
     }
 
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
