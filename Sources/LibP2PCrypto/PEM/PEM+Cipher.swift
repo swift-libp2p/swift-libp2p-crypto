@@ -14,6 +14,7 @@
 
 import CryptoSwift
 import Foundation
+import SwiftASN1
 
 // MARK: Encrypted PEM Cipher Algorithms
 
@@ -24,12 +25,12 @@ extension LibP2PCrypto.PEM {
         case aes_256_cbc(iv: [UInt8])
         //case des3(iv: [UInt8])
 
-        init(objID: [UInt8], iv: [UInt8]) throws {
+        init(objID: ASN1ObjectIdentifier, iv: [UInt8]) throws {
             let algorithm: CipherAlgorithm
             switch objID {
-            case [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x02]:  // aes-128-cbc
+            case ASN1ObjectIdentifier.LibP2P.aes128CBC:
                 algorithm = .aes_128_cbc(iv: iv)
-            case [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x2a]:  // aes-256-cbc
+            case ASN1ObjectIdentifier.LibP2P.aes256CBC:
                 algorithm = .aes_256_cbc(iv: iv)
             //case [42, 134, 72, 134, 247, 13, 3, 7]:
             //  algorithm = .des3(iv: iv)
@@ -85,12 +86,12 @@ extension LibP2PCrypto.PEM {
             }
         }
 
-        var objectIdentifier: [UInt8] {
+        var objectIdentifier: ASN1ObjectIdentifier {
             switch self {
             case .aes_128_cbc:
-                return [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x02]
+                return ASN1ObjectIdentifier.LibP2P.aes128CBC
             case .aes_256_cbc:
-                return [0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x2a]
+                return ASN1ObjectIdentifier.LibP2P.aes256CBC
             }
         }
 
@@ -103,35 +104,23 @@ extension LibP2PCrypto.PEM {
             }
         }
 
-        func encodeCipher() throws -> ASN1.Node {
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(self.objectIdentifier)),
-                .octetString(data: Data(self.iv)),
-            ])
+        func encodeCipher() throws -> CipherAlgorithmIdentifier {
+            CipherAlgorithmIdentifier(algorithm: self.objectIdentifier, iv: self.iv)
         }
     }
 
     /// Decodes the Cipher ASN1 Block in an Encrypted Private Key PEM file
-    /// - Parameter node: The ASN1 sequence node containing the cipher parameters
+    /// - Parameter algorithmIdentifier: The decoded cipher AlgorithmIdentifier
     /// - Returns: The CipherAlogrithm if supported
     ///
-    /// Expects an ASN1.Node with the following structure
+    /// Expects the following ASN1 structure
     /// ```
-    /// ASN1.Parser.Node.sequence(nodes: [
-    ///     ASN1.Parser.Node.objectIdentifier(data: 9 bytes),      //des-ede3-cbc
-    ///     ASN1.Parser.Node.octetString(data: 16 bytes)           //IV
-    /// ])
+    /// SEQUENCE {
+    ///     OBJECT IDENTIFIER       // ex: aes-128-cbc
+    ///     OCTET STRING            // IV
+    /// }
     /// ```
-    internal static func decodeCipher(_ node: ASN1.Node) throws -> CipherAlgorithm {
-        guard case .sequence(let params) = node else { throw Error.invalidPEMFormat("EncryptedPrivateKey::CIPHER") }
-        guard params.count == 2 else { throw Error.invalidPEMFormat("EncryptedPrivateKey::CIPHER") }
-        guard case .objectIdentifier(let objID) = params.first else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::CIPHER")
-        }
-        guard case .octetString(let initialVector) = params.last else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::CIPHER")
-        }
-
-        return try CipherAlgorithm(objID: objID.byteArray, iv: initialVector.byteArray)
+    internal static func decodeCipher(_ algorithmIdentifier: CipherAlgorithmIdentifier) throws -> CipherAlgorithm {
+        try CipherAlgorithm(objID: algorithmIdentifier.algorithm, iv: Array(algorithmIdentifier.iv.bytes))
     }
 }
