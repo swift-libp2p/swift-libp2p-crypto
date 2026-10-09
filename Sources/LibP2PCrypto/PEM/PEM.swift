@@ -14,6 +14,7 @@
 
 import CryptoSwift
 import Foundation
+import SwiftASN1
 
 extension LibP2PCrypto {
     public struct PEM {
@@ -34,11 +35,11 @@ extension LibP2PCrypto {
             /// Encountered a invalid/unexpected parameters while attempting to decode a PEM file
             case invalidParameters
             /// Encountered an unsupported Cipher algorithm while attempting to decrypt an encrypted PEM file
-            case unsupportedCipherAlgorithm([UInt8])
+            case unsupportedCipherAlgorithm(ASN1ObjectIdentifier)
             /// Encountered an unsupported Password Derivation algorithm while attempting to decrypt an encrypted PEM file
-            case unsupportedPBKDFAlgorithm([UInt8])
+            case unsupportedPBKDFAlgorithm(ASN1ObjectIdentifier)
             /// The instiating types objectIdentifier does not match that of the PEM file
-            case objectIdentifierMismatch(got: [UInt8], expected: [UInt8])
+            case objectIdentifierMismatch(got: ASN1ObjectIdentifier, expected: ASN1ObjectIdentifier)
         }
 
         // MARK: Add support for additional PEM types here
@@ -152,7 +153,7 @@ extension LibP2PCrypto {
         /// - Returns: A tuple containing the PEMType, and the actual base64 decoded PEM data (with the headers and footers removed).
         internal static func pemToData(
             _ data: [UInt8]
-        ) throws -> (type: PEMType, bytes: [UInt8], objectIdentifiers: [[UInt8]]) {
+        ) throws -> (type: PEMType, bytes: [UInt8], objectIdentifiers: [ASN1ObjectIdentifier]) {
             let fiveDashes = ArraySlice<UInt8>(repeating: 0x2D, count: 5)  // "-----".bytes.toHexString()
             let chunks = data.split(separator: 0x0a)  // 0x0a == "\n" `new line` char
             guard chunks.count > 2 else {
@@ -191,43 +192,24 @@ extension LibP2PCrypto {
                 throw Error.invalidPEMFormat("Body of PEM isn't valid base64 encoded")
             }
 
-            let asn1 = try ASN1.Decoder.decode(data: pemData)
+            let asn1 = try DER.parse(pemData.byteArray)
 
             // return the PEMType and PEM Data (without header & footer)
             return (
-                type: pemType, bytes: pemData.byteArray, objectIdentifiers: objIdsInSequence(asn1).map { $0.byteArray }
+                type: pemType, bytes: pemData.byteArray, objectIdentifiers: asn1.containedObjectIdentifiers
             )
         }
 
-        /// Traverses a Node tree and returns all instances of objectIds
-        internal static func objIdsInSequence(_ node: ASN1.Node) -> [Data] {
-            if case .objectIdentifier(let id) = node {
-                return [id]
-            } else if case .sequence(let nodes) = node {
-                return objIdsInSequence(nodes)
-            }
-            return []
-        }
-
-        /// Traverses a Node tree and returns all instances of objectIds
-        internal static func objIdsInSequence(_ nodes: [ASN1.Node]) -> [Data] {
-            var objs: [Data] = []
-
-            for node in nodes {
-                if case .objectIdentifier(let id) = node {
-                    objs.append(id)
-                } else if case .sequence(let nodes) = node {
-                    objs.append(contentsOf: objIdsInSequence(nodes))
-                }
-            }
-
-            return objs
+        /// Parses DER encoded data and returns all instances of objectIds contained within it
+        internal static func objIdsInSequence(_ der: [UInt8]) throws -> [ASN1ObjectIdentifier] {
+            try DER.parse(der).containedObjectIdentifiers
         }
 
         /// Decodes an ASN1 formatted Public Key into it's raw DER representation
         /// - Parameters:
         ///   - pem: The ASN1 encoded Public Key representation
-        ///   - expectedObjectIdentifier: The expected objectIdentifier for the particular key type
+        ///   - expectedPrimaryObjectIdentifier: The expected objectIdentifier for the particular key type
+        ///   - expectedSecondaryObjectIdentifier: The expected secondary objectIdentifier (algorithm parameter) for the particular key type
         /// - Returns: The raw bitString data (Public Key DER)
         ///
         /// ```
@@ -239,114 +221,28 @@ extension LibP2PCrypto {
         /// ```
         internal static func decodePublicKeyPEM(
             _ pem: Data,
-            expectedPrimaryObjectIdentifier: [UInt8],
-            expectedSecondaryObjectIdentifier: [UInt8]?
+            expectedPrimaryObjectIdentifier: ASN1ObjectIdentifier,
+            expectedSecondaryObjectIdentifier: ASN1ObjectIdentifier?
         ) throws -> [UInt8] {
-            let asn = try ASN1.Decoder.decode(data: pem)
+            let spki = try SubjectPublicKeyInfo(derEncoded: pem.byteArray)
 
-            //print("PublicKey")
-            //print(asn)
+            try validate(
+                spki.algorithmIdentifier,
+                expectedPrimaryObjectIdentifier: expectedPrimaryObjectIdentifier,
+                expectedSecondaryObjectIdentifier: expectedSecondaryObjectIdentifier
+            )
 
-            // Enforce the above ASN1 Structure
-            guard case .sequence(let sequence) = asn else {
-                throw Error.invalidPEMFormat("PublicKey::No top level sequence for PublicKey PEM")
-            }
-            guard sequence.count == 2 else {
-                throw Error.invalidPEMFormat(
-                    "PublicKey::Top level sequnce should contain two nodes but we got \(sequence.count) isntead"
-                )
-            }
-            guard case .sequence(let params) = sequence.first else {
-                throw Error.invalidPEMFormat(
-                    "PublicKey::Expected the first node of the top level to be a sequence node, but we got \(sequence.first?.description ?? "NIL") instead"
-                )
-            }
-            guard params.count >= 1 else {
-                throw Error.invalidPEMFormat("PublicKey::Expected at least one param within the secondary sequence")
-            }
-            guard case .objectIdentifier(let objectID) = params.first else {
-                throw Error.invalidPEMFormat(
-                    "PublicKey::Expected first param of secondary sequence to be an objectIndentifier"
-                )
-            }
-
-            // Ensure the ObjectID specified in the PEM matches that of the Key.Type we're attempting to instantiate
-            guard objectID.byteArray == expectedPrimaryObjectIdentifier else {
-                throw Error.objectIdentifierMismatch(got: objectID.byteArray, expected: expectedPrimaryObjectIdentifier)
-            }
-
-            // If the key supports a secondary objectIdentifier (ensure one is present and that they match)
-            if let expectedSecondaryObjectIdentifier = expectedSecondaryObjectIdentifier {
-                guard params.count >= 2 else { throw Error.invalidPEMFormat("PrivateKey::") }
-                guard case .objectIdentifier(let objectIDSecondary) = params[1] else {
-                    throw Error.invalidPEMFormat("PrivateKey::")
-                }
-                guard objectIDSecondary.byteArray == expectedSecondaryObjectIdentifier else {
-                    throw Error.objectIdentifierMismatch(
-                        got: objectIDSecondary.byteArray,
-                        expected: expectedSecondaryObjectIdentifier
-                    )
-                }
-            }
-
-            guard case .bitString(let bits) = sequence.last else {
-                throw Error.invalidPEMFormat("Expected the last element of the top level sequence to be a bitString")
-            }
-
-            return bits.byteArray
+            return Array(spki.key.bytes)
         }
 
         /// Decodes an ASN1 formatted Private Key into it's raw DER representation
         /// - Parameters:
         ///   - pem: The ASN1 encoded Private Key representation
-        ///   - expectedObjectIdentifier: The expected objectIdentifier for the particular key type
+        ///   - expectedPrimaryObjectIdentifier: The expected objectIdentifier for the particular key type
+        ///   - expectedSecondaryObjectIdentifier: The expected secondary objectIdentifier (algorithm parameter) for the particular key type
         /// - Returns: The raw octetString data (Private Key DER)
-        internal static func decodePrivateKeyPEM(
-            _ pem: Data,
-            expectedPrimaryObjectIdentifier: [UInt8],
-            expectedSecondaryObjectIdentifier: [UInt8]?
-        ) throws -> [UInt8] {
-            let asn = try ASN1.Decoder.decode(data: pem)
-
-            //print("PrivateKey")
-            //print(asn)
-
-            // Enforce the above ASN1 Structure
-            guard case .sequence(let sequence) = asn else {
-                throw Error.invalidPEMFormat("PrivateKey::Top level node is not a sequence")
-            }
-            // Enforce the integer/version param as the first param in our top level sequence
-            guard case .integer(let integer) = sequence.first else {
-                throw Error.invalidPEMFormat("PrivateKey::First item in top level sequence wasn't an integer")
-            }
-            //print("PEM Version: \(integer.bytes)")
-            switch integer {
-            case Data(hex: "0x00"):
-                //Proceed with standard pkcs1 private key format
-                return try decodePrivateKey(
-                    sequence,
-                    expectedPrimaryObjectIdentifier: expectedPrimaryObjectIdentifier,
-                    expectedSecondaryObjectIdentifier: expectedSecondaryObjectIdentifier
-                )
-            case Data(hex: "0x01"):
-                //Proceed with EC private key format
-                return try decodePrivateECKey(
-                    sequence,
-                    expectedPrimaryObjectIdentifier: expectedPrimaryObjectIdentifier
-                )
-            default:
-                throw Error.invalidPEMFormat("Unknown version identifier")
-            }
-        }
-
-        /// Decodes a standard (RSA) Private Key PEM file
-        /// - Parameters:
-        ///   - sequence: The contents of the top level ASN1 Sequence node
-        ///   - expectedPrimaryObjectIdentifier: The expected primary object identifier key to compare the PEM contents against
-        ///   - expectedSecondaryObjectIdentifier: The expected secondary object identifier key to compare the PEM contents against
-        /// - Returns: The private key bytes
         ///
-        /// [Private key format]()
+        /// Supports both the PKCS#8 `PrivateKeyInfo` structure (version 0)
         /// ```
         /// 0:d=0  hl=4 l= 630 cons: SEQUENCE
         /// 4:d=1  hl=2 l=   1 prim:  INTEGER           :00
@@ -355,55 +251,7 @@ extension LibP2PCrypto {
         /// 20:d=2  hl=2 l=   0 prim:   NULL
         /// 22:d=1  hl=4 l= 608 prim:  OCTET STRING      [HEX DUMP]:3082...AA50
         /// ```
-        private static func decodePrivateKey(
-            _ sequence: [ASN1.Node],
-            expectedPrimaryObjectIdentifier: [UInt8],
-            expectedSecondaryObjectIdentifier: [UInt8]?
-        ) throws -> [UInt8] {
-            guard sequence.count == 3 else {
-                throw Error.invalidPEMFormat("PrivateKey::Top level sequence doesn't contain 3 items")
-            }
-            guard case .sequence(let params) = sequence[1] else {
-                throw Error.invalidPEMFormat("PrivateKey::Second item wasn't a sequence")
-            }
-            guard params.count >= 1 else {
-                throw Error.invalidPEMFormat("PrivateKey::Second sequence contained fewer than expected parameters")
-            }
-            guard case .objectIdentifier(let objectID) = params.first else {
-                throw Error.invalidPEMFormat("PrivateKey::")
-            }
-
-            // Ensure the ObjectID specified in the PEM matches that of the Key.Type we're attempting to instantiate
-            guard objectID.byteArray == expectedPrimaryObjectIdentifier else {
-                throw Error.objectIdentifierMismatch(got: objectID.byteArray, expected: expectedPrimaryObjectIdentifier)
-            }
-
-            // If the key supports a secondary objectIdentifier (ensure one is present and that they match)
-            if let expectedSecondaryObjectIdentifier = expectedSecondaryObjectIdentifier {
-                guard params.count >= 2 else { throw Error.invalidPEMFormat("PrivateKey::") }
-                guard case .objectIdentifier(let objectIDSecondary) = params[1] else {
-                    throw Error.invalidPEMFormat("PrivateKey::")
-                }
-                guard objectIDSecondary.byteArray == expectedSecondaryObjectIdentifier else {
-                    throw Error.objectIdentifierMismatch(
-                        got: objectIDSecondary.byteArray,
-                        expected: expectedSecondaryObjectIdentifier
-                    )
-                }
-            }
-
-            guard case .octetString(let octet) = sequence[2] else { throw Error.invalidPEMFormat("PrivateKey::") }
-
-            return octet.byteArray
-        }
-
-        /// Decodes an Eliptic Curve Private Key PEM that conforms to the IETF RFC5915 structure
-        /// - Parameters:
-        ///   - node: The contents of the top level ASN1 Sequence node
-        ///   - expectedPrimaryObjectIdentifier: The expected primary object identifier key to compare the PEM contents against
-        /// - Returns: The EC private key bytes
-        ///
-        /// [EC private key format](https://datatracker.ietf.org/doc/html/rfc5915#section-3)
+        /// and the [RFC 5915](https://datatracker.ietf.org/doc/html/rfc5915#section-3) `ECPrivateKey` structure (version 1)
         /// ```
         /// ECPrivateKey ::= SEQUENCE {
         ///     version        INTEGER { ecPrivkeyVer1(1) } (ecPrivkeyVer1),
@@ -412,37 +260,72 @@ extension LibP2PCrypto {
         ///     publicKey  [1] BIT STRING OPTIONAL
         /// }
         /// ```
-        private static func decodePrivateECKey(
-            _ sequence: [ASN1.Node],
-            expectedPrimaryObjectIdentifier: [UInt8]
+        internal static func decodePrivateKeyPEM(
+            _ pem: Data,
+            expectedPrimaryObjectIdentifier: ASN1ObjectIdentifier,
+            expectedSecondaryObjectIdentifier: ASN1ObjectIdentifier?
         ) throws -> [UInt8] {
-            guard sequence.count >= 2 else {
-                throw Error.invalidPEMFormat("PrivateKey::EC::Top level sequence doesn't contain at least 2 items")
+            let node = try DER.parse(pem.byteArray)
+
+            // Peek at the version integer to determine which private key structure we're dealing with
+            guard node.identifier == .sequence, case .constructed(let children) = node.content else {
+                throw Error.invalidPEMFormat("PrivateKey::Top level node is not a sequence")
             }
-            guard case .octetString(let octet) = sequence[1] else {
-                throw Error.invalidPEMFormat("PrivateKey::EC::Second item wasn't an octetString")
+            var iterator = children.makeIterator()
+            guard let version = try? Int(derEncoded: &iterator) else {
+                throw Error.invalidPEMFormat("PrivateKey::First item in top level sequence wasn't an integer")
             }
 
-            // Remaining parameters are optional...
-            if sequence.count > 2 {
-                guard case .objectIdentifier(let objectID) = sequence[2] else {
-                    throw Error.invalidPEMFormat("PrivateKey::EC::Missing objectIdentifier in top level sequence")
+            switch version {
+            case PrivateKeyInfo.version:
+                // Proceed with standard pkcs8 private key format
+                let privateKeyInfo = try PrivateKeyInfo(derEncoded: node)
+                try validate(
+                    privateKeyInfo.algorithmIdentifier,
+                    expectedPrimaryObjectIdentifier: expectedPrimaryObjectIdentifier,
+                    expectedSecondaryObjectIdentifier: expectedSecondaryObjectIdentifier
+                )
+                return Array(privateKeyInfo.privateKey.bytes)
+
+            case ECPrivateKey.version:
+                // Proceed with EC private key format
+                let ecPrivateKey = try ECPrivateKey(derEncoded: node)
+                // The named curve parameter is optional, but if present, it must match the Key.Type we're attempting to instantiate
+                if let namedCurve = ecPrivateKey.namedCurve, namedCurve != expectedPrimaryObjectIdentifier {
+                    throw Error.objectIdentifierMismatch(got: namedCurve, expected: expectedPrimaryObjectIdentifier)
                 }
-                // Ensure the ObjectID specified in the PEM matches that of the Key.Type we're attempting to instantiate
-                guard objectID.byteArray == expectedPrimaryObjectIdentifier else {
+                return Array(ecPrivateKey.privateKey.bytes)
+
+            default:
+                throw Error.invalidPEMFormat("Unknown version identifier")
+            }
+        }
+
+        /// Ensures the AlgorithmIdentifier specified in the PEM matches that of the Key.Type we're attempting to instantiate
+        private static func validate(
+            _ algorithmIdentifier: AlgorithmIdentifier,
+            expectedPrimaryObjectIdentifier: ASN1ObjectIdentifier,
+            expectedSecondaryObjectIdentifier: ASN1ObjectIdentifier?
+        ) throws {
+            guard algorithmIdentifier.algorithm == expectedPrimaryObjectIdentifier else {
+                throw Error.objectIdentifierMismatch(
+                    got: algorithmIdentifier.algorithm,
+                    expected: expectedPrimaryObjectIdentifier
+                )
+            }
+
+            // If the key supports a secondary objectIdentifier (ensure one is present and that they match)
+            if let expectedSecondaryObjectIdentifier = expectedSecondaryObjectIdentifier {
+                guard case .objectIdentifier(let secondaryObjectIdentifier) = algorithmIdentifier.parameters else {
+                    throw Error.invalidPEMFormat("Missing secondary objectIdentifier")
+                }
+                guard secondaryObjectIdentifier == expectedSecondaryObjectIdentifier else {
                     throw Error.objectIdentifierMismatch(
-                        got: objectID.byteArray,
-                        expected: expectedPrimaryObjectIdentifier
+                        got: secondaryObjectIdentifier,
+                        expected: expectedSecondaryObjectIdentifier
                     )
                 }
             }
-
-            //if sequence.count > 3 {
-            //    // Optional Public Key
-            //    guard case .bitString(let _) = sequence[3] else { throw Error.invalidPEMFormat("PrivateKey::EC::") }
-            //}
-
-            return octet.byteArray
         }
     }
 }

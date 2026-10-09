@@ -13,12 +13,13 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import SwiftASN1
 
 extension RSAPublicKey: DERCodable {
-    /// RSA Object Identifier Bytes
-    public static var primaryObjectIdentifier: [UInt8] { [42, 134, 72, 134, 247, 13, 1, 1, 1] }
+    /// rsaEncryption (1.2.840.113549.1.1.1)
+    public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.rsaEncryption }
 
-    public static var secondaryObjectIdentifier: [UInt8]? { nil }
+    public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
 
     public func publicKeyDER() throws -> [UInt8] {
         self.rawRepresentation.byteArray
@@ -57,10 +58,10 @@ extension RSAPublicKey: DERCodable {
 }
 
 extension RSAPrivateKey: DERCodable {
-    /// RSA Object Identifier Bytes
-    public static var primaryObjectIdentifier: [UInt8] { [42, 134, 72, 134, 247, 13, 1, 1, 1] }
+    /// rsaEncryption (1.2.840.113549.1.1.1)
+    public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.rsaEncryption }
 
-    static var secondaryObjectIdentifier: [UInt8]? { nil }
+    static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
 
     func publicKeyDER() throws -> [UInt8] {
         try self.derivePublicKey().rawRepresentation.byteArray
@@ -81,17 +82,10 @@ extension RSAPrivateKey: DERCodable {
     }
 
     public func exportPrivateKeyPEMRaw() throws -> [UInt8] {
-        let privateDER = try self.privateKeyDER()
-        let asnNodes: ASN1.Node = .sequence(nodes: [
-            .integer(data: Data(hex: "0x00")),
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(Self.primaryObjectIdentifier)),
-                .null,
-            ]),
-            .octetString(data: Data(privateDER)),
-        ])
-
-        return ASN1.Encoder.encode(asnNodes)
+        try PrivateKeyInfo(
+            algorithmIdentifier: .rsaEncryption,
+            privateKey: self.privateKeyDER()
+        ).serializedDERBytes()
     }
 
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {

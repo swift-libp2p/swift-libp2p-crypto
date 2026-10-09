@@ -1,9 +1,9 @@
-// swift-tools-version:6.0
+// swift-tools-version:6.1
 //===----------------------------------------------------------------------===//
 //
 // This source file is part of the swift-libp2p open source project
 //
-// Copyright (c) 2022-2025 swift-libp2p project authors
+// Copyright (c) 2022-2026 swift-libp2p project authors
 // Licensed under MIT
 //
 // See LICENSE for license information
@@ -18,8 +18,8 @@ import PackageDescription
 let package = Package(
     name: "swift-libp2p-crypto",
     platforms: [
-        .macOS(.v10_15),
-        .iOS(.v13),
+        .macOS(.v13),
+        .iOS(.v16),
     ],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
@@ -40,6 +40,8 @@ let package = Package(
         // 🔑 Hashing (BCrypt, SHA2, HMAC), encryption (AES), public-key (RSA), PEM and DER file handling, and random data generation.
         .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "4.3.0")),
         .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.9.0")),
+        // ASN.1 / DER Parsing and Serialization
+        .package(url: "https://github.com/apple/swift-asn1.git", .upToNextMajor(from: "1.7.1")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -53,9 +55,10 @@ let package = Package(
                 .product(name: "secp256k1", package: "secp256k1.swift"),
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "CryptoSwift", package: "CryptoSwift"),
+                .product(name: "SwiftASN1", package: "swift-asn1"),
             ],
-            resources: [
-                .copy("Protobufs/keys.proto")
+            exclude: [
+                "Protobufs/keys.proto"
             ]
         ),
         .testTarget(

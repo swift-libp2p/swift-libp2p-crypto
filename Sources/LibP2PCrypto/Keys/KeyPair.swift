@@ -16,6 +16,7 @@ import Crypto
 import Foundation
 import Multibase
 import Multihash
+import SwiftASN1
 
 extension LibP2PCrypto.Keys {
     public struct KeyPair: Sendable {
@@ -125,18 +126,15 @@ extension LibP2PCrypto.Keys {
         private func rsaModulusBitCount() -> Int? {
             guard case .rsa = self.keyType else { return nil }
             guard
-                case .sequence(let top)? = try? ASN1.Decoder.decode(data: self.publicKey.rawRepresentation),
-                top.count >= 2,
-                case .bitString(let pkcs1) = top[1],
-                case .sequence(let numbers)? = try? ASN1.Decoder.decode(data: pkcs1),
-                case .integer(let modulus)? = numbers.first
+                let spki = try? SubjectPublicKeyInfo(derEncoded: self.publicKey.rawRepresentation.byteArray),
+                let pkcs1 = try? RSAPublicKeyPKCS1(derEncoded: spki.key.bytes)
             else { return nil }
-            // Strip the DER sign byte / leading-zero padding, then report the modulus size
+            // The DER sign byte has already been stripped by the decoder. Report the modulus size
             // rounded up to a whole byte. Some backends (notably CryptoSwift on Linux)
             // occasionally emit a modulus whose top bit is clear, making the exact bit-count
             // one short (e.g. 2047 for a 2048-bit key); byte-aligning classifies these the
             // same as a fully-populated modulus of the same key size.
-            var bytes = modulus.byteArray
+            var bytes = pkcs1.modulus
             while bytes.first == 0 { bytes.removeFirst() }
             guard bytes.isEmpty == false else { return nil }
             return bytes.count * 8
@@ -388,11 +386,9 @@ extension LibP2PCrypto.Keys.KeyPair {
             )
 
             // Extract out the objectIdentifiers from the decrypted pem
-            let ids: [[UInt8]]
+            let ids: [ASN1ObjectIdentifier]
             do {
-                ids = try LibP2PCrypto.PEM.objIdsInSequence(ASN1.Decoder.decode(data: Data(decryptedPEM))).map {
-                    $0.byteArray
-                }
+                ids = try LibP2PCrypto.PEM.objIdsInSequence(decryptedPEM)
             } catch {
                 throw LibP2PCrypto.PEM.Error.decodingError
             }

@@ -14,6 +14,7 @@
 
 #if canImport(Security)
 import Foundation
+import SwiftASN1
 import Multibase
 @preconcurrency import Security
 
@@ -23,13 +24,18 @@ struct RSAPublicKey: CommonPublicKey {
     /// The underlying SecKey that backs this struct
     private let key: SecKey
 
-    /// The PKCS#1 DER (`SecKeyCopyExternalRepresentation`) captured at init time so that the
-    /// non-throwing `rawRepresentation` accessor can never crash or silently return empty data.
-    private let externalRepresentationBytes: Data
+    /// The DER encoded SubjectPublicKeyInfo (wrapping the PKCS#1 DER from `SecKeyCopyExternalRepresentation`)
+    /// captured at init time so that the non-throwing `rawRepresentation` accessor can never crash or silently return empty data.
+    private let subjectPublicKeyInfoBytes: Data
 
     fileprivate init(_ secKey: SecKey) throws {
         self.key = secKey
-        self.externalRepresentationBytes = try secKey.rawRepresentation()
+        self.subjectPublicKeyInfoBytes = try Data(
+            SubjectPublicKeyInfo(
+                algorithmIdentifier: .rsaEncryption,
+                key: secKey.rawRepresentation().byteArray
+            ).serializedDERBytes()
+        )
     }
 
     init(rawRepresentation raw: Data) throws {
@@ -49,35 +55,21 @@ struct RSAPublicKey: CommonPublicKey {
     }
 
     init(marshaledData data: Data) throws {
-        let asn = try ASN1.Decoder.decode(data: data)
-        guard case .sequence(let nodes) = asn, nodes.count >= 2 else {
-            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: expected a 2-element sequence")
+        let spki: SubjectPublicKeyInfo
+        do {
+            spki = try SubjectPublicKeyInfo(derEncoded: data.byteArray)
+        } catch {
+            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: \(error)")
         }
-        guard case .sequence(let subjectInfo) = nodes[0] else {
-            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: missing algorithm sequence")
-        }
-        guard case .objectIdentifier(let objID) = subjectInfo.first else {
-            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: missing object identifier")
-        }
-        guard objID.byteArray == RSAPublicKey.primaryObjectIdentifier else {
+        guard spki.algorithmIdentifier.algorithm == RSAPublicKey.primaryObjectIdentifier else {
             throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: unexpected object identifier")
         }
-        guard case .bitString(let bits) = nodes[1] else {
-            throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("RSA public key: missing key bit string")
-        }
-        try self.init(rawRepresentation: bits)
+        try self.init(rawRepresentation: Data(spki.key.bytes))
     }
 
+    /// We return the ASN1 Encoded DER SubjectPublicKeyInfo representation of the public key
     var rawRepresentation: Data {
-        let asnNodes: ASN1.Node = .sequence(nodes: [
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(RSAPublicKey.primaryObjectIdentifier)),
-                .null,
-            ]),
-            .bitString(data: externalRepresentationBytes),
-        ])
-
-        return Data(ASN1.Encoder.encode(asnNodes))
+        subjectPublicKeyInfoBytes
     }
 
     func encrypt(data: Data) throws -> Data {

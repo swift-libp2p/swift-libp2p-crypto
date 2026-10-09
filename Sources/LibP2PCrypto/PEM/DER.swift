@@ -13,13 +13,14 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import SwiftASN1
 
 /// Conform to this protocol if your type can be instantiated from a ASN1 DER representation
 public protocol DERDecodable {
-    /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> [0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01])
-    static var primaryObjectIdentifier: [UInt8] { get }
-    /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> [0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01])
-    static var secondaryObjectIdentifier: [UInt8]? { get }
+    /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> 1.2.840.113549.1.1.1)
+    static var primaryObjectIdentifier: ASN1ObjectIdentifier { get }
+    /// The keys secondary ASN1 object identifier, if any (ex: Secp256k1 public key --> secp256k1 --> 1.3.132.0.10)
+    static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { get }
     /// Instantiates an instance of your Public Key when given a DER representation of your Public Key
     init(publicDER: [UInt8]) throws
     /// Instantiates an instance of your Private Key when given a DER representation of your Private Key
@@ -117,10 +118,10 @@ extension DERDecodable {
 
 /// Conform to this protocol if your type can be described in an ASN1 DER representation
 public protocol DEREncodable {
-    /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> [0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01])
-    static var primaryObjectIdentifier: [UInt8] { get }
-    /// The keys ASN1 object identifier (ex: RSA --> null --> nil)
-    static var secondaryObjectIdentifier: [UInt8]? { get }
+    /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> 1.2.840.113549.1.1.1)
+    static var primaryObjectIdentifier: ASN1ObjectIdentifier { get }
+    /// The keys secondary ASN1 object identifier, if any (ex: RSA --> nil)
+    static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { get }
 
     func publicKeyDER() throws -> [UInt8]
     func privateKeyDER() throws -> [UInt8]
@@ -139,36 +140,20 @@ public protocol DEREncodable {
 
 extension DEREncodable {
 
+    /// The DER encoded SubjectPublicKeyInfo for this key
     internal func exportPublicKeyPEMRaw() throws -> [UInt8] {
-        let publicDER = try self.publicKeyDER()
-        let secondaryObject: ASN1.Node?
-        if Self.primaryObjectIdentifier == RSAPublicKey.primaryObjectIdentifier {
-            secondaryObject = .null
-        } else if Self.primaryObjectIdentifier == Secp256k1PublicKey.primaryObjectIdentifier {
-            secondaryObject = .objectIdentifier(data: Data(Self.secondaryObjectIdentifier!))
+        let parameters: AlgorithmIdentifier.Parameters?
+        if Self.primaryObjectIdentifier == ASN1ObjectIdentifier.LibP2P.rsaEncryption {
+            // RSA requires an explicit NULL parameter (RFC 3279 §2.3.1)
+            parameters = .null
         } else {
-            secondaryObject = nil
+            parameters = Self.secondaryObjectIdentifier.map { .objectIdentifier($0) }
         }
 
-        let asnNodes: ASN1.Node
-        if let secObj = secondaryObject {
-            asnNodes = .sequence(nodes: [
-                .sequence(nodes: [
-                    .objectIdentifier(data: Data(Self.primaryObjectIdentifier)),
-                    secObj,
-                ]),
-                .bitString(data: Data(publicDER)),
-            ])
-        } else {
-            asnNodes = .sequence(nodes: [
-                .sequence(nodes: [
-                    .objectIdentifier(data: Data(Self.primaryObjectIdentifier))
-                ]),
-                .bitString(data: Data(publicDER)),
-            ])
-        }
-
-        return ASN1.Encoder.encode(asnNodes)
+        return try SubjectPublicKeyInfo(
+            algorithmIdentifier: AlgorithmIdentifier(algorithm: Self.primaryObjectIdentifier, parameters: parameters),
+            key: self.publicKeyDER()
+        ).serializedDERBytes()
     }
 
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
@@ -195,17 +180,10 @@ extension DEREncodable {
     }
 
     public func exportPrivateKeyPEMRaw() throws -> [UInt8] {
-        let privateDER = try self.privateKeyDER()
-        let asnNodes: ASN1.Node = .sequence(nodes: [
-            .integer(data: Data(hex: "0x00")),
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(Self.primaryObjectIdentifier))
-                //.null
-            ]),
-            .octetString(data: Data(privateDER)),
-        ])
-
-        return ASN1.Encoder.encode(asnNodes)
+        try PrivateKeyInfo(
+            algorithmIdentifier: AlgorithmIdentifier(algorithm: Self.primaryObjectIdentifier),
+            privateKey: self.privateKeyDER()
+        ).serializedDERBytes()
     }
 
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
@@ -234,32 +212,3 @@ extension DEREncodable {
 
 /// Conform to this protocol if your type can both be instantiated and expressed as an ASN1 DER representation.
 public protocol DERCodable: DERDecodable, DEREncodable {}
-
-struct DER {
-    /// Integer to Octet String Primitive
-    /// - Parameters:
-    ///   - x: nonnegative integer to be converted
-    ///   - size: intended length of the resulting octet string
-    /// - Returns: corresponding octet string of length xLen
-    /// - Note: https://datatracker.ietf.org/doc/html/rfc3447#section-4.1
-    internal static func i2osp(x: [UInt8], size: Int) -> [UInt8] {
-        var modulus = x
-        while modulus.count < size {
-            modulus.insert(0x00, at: 0)
-        }
-        if modulus[0] >= 0x80 {
-            modulus.insert(0x00, at: 0)
-        }
-        return modulus
-    }
-
-    /// Integer to Octet String Primitive
-    /// - Parameters:
-    ///   - x: nonnegative integer to be converted
-    ///   - size: intended length of the resulting octet string
-    /// - Returns: corresponding octet string of length xLen
-    /// - Note: https://datatracker.ietf.org/doc/html/rfc3447#section-4.1
-    internal static func i2ospData(x: [UInt8], size: Int) -> Data {
-        Data(DER.i2osp(x: x, size: size))
-    }
-}

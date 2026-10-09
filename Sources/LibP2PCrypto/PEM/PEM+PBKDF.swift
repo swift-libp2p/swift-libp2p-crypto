@@ -14,6 +14,7 @@
 
 import CryptoSwift
 import Foundation
+import SwiftASN1
 
 // MARK: Encrypted PEM PBKDF Algorithms
 
@@ -40,9 +41,9 @@ extension LibP2PCrypto.PEM {
         /// Kept at 8 so previously-encrypted PEMs (whose legacy default salt was 8 bytes) still import.
         static let minimumSaltLength = 8
 
-        init(objID: [UInt8], salt: [UInt8], iterations: [UInt8]) throws {
-            guard let iterations = Int(iterations.toHexString(), radix: 16) else {
-                throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF")
+        init(objID: ASN1ObjectIdentifier, salt: [UInt8], iterations: Int) throws {
+            guard iterations > 0 else {
+                throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF::iteration count must be positive")
             }
             guard salt.count >= Self.minimumSaltLength else {
                 throw Error.invalidPEMFormat(
@@ -50,7 +51,7 @@ extension LibP2PCrypto.PEM {
                 )
             }
             switch objID {
-            case [42, 134, 72, 134, 247, 13, 1, 5, 12]:  // pbkdf2
+            case ASN1ObjectIdentifier.LibP2P.pbkdf2:
                 self = .pbkdf2(salt: salt, iterations: iterations)
             default:
                 throw Error.unsupportedPBKDFAlgorithm(objID)
@@ -79,10 +80,10 @@ extension LibP2PCrypto.PEM {
             }
         }
 
-        var objectIdentifier: [UInt8] {
+        var objectIdentifier: ASN1ObjectIdentifier {
             switch self {
             case .pbkdf2:
-                return [42, 134, 72, 134, 247, 13, 1, 5, 12]
+                return ASN1ObjectIdentifier.LibP2P.pbkdf2
             }
         }
 
@@ -100,61 +101,34 @@ extension LibP2PCrypto.PEM {
             }
         }
 
-        func encodePBKDF() throws -> ASN1.Node {
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(self.objectIdentifier)),
-                .sequence(nodes: [
-                    .octetString(data: Data(self.salt)),
-                    .integer(data: Data(Self.encodeIterationCount(self.iterations))),
-                ]),
-            ])
-        }
-
-        /// Encodes the PBKDF2 iteration count as the content octets of a DER `INTEGER`.
-        ///
-        /// The previous implementation hard-coded a 2-byte width, which silently truncated
-        /// iteration counts above 65535. This produces a minimal big-endian encoding and
-        /// prepends a `0x00` byte when the most significant bit is set so the value is never
-        /// misinterpreted as negative by strict DER parsers (e.g. OpenSSL).
-        static func encodeIterationCount(_ value: Int) -> [UInt8] {
-            var bytes = withUnsafeBytes(of: value.bigEndian, Array<UInt8>.init)
-            while bytes.count > 1, bytes.first == 0 { bytes.removeFirst() }
-            if let first = bytes.first, first & 0x80 != 0 { bytes.insert(0, at: 0) }
-            return bytes
+        func encodePBKDF() throws -> PBKDF2AlgorithmIdentifier {
+            PBKDF2AlgorithmIdentifier(
+                algorithm: self.objectIdentifier,
+                salt: self.salt,
+                iterationCount: self.iterations
+            )
         }
     }
 
     /// Decodes the PBKDF ASN1 Block in an Encrypted Private Key PEM file
-    /// - Parameter node: The ASN1 sequence node containing the pbkdf parameters
+    /// - Parameter algorithmIdentifier: The decoded pbkdf AlgorithmIdentifier
     /// - Returns: The PBKDFAlogrithm if supported
     ///
-    /// Expects an ASN1.Node with the following structure
+    /// Expects the following ASN1 structure
     /// ```
-    /// ASN1.Parser.Node.sequence(nodes: [
-    ///     ASN1.Parser.Node.objectIdentifier(data: 9 bytes),      //PBKDF2 //[42,134,72,134,247,13,1,5,12]
-    ///     ASN1.Parser.Node.sequence(nodes: [
-    ///         ASN1.Parser.Node.octetString(data: 8 bytes),       //SALT
-    ///         ASN1.Parser.Node.integer(data: 2 bytes)            //ITTERATIONS
-    ///     ])
-    /// ])
+    /// SEQUENCE {
+    ///     OBJECT IDENTIFIER       // PBKDF2 (1.2.840.113549.1.5.12)
+    ///     SEQUENCE {
+    ///         OCTET STRING        // SALT
+    ///         INTEGER             // ITERATIONS
+    ///     }
+    /// }
     /// ```
-    internal static func decodePBKFD(_ node: ASN1.Node) throws -> PBKDFAlgorithm {
-        guard case .sequence(let wrapper) = node else { throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF") }
-        guard wrapper.count == 2 else { throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF") }
-        guard case .objectIdentifier(let objID) = wrapper.first else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF")
-        }
-        guard case .sequence(let params) = wrapper.last else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF")
-        }
-        guard params.count == 2 else { throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF") }
-        guard case .octetString(let salt) = params.first else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF")
-        }
-        guard case .integer(let iterations) = params.last else {
-            throw Error.invalidPEMFormat("EncryptedPrivateKey::PBKDF")
-        }
-
-        return try PBKDFAlgorithm(objID: objID.byteArray, salt: salt.byteArray, iterations: iterations.byteArray)
+    internal static func decodePBKFD(_ algorithmIdentifier: PBKDF2AlgorithmIdentifier) throws -> PBKDFAlgorithm {
+        try PBKDFAlgorithm(
+            objID: algorithmIdentifier.algorithm,
+            salt: Array(algorithmIdentifier.salt.bytes),
+            iterations: algorithmIdentifier.iterationCount
+        )
     }
 }

@@ -145,45 +145,43 @@ struct Libp2pCryptoTests {
         print(rsaSecKeyRawRep.asString(base: .base16))
 
         /// Ensure we can import the RSA key as a CryptoSwift RSA Key
-        guard case .sequence(let params) = try ASN1.Decoder.decode(data: rsaSecKeyRawRep) else {
+        let privKeyNode = try DER.parse(rsaSecKeyRawRep.byteArray)
+        guard case .constructed(let privKeyParams) = privKeyNode.content else {
             Issue.record("Invalid ASN1 Encoding -> No PrivKey Sequence")
             return
         }
         // We check for 4 here because internally we can only marshal the first 4 integers at the moment...
-        guard params.count == 4 || params.count == 9 else {
-            Issue.record("Invalid ASN1 Encoding -> Invalid Private RSA param count. Expected 9 got \(params.count)")
+        let paramCount = Array(privKeyParams).count
+        guard paramCount == 4 || paramCount == 9 else {
+            Issue.record("Invalid ASN1 Encoding -> Invalid Private RSA param count. Expected 9 got \(paramCount)")
             return
         }
-        guard case .integer(let n) = params[1] else {
-            Issue.record("Invalid ASN1 Encoding -> PrivKey No Modulus")
-            return
-        }
-        guard case .integer(let e) = params[2] else {
-            Issue.record("Invalid ASN1 Encoding -> PrivKey No Public Exponent")
-            return
-        }
-        guard case .integer(let d) = params[3] else {
-            Issue.record("Invalid ASN1 Encoding -> PrivKey No Private Exponent")
-            return
+        let (n, e, d) = try DER.sequence(privKeyNode, identifier: .sequence) { nodes in
+            _ = try Int(derEncoded: &nodes)  // version
+            let n = try ArraySlice<UInt8>(derEncoded: &nodes)
+            let e = try ArraySlice<UInt8>(derEncoded: &nodes)
+            let d = try ArraySlice<UInt8>(derEncoded: &nodes)
+            // Skip the remaining CRT params
+            while nodes.next() != nil {}
+            return (n, e, d)
         }
 
-        let rsaCryptoSwift = RSA(n: n.byteArray, e: e.byteArray, d: d.byteArray)
+        let rsaCryptoSwift = RSA(n: Array(n), e: Array(e), d: Array(d))
 
         // Raw Rep
         guard let d = rsaCryptoSwift.d else {
             Issue.record("Failed to import RSA SecKey as private CryptoSwift Key")
             return
         }
-        let mod = rsaCryptoSwift.n.serialize()
-        let privkeyAsnNode: ASN1.Node =
-            .sequence(nodes: [
-                .integer(data: Data([UInt8](arrayLiteral: 0x00))),
-                .integer(data: Data(DER.i2osp(x: mod.byteArray, size: mod.count + 1))),
-                .integer(data: rsaCryptoSwift.e.serialize()),
-                .integer(data: d.serialize()),
-            ])
+        var serializer = DER.Serializer()
+        try serializer.appendConstructedNode(identifier: .sequence) { coder in
+            try coder.serialize(0)
+            try coder.serialize(rsaCryptoSwift.n.serialize().byteArray[...])
+            try coder.serialize(rsaCryptoSwift.e.serialize().byteArray[...])
+            try coder.serialize(d.serialize().byteArray[...])
+        }
 
-        let rsaCryptoSwiftRawRep = Data(ASN1.Encoder.encode(privkeyAsnNode))
+        let rsaCryptoSwiftRawRep = Data(serializer.serializedBytes)
 
         print(rsaCryptoSwiftRawRep.asString(base: .base16))
 
@@ -1113,16 +1111,13 @@ struct DERAndPEMTests {
 
         let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
 
-        let asn = try ASN1.Decoder.decode(data: Data(bytes))
+        let spki = try SubjectPublicKeyInfo(derEncoded: bytes)
 
-        print(asn)
+        print(spki)
 
-        guard case .sequence(let top) = asn, case .bitString(let pubKeyData) = top.last else {
-            Issue.record("Failed to extract our PubKey bit string")
-            return
-        }
+        #expect(spki.algorithmIdentifier == AlgorithmIdentifier(algorithm: ASN1ObjectIdentifier.LibP2P.ed25519))
 
-        let pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: pubKeyData.byteArray)
+        let pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: spki.key.bytes)
 
         print(pubKey)
 
@@ -1162,30 +1157,25 @@ struct DERAndPEMTests {
 
         let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
 
-        let asn = try ASN1.Decoder.decode(data: Data(bytes))
+        let privateKeyInfo = try PrivateKeyInfo(derEncoded: bytes)
 
-        print(asn)
+        print(privateKeyInfo)
 
-        //        sequence(nodes: [
-        //            libp2p_crypto.Asn1Parser.Node.integer(data: 1 bytes),
-        //            libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-        //                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 3 bytes)]
-        //            ),
-        //            libp2p_crypto.Asn1Parser.Node.octetString(data: 34 bytes) <- This is actually another octetString
-        //        ])
+        //        SEQUENCE {
+        //            INTEGER (0)
+        //            SEQUENCE {
+        //                OBJECT IDENTIFIER (1.3.101.112)
+        //            }
+        //            OCTET STRING (34 bytes) <- This is actually another octetString
+        //        }
 
-        guard case .sequence(let top) = asn, case .octetString(var privKeyData) = top.last else {
-            Issue.record("Failed to extract our PrivKey bit string")
-            return
-        }
+        #expect(privateKeyInfo.algorithmIdentifier.algorithm == ASN1ObjectIdentifier.LibP2P.ed25519)
 
-        while privKeyData.count > 32 {
-            privKeyData.removeFirst()
-        }
+        let privKeyData = try ASN1OctetString(derEncoded: privateKeyInfo.privateKey.bytes).bytes
 
-        print(privKeyData.count)
+        #expect(privKeyData.count == 32)
 
-        let privKey = try Curve25519.Signing.PrivateKey(rawRepresentation: privKeyData.byteArray)
+        let privKey = try Curve25519.Signing.PrivateKey(rawRepresentation: privKeyData)
 
         print(privKey)
 
@@ -1223,24 +1213,22 @@ struct DERAndPEMTests {
 
         let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
 
-        let asn = try ASN1.Decoder.decode(data: Data(bytes))
+        let spki = try SubjectPublicKeyInfo(derEncoded: bytes)
 
-        print(asn)
+        print(spki)
 
-        //        sequence(nodes: [
-        //            libp2p_crypto.Asn1Parser.Node.sequence(nodes: [
-        //                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 7 bytes),  :id-ecPublicKey
-        //                libp2p_crypto.Asn1Parser.Node.objectIdentifier(data: 5 bytes)   :secp256k1
-        //            ]),
-        //            libp2p_crypto.Asn1Parser.Node.bitString(data: 65 bytes)
-        //        ])
+        //        SEQUENCE {
+        //            SEQUENCE {
+        //                OBJECT IDENTIFIER   :id-ecPublicKey
+        //                OBJECT IDENTIFIER   :secp256k1
+        //            }
+        //            BIT STRING (65 bytes)
+        //        }
 
-        guard case .sequence(let top) = asn, case .bitString(let pubKeyData) = top.last else {
-            Issue.record("Failed to extract our Public Key bit/octet string")
-            return
-        }
+        #expect(spki.algorithmIdentifier.algorithm == ASN1ObjectIdentifier.LibP2P.idEcPublicKey)
+        #expect(spki.algorithmIdentifier.parameters == .objectIdentifier(ASN1ObjectIdentifier.LibP2P.secp256k1))
 
-        let pubKey = try Secp256k1PublicKey(pubKeyData.byteArray)
+        let pubKey = try Secp256k1PublicKey(Array(spki.key.bytes))
 
         print(pubKey)
 
@@ -1280,23 +1268,21 @@ struct DERAndPEMTests {
 
         let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
 
-        let asn = try ASN1.Decoder.decode(data: Data(bytes))
+        let ecPrivateKey = try ECPrivateKey(derEncoded: bytes)
 
-        print(asn)
+        print(ecPrivateKey)
 
-        //        sequence(nodes: [
-        //            libp2p_crypto.Asn1ParserECPrivate.Node.integer(data: 1 bytes),
-        //            libp2p_crypto.Asn1ParserECPrivate.Node.octetString(data: 32 bytes),      // private key data
-        //            libp2p_crypto.Asn1ParserECPrivate.Node.objectIdentifier(data: 7 bytes),  :secp256k1
-        //            libp2p_crypto.Asn1ParserECPrivate.Node.bitString(data: 67 bytes)
-        //        ])
+        //        SEQUENCE {
+        //            INTEGER (1)
+        //            OCTET STRING (32 bytes)             // private key data
+        //            [0] OBJECT IDENTIFIER   :secp256k1
+        //            [1] BIT STRING (65 bytes)           // public key data
+        //        }
 
-        guard case .sequence(let top) = asn, case .octetString(let privKeyData) = top[1] else {
-            Issue.record("Failed to extract our PrivKey bit/octet string")
-            return
-        }
+        #expect(ecPrivateKey.namedCurve == ASN1ObjectIdentifier.LibP2P.secp256k1)
+        #expect(ecPrivateKey.publicKey?.bytes.count == 65)
 
-        let privKey = try Secp256k1PrivateKey(privKeyData.byteArray)
+        let privKey = try Secp256k1PrivateKey(Array(ecPrivateKey.privateKey.bytes))
 
         #expect(
             privKey.rawRepresentation.asString(base: .base64Pad) == "mZunAPeZmGUS2IbOaCuikn+dJ7BzxQ/IET3CJvvjaxo="
@@ -1373,11 +1359,16 @@ struct DERAndPEMTests {
         let base64 = String(data: Data(chunks[1..<chunks.count - 1].joined()), encoding: .utf8)!
         let pemData = Data(base64Encoded: base64)!
 
-        let asn = try ASN1.Decoder.decode(data: pemData)
+        let ecPrivateKey = try ECPrivateKey(derEncoded: pemData.byteArray)
 
-        //let asn = try ASN1.Decoder.decode(data: BaseEncoding.decode(pem).data)
+        print(ecPrivateKey)
 
-        print(asn)
+        #expect(ecPrivateKey.privateKey.bytes.count == 32)
+        #expect(ecPrivateKey.namedCurve == ASN1ObjectIdentifier.LibP2P.secp256k1)
+        #expect(ecPrivateKey.publicKey?.bytes.first == 0x04)
+
+        /// Re-encoding the decoded structure reproduces the original DER exactly
+        #expect(try ecPrivateKey.serializedDERBytes() == pemData.byteArray)
     }
 
     @Test func testRSAEncryptedPrivateKeyPem() throws {
@@ -1498,22 +1489,16 @@ struct DERAndPEMTests {
         // Generate Encryption Key from Password (confirmed key is same)
         let key = try pbkdf.deriveKey(password: "mypassword", ofLength: cipher.desiredKeyLength)
 
-        let pemData: ASN1.Node = .sequence(nodes: [
-            .integer(data: Data(hex: "0x00")),
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(hex: "2a864886f70d010101")),
-                .null,
-            ]),
-            .octetString(
-                data: Data(
-                    hex:
-                        "3082025d02010002818100cac3f636b7733cf98fbe26aad1a6578f9889995e87b820bb729b798f5178311eb1145b9b05a8384193c7b594d03ff626b3b94f79220bbd2ad6f4e688d6d8afd3744a34afcd484809c35bdf31b9b8d2e0ebac5671f9e6eae68766c6803b074c53f663b5f689e9505d672724904a7d6ab4d1fc31cda4a169206f8f772339c9716f02030100010281807b726b084d101fe3609c48365f858271ae50b7cb519dcc6fd30acd2b705258b572e20e1387922f0dddc70cca192f97d16042461c5d9a000580f1811976945e16ad180666399cbe2e42d6a2c07a77fc8aaad950dedeec5d6576eb8fb07bb70989d273dc22e892b3df04982ba6d597ef8238b84fed5b84e493512554e43723f1c1024100f24805a6fcf6f4324f6248d6646538474c790d4111dbb2b816972a0164ea94fc3a209afe5b38d8c7ee1661610e94727669fe3261b4c112fc5c6629477e380687024100d63f23ad2abd389127009bee7bd872acdfb85b3b53d0029bcb2afc11895a8f0b6273d331d85ed39ac1b9d61afa1d72227b6dea3cec7ff78a9e277e9c3d460fd9024100bc2c8e1f4d782cdfea6226ba454d8c716c06d4f186024203d29fe3a3239342d5c7fbcd05e329facd05b1623eb4c93d41953f363846e0727388fc5bf1482a117f0240543566f1664e0f50c612b037514826f299d05d537942d5f3a42c55fd128e9c90adf6b678ee017f8c613e88cffba4dd3a7e671a5d2ddbb251328e756e358b37290241008acc81787457ab32ae0a939e13805651da3403b9ae46b7d31f1580b3fb7ca4ba109ac9b624e24d6c5ca5765c0ea09c00173eebabc283e29b25a281744dcbbbd6"
-                )
-            ),
-        ])
+        let pemData = PrivateKeyInfo(
+            algorithmIdentifier: .rsaEncryption,
+            privateKey: Data(
+                hex:
+                    "3082025d02010002818100cac3f636b7733cf98fbe26aad1a6578f9889995e87b820bb729b798f5178311eb1145b9b05a8384193c7b594d03ff626b3b94f79220bbd2ad6f4e688d6d8afd3744a34afcd484809c35bdf31b9b8d2e0ebac5671f9e6eae68766c6803b074c53f663b5f689e9505d672724904a7d6ab4d1fc31cda4a169206f8f772339c9716f02030100010281807b726b084d101fe3609c48365f858271ae50b7cb519dcc6fd30acd2b705258b572e20e1387922f0dddc70cca192f97d16042461c5d9a000580f1811976945e16ad180666399cbe2e42d6a2c07a77fc8aaad950dedeec5d6576eb8fb07bb70989d273dc22e892b3df04982ba6d597ef8238b84fed5b84e493512554e43723f1c1024100f24805a6fcf6f4324f6248d6646538474c790d4111dbb2b816972a0164ea94fc3a209afe5b38d8c7ee1661610e94727669fe3261b4c112fc5c6629477e380687024100d63f23ad2abd389127009bee7bd872acdfb85b3b53d0029bcb2afc11895a8f0b6273d331d85ed39ac1b9d61afa1d72227b6dea3cec7ff78a9e277e9c3d460fd9024100bc2c8e1f4d782cdfea6226ba454d8c716c06d4f186024203d29fe3a3239342d5c7fbcd05e329facd05b1623eb4c93d41953f363846e0727388fc5bf1482a117f0240543566f1664e0f50c612b037514826f299d05d537942d5f3a42c55fd128e9c90adf6b678ee017f8c613e88cffba4dd3a7e671a5d2ddbb251328e756e358b37290241008acc81787457ab32ae0a939e13805651da3403b9ae46b7d31f1580b3fb7ca4ba109ac9b624e24d6c5ca5765c0ea09c00173eebabc283e29b25a281744dcbbbd6"
+            ).byteArray
+        )
 
         // Encrypt Plaintext
-        let ciphertext = try cipher.encrypt(bytes: ASN1.Encoder.encode(pemData), withKey: key)
+        let ciphertext = try cipher.encrypt(bytes: pemData.serializedDERBytes(), withKey: key)
 
         // Ensure the ciphertext is the same...
         #expect(
@@ -1527,31 +1512,19 @@ struct DERAndPEMTests {
         //print(pbkdf.iterations.bytes(totalBytes: 2))
 
         //        print("*** DER ***")
-        //        //print(try ASN1.Decoder.decode(data: Data(keyPair.privateKey!.exportPrivateKeyPEM(withHeaderAndFooter: false))))
         //        print("***********")
         //
         // Encode Encrypted PEM (including pbkdf and cipher algos used)
-        let nodes: ASN1.Node = .sequence(nodes: [
-            .sequence(nodes: [
-                .objectIdentifier(data: Data(hex: "2a864886f70d01050d")),
-                .sequence(nodes: [
-                    .sequence(nodes: [
-                        .objectIdentifier(data: Data(pbkdf.objectIdentifier)),
-                        .sequence(nodes: [
-                            .octetString(data: Data(pbkdf.salt)),
-                            .integer(data: Data(pbkdf.iterations.bytes(totalBytes: 2))),
-                        ]),
-                    ]),
-                    .sequence(nodes: [
-                        .objectIdentifier(data: Data(cipher.objectIdentifier)),
-                        .octetString(data: Data(cipher.iv)),
-                    ]),
-                ]),
-            ]),
-            .octetString(data: Data(ciphertext)),
-        ])
-
-        let encoded = ASN1.Encoder.encode(nodes)
+        let encoded = try EncryptedPrivateKeyInfo(
+            encryptionAlgorithm: ASN1ObjectIdentifier.LibP2P.pbes2,
+            keyDerivationFunction: PBKDF2AlgorithmIdentifier(
+                algorithm: pbkdf.objectIdentifier,
+                salt: pbkdf.salt,
+                iterationCount: pbkdf.iterations
+            ),
+            encryptionScheme: CipherAlgorithmIdentifier(algorithm: cipher.objectIdentifier, iv: cipher.iv),
+            encryptedData: ciphertext
+        ).serializedDERBytes()
 
         //print(encoded.asString(base: .base16))
 
@@ -1928,8 +1901,8 @@ struct RegressionTests {
     @Test func pbkdf2IterationEncodingSurvivesLargeValues() throws {
         let salt = try LibP2PCrypto.randomBytes(length: 16)
         let pbkdf = LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(salt: salt, iterations: 310_000)
-        let encoded = ASN1.Encoder.encode(try pbkdf.encodePBKDF())
-        let decoded = try LibP2PCrypto.PEM.decodePBKFD(ASN1.Decoder.decode(data: Data(encoded)))
+        let encoded = try pbkdf.encodePBKDF().serializedDERBytes()
+        let decoded = try LibP2PCrypto.PEM.decodePBKFD(PBKDF2AlgorithmIdentifier(derEncoded: encoded))
         #expect(decoded.iterations == 310_000)
         #expect(decoded.salt == salt)
     }
@@ -2009,7 +1982,7 @@ struct RegressionTests {
     @Test func truncatedASN1SequenceThrows() {
         // Tag 0x30 (SEQUENCE) declares 5 content bytes but supplies none.
         #expect(throws: (any Error).self) {
-            _ = try ASN1.Decoder.decode(data: Data([0x30, 0x05]))
+            _ = try DER.parse([0x30, 0x05])
         }
     }
 
@@ -2027,5 +2000,92 @@ struct RegressionTests {
         let message = Data("async".utf8)
         let signature = try kp.sign(message: message)
         #expect(try kp.verify(signature: signature, for: message))
+    }
+}
+
+@Suite("ASN1 Tests")
+struct ASN1Tests {
+
+    /// The swift-asn1 object identifiers must serialize to the exact bytes our hand-rolled encoder used to emit
+    @Test(arguments: [
+        (ASN1ObjectIdentifier.LibP2P.rsaEncryption, "06092a864886f70d010101"),
+        (ASN1ObjectIdentifier.LibP2P.ed25519, "06032b6570"),
+        (ASN1ObjectIdentifier.LibP2P.idEcPublicKey, "06072a8648ce3d0201"),
+        (ASN1ObjectIdentifier.LibP2P.secp256k1, "06052b8104000a"),
+        (ASN1ObjectIdentifier.LibP2P.pbes2, "06092a864886f70d01050d"),
+        (ASN1ObjectIdentifier.LibP2P.pbkdf2, "06092a864886f70d01050c"),
+        (ASN1ObjectIdentifier.LibP2P.aes128CBC, "0609608648016503040102"),
+        (ASN1ObjectIdentifier.LibP2P.aes256CBC, "060960864801650304012a"),
+    ])
+    func objectIdentifiersSerializeToLegacyBytes(oid: ASN1ObjectIdentifier, expectedHex: String) throws {
+        #expect(try oid.serializedDERBytes() == Data(hex: expectedHex).byteArray)
+    }
+
+    @Test func keyTypeObjectIdentifiers() {
+        #expect(RSAPublicKey.primaryObjectIdentifier == ASN1ObjectIdentifier.LibP2P.rsaEncryption)
+        #expect(Curve25519.Signing.PublicKey.primaryObjectIdentifier == "1.3.101.112")
+        #expect(Secp256k1PublicKey.primaryObjectIdentifier == "1.2.840.10045.2.1")
+        #expect(Secp256k1PublicKey.secondaryObjectIdentifier == "1.3.132.0.10")
+        // Previously expressed as the TLV bytes [0x06, 0x05, 0x2B, 0x81, 0x04, 0x00, 0x0A]
+        #expect(Secp256k1PrivateKey.primaryObjectIdentifier == "1.3.132.0.10")
+    }
+
+    @Test func rsaAlgorithmIdentifierIncludesNullParameter() throws {
+        #expect(
+            try AlgorithmIdentifier.rsaEncryption.serializedDERBytes()
+                == Data(hex: "300d06092a864886f70d0101010500").byteArray
+        )
+    }
+
+    @Test func secp256k1ECPrivateKeyRoundTrips() throws {
+        let key = try Secp256k1PrivateKey()
+        let der = try key.exportPrivateKeyPEMRaw()
+
+        let decoded = try ECPrivateKey(derEncoded: der)
+        #expect(Array(decoded.privateKey.bytes) == key.rawRepresentation.byteArray)
+        #expect(decoded.namedCurve == ASN1ObjectIdentifier.LibP2P.secp256k1)
+        #expect(try decoded.publicKey.map { Array($0.bytes) } == key.publicKeyDER())
+        #expect(try decoded.serializedDERBytes() == der)
+    }
+
+    // MARK: Strict DER
+
+    @Test func nonMinimalIntegerIsRejected() {
+        // INTEGER 1 encoded with a redundant leading zero byte
+        #expect(throws: ASN1Error.self) {
+            _ = try Int(derEncoded: [0x02, 0x02, 0x00, 0x01])
+        }
+    }
+
+    @Test func invalidBitStringPaddingIsRejected() throws {
+        var der = try SubjectPublicKeyInfo(
+            algorithmIdentifier: AlgorithmIdentifier(algorithm: ASN1ObjectIdentifier.LibP2P.ed25519),
+            key: [UInt8](repeating: 0x01, count: 32)
+        ).serializedDERBytes()
+        // Layout: 30 2a | 30 05 06 03 2b 65 70 | 03 21 <padding> <32 key bytes>
+        #expect(der[11] == 0x00)
+        der[11] = 0x08
+        #expect(throws: ASN1Error.self) {
+            _ = try SubjectPublicKeyInfo(derEncoded: der)
+        }
+    }
+
+    @Test func trailingBytesAreRejected() throws {
+        let der = try AlgorithmIdentifier.rsaEncryption.serializedDERBytes()
+        #expect(throws: ASN1Error.self) {
+            _ = try AlgorithmIdentifier(derEncoded: der + [0x00])
+        }
+    }
+
+    @Test func zeroPBKDF2IterationCountIsRejected() throws {
+        let encoded = try PBKDF2AlgorithmIdentifier(
+            algorithm: ASN1ObjectIdentifier.LibP2P.pbkdf2,
+            salt: [UInt8](repeating: 0x01, count: 16),
+            iterationCount: 0
+        ).serializedDERBytes()
+        let decoded = try PBKDF2AlgorithmIdentifier(derEncoded: encoded)
+        #expect(throws: LibP2PCrypto.PEM.Error.self) {
+            _ = try LibP2PCrypto.PEM.decodePBKFD(decoded)
+        }
     }
 }
