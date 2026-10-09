@@ -13,11 +13,13 @@
 //===----------------------------------------------------------------------===//
 //
 //  - TODO: Support JWK https://tools.ietf.org/html/rfc7517
-//  - TODO: Support PEM format
 
 import Crypto
 import Foundation
 import Multibase
+
+/// Re-exported so consumers can use `ASN1ObjectIdentifier` (used by `DERDecodable` / `DEREncodable`)
+@_exported import SwiftASN1
 
 public enum LibP2PCrypto {
 
