@@ -2,7 +2,7 @@
 //
 // This source file is part of the swift-libp2p open source project
 //
-// Copyright (c) 2022-2025 swift-libp2p project authors
+// Copyright (c) 2022-2026 swift-libp2p project authors
 // Licensed under MIT
 //
 // See LICENSE for license information
@@ -12,8 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+import CryptoSwift
 import Foundation
 import SwiftASN1
+import SwiftProtobuf
 
 extension Secp256k1PublicKey: CommonPublicKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
@@ -35,15 +37,10 @@ extension Secp256k1PublicKey: CommonPublicKey {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("Secp256k1 keys don't support encryption")
     }
 
+    /// Verifies a DER encoded ECDSA signature over the SHA-256 hash of `expectedData` (as specified by libp2p).
+    /// - Throws: if the signature isn't valid DER.
     public func verify(signature: Data, for expectedData: Data) throws -> Bool {
-        guard signature.count >= 32 + 32 + 1 else {
-            throw LibP2PCrypto.Keys.KeyError.invalidSignatureLength(expected: 65, got: signature.count)
-        }
-        let bytes = signature.byteArray
-        let v: [UInt8] = [UInt8](bytes[0..<1])  //First byte
-        let r: [UInt8] = [UInt8](bytes[1...32])  //Next 32 bytes
-        let s: [UInt8] = [UInt8](bytes[33...64])  //Last 32 bytes
-        return try self.verifySignature(message: expectedData.byteArray, v: v, r: r, s: s)
+        try self.isValidSignature(der: signature, for: expectedData)
     }
 
     public func marshal() throws -> Data {
@@ -107,9 +104,9 @@ extension Secp256k1PrivateKey: CommonPrivateKey {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("Secp256k1 keys don't support decryption")
     }
 
+    /// Signs the SHA-256 hash of `data` and returns a DER encoded ECDSA signature (as specified by libp2p).
     public func sign(message data: Data) throws -> Data {
-        let signature = try sign(message: data.byteArray)
-        return Data([UInt8(signature.v)] + signature.r + signature.s)
+        self.signatureDER(for: data)
     }
 
     public func marshal() throws -> Data {

@@ -2,7 +2,7 @@
 //
 // This source file is part of the swift-libp2p open source project
 //
-// Copyright (c) 2022-2025 swift-libp2p project authors
+// Copyright (c) 2022-2026 swift-libp2p project authors
 // Licensed under MIT
 //
 // See LICENSE for license information
@@ -12,37 +12,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CryptoSwift
 import Foundation
 import Multibase
-import secp256k1
+import P256K
 
-public func secp256k1_default_ctx_create(errorThrowable: Error) throws -> OpaquePointer {
-    let c = secp256k1_context_create(UInt32(SECP256K1_CONTEXT_SIGN) | UInt32(SECP256K1_CONTEXT_VERIFY))
-    guard let ctx = c else {
-        throw errorThrowable
-    }
-
-    guard var rand = try? LibP2PCrypto.randomBytes(length: 32) else {
-        throw errorThrowable
-    }
-
-    guard secp256k1_context_randomize(ctx, &rand) == 1 else {
-        throw errorThrowable
-    }
-
-    return ctx
-}
-
-public func secp256k1_default_ctx_destroy(ctx: OpaquePointer) {
-    secp256k1_context_destroy(ctx)
-}
-
-/// - Note: `@unchecked Sendable` is sound here because every stored property is a `let`
-///   (`rawPublicKey`, `key`, and the `secp256k1_context` `ctx`, which is only used for the
-///   thread-safe parse / serialize / verify operations). A future migration to the
-///   `swift-secp256k1` (P256K) package would let us drop `@unchecked` entirely.
-public final class Secp256k1PublicKey: @unchecked Sendable {
+public final class Secp256k1PublicKey: Sendable {
 
     static let UNCOMPRESSED_LENGTH = 64
     static let UNCOMPRESSED_LENGTH_WITH_HEADER = 65
@@ -62,14 +36,8 @@ public final class Secp256k1PublicKey: @unchecked Sendable {
     /// The raw uncompressed public key bytes (without the 0x04 header prefix)
     public let rawPublicKey: [UInt8]
 
-    /// True iff ctx should not be freed on deinit
-    private let ctxSelfManaged: Bool
-
-    /// Internal context for secp256k1 library calls
-    private let ctx: OpaquePointer
-
-    /// Internal context for secp256k1 library calls
-    private let key: secp256k1_pubkey
+    /// The underlying P256K public key (always held in its compressed format)
+    let key: P256K.Signing.PublicKey
 
     // MARK: - Initialization
 
@@ -80,12 +48,10 @@ public final class Secp256k1PublicKey: @unchecked Sendable {
 
     /// Initializes a new instance of `Secp256k1PublicKey` with the given raw public key Bytes.
     /// - Parameters:
-    ///   - rawPublicKeyData: The public key, either compressed or uncompressed, with the proper key type header prefix (0x04 in the case of standard uncompressed key).
-    ///   - ctx: An optional self managed context. If you have specific requirements and your app performs not as fast as you want it to, you can manage the `secp256k1_context` yourself with the public methods `secp256k1_default_ctx_create` and `secp256k1_default_ctx_destroy`. If you do this, we will not be able to free memory automatically and you __have__ to destroy the context yourself once your app is closed or you are sure it will not be used any longer. Only use this optional context management if you know exactly what you are doing and you really need it.
+    ///   - rawPublicKeyData: The public key, either compressed (33 bytes) or uncompressed (65 bytes), with the proper key type header prefix (0x04 in the case of standard uncompressed key). A 64 byte uncompressed key without the header prefix is also accepted.
     /// - Throws:
-    ///    Secp256k1PublicKey.Error.keyMalformed if the given `publicKey` does not fulfill the requirements from above. Secp256k1PublicKey.Error.internalError if a secp256k1 library call or another internal call fails.
-    public init(publicKey rawPublicKeyData: [UInt8], ctx: OpaquePointer? = nil) throws {
-        // Create a mutable copy of the raw bytes
+    ///    Secp256k1PublicKey.Error.keyMalformed if the given `publicKey` does not fulfill the requirements from above.
+    public init(publicKey rawPublicKeyData: [UInt8]) throws {
         var rawPublicKeyData = rawPublicKeyData
 
         // WARNING:
@@ -95,66 +61,45 @@ public final class Secp256k1PublicKey: @unchecked Sendable {
             rawPublicKeyData.insert(KeyFormat.UNCOMPRESSED.rawValue, at: 0)
         }
 
-        // Create context
-        let finalCtx: OpaquePointer
-        if let ctx = ctx {
-            finalCtx = ctx
-            self.ctxSelfManaged = true
-        } else {
-            let ctx = try secp256k1_default_ctx_create(errorThrowable: Error.internalError)
-            finalCtx = ctx
-            self.ctxSelfManaged = false
-        }
-        self.ctx = finalCtx
-
-        var pubKey = secp256k1_pubkey()
-        // Attempt to parse the public key data
-        let res = secp256k1_ec_pubkey_parse(finalCtx, &pubKey, &rawPublicKeyData, rawPublicKeyData.count)
-        // Check for parsing errors
-        guard res == 1 else {
+        // Parse and validate the key (P256K selects the format based on the length)
+        let parsed: P256K.Signing.PublicKey
+        do {
+            parsed = try P256K.Signing.PublicKey(x963Representation: rawPublicKeyData)
+        } catch {
             throw Error.keyMalformed
         }
 
-        // Attempt to serialize the pubkey in it's uncompressed form
-        var uncompressedPubKey = [UInt8](repeating: 0, count: Secp256k1PublicKey.UNCOMPRESSED_LENGTH_WITH_HEADER)
-        var pubKeyLength = Secp256k1PublicKey.UNCOMPRESSED_LENGTH_WITH_HEADER
-        let res2 = secp256k1_ec_pubkey_serialize(
-            finalCtx,
-            &uncompressedPubKey,
-            &pubKeyLength,
-            &pubKey,
-            UInt32(SECP256K1_EC_UNCOMPRESSED)
-        )
-        // Check for serialization errors
-        guard res2 == 1 else {
-            throw Error.internalError
+        // `uncompressedRepresentation` is re-serialized by libsecp256k1, so it's always the canonical 0x04 form
+        let uncompressed = [UInt8](parsed.uncompressedRepresentation)
+        guard uncompressed.count == Secp256k1PublicKey.UNCOMPRESSED_LENGTH_WITH_HEADER else {
+            throw Error.keyMalformed
+        }
+
+        // Normalize the stored key to its compressed format (0x02 / 0x03 prefix based on the parity of Y)
+        let parity = uncompressed[64] & 1 == 0 ? KeyFormat.EVEN : KeyFormat.ODD
+        let compressed = [parity.rawValue] + uncompressed[1...32]
+        do {
+            self.key = try P256K.Signing.PublicKey(dataRepresentation: compressed, format: .compressed)
+        } catch {
+            throw Error.keyMalformed
         }
 
         // Store the uncompressed public key in our rawPublicKey field
-        self.rawPublicKey = Array(uncompressedPubKey.dropFirst())
-        self.key = pubKey
+        self.rawPublicKey = Array(uncompressed.dropFirst())
     }
 
+    /// Initializes a new instance of `Secp256k1PublicKey` from an already validated P256K public key.
+    convenience init(key: P256K.Signing.PublicKey) throws {
+        try self.init(publicKey: [UInt8](key.uncompressedRepresentation))
+    }
+
+    /// Returns the 33 byte compressed public key (with the 0x02 / 0x03 header prefix)
     public func compressPublicKey() throws -> [UInt8] {
-        var compressedPubKey = [UInt8](repeating: 0, count: Secp256k1PublicKey.COMPRESSED_LENGTH_WITH_HEADER)
-        var pubKeyLength = Secp256k1PublicKey.COMPRESSED_LENGTH_WITH_HEADER
-        var pubkey = self.key
-        let res = secp256k1_ec_pubkey_serialize(
-            self.ctx,
-            &compressedPubKey,
-            &pubKeyLength,
-            &pubkey,
-            UInt32(SECP256K1_EC_COMPRESSED)
-        )
-        guard res == 1 else {
+        let compressed = [UInt8](self.key.dataRepresentation)
+        guard compressed.count == Secp256k1PublicKey.COMPRESSED_LENGTH_WITH_HEADER else {
             throw Error.internalError
         }
-        guard compressedPubKey.count == pubKeyLength,
-            compressedPubKey.count == Secp256k1PublicKey.COMPRESSED_LENGTH_WITH_HEADER
-        else {
-            throw Error.internalError
-        }
-        return compressedPubKey
+        return compressed
     }
 
     /// Initializes a new instance of `SecP256k1PublicKey` with the given a hex string.
@@ -171,76 +116,17 @@ public final class Secp256k1PublicKey: @unchecked Sendable {
 
     // MARK: - Signatures
 
-    public func verifySignature(message: [UInt8], v: [UInt8], r: [UInt8], s: [UInt8]) throws -> Bool {
-        // Get public key
-        var rawpubKey = rawPublicKey
-        rawpubKey.insert(KeyFormat.UNCOMPRESSED.rawValue, at: 0)
-        guard let pubkey = malloc(MemoryLayout<secp256k1_pubkey>.size)?.assumingMemoryBound(to: secp256k1_pubkey.self)
-        else {
-            throw Error.internalError
-        }
-        defer {
-            free(pubkey)
-        }
-        guard
-            secp256k1_ec_pubkey_parse(ctx, pubkey, &rawpubKey, Secp256k1PublicKey.UNCOMPRESSED_LENGTH_WITH_HEADER) == 1
-        else {
-            throw Error.keyMalformed
-        }
-
-        // Create raw signature array
-        var rawSig: [UInt8] = []
-
-        // Ensure the provided R and S values are the correct length
-        guard r.count <= 32 && s.count <= 32 else {
+    /// Verifies a DER encoded ECDSA signature against the SHA-256 hash of `message` (as specified by libp2p).
+    /// - Note: Non-canonical (high-S) signatures are rejected.
+    /// - Throws: Secp256k1PublicKey.Error.signatureMalformed if the signature isn't valid DER.
+    func isValidSignature(der signature: Data, for message: Data) throws -> Bool {
+        let sig: P256K.Signing.ECDSASignature
+        do {
+            sig = try P256K.Signing.ECDSASignature(derRepresentation: signature)
+        } catch {
             throw Error.signatureMalformed
         }
-
-        // Ensure the provided V value is valid
-        guard let vInt = Int32(v.asString(base: .base16), radix: 16), vInt >= 0, vInt <= 3 else {
-            throw Error.signatureMalformed
-        }
-
-        // Prepare the signature bytes
-        rawSig.append(contentsOf: r)
-        rawSig.append(contentsOf: s)
-
-        // Parse recoverable signature
-        guard
-            let recsig = malloc(MemoryLayout<secp256k1_ecdsa_recoverable_signature>.size)?.assumingMemoryBound(
-                to: secp256k1_ecdsa_recoverable_signature.self
-            )
-        else {
-            throw Error.internalError
-        }
-        defer {
-            free(recsig)
-        }
-        guard secp256k1_ecdsa_recoverable_signature_parse_compact(ctx, recsig, &rawSig, vInt) == 1 else {
-            throw Error.signatureMalformed
-        }
-
-        // Convert to normal signature
-        guard
-            let sig = malloc(MemoryLayout<secp256k1_ecdsa_signature>.size)?.assumingMemoryBound(
-                to: secp256k1_ecdsa_signature.self
-            )
-        else {
-            throw Error.internalError
-        }
-        defer {
-            free(sig)
-        }
-        guard secp256k1_ecdsa_recoverable_signature_convert(ctx, sig, recsig) == 1 else {
-            throw Error.internalError
-        }
-
-        // Check validity with signature
-        var hash = SHA3(variant: .keccak256).calculate(for: message)
-        guard hash.count == 32 else {
-            throw Error.internalError
-        }
-        return secp256k1_ecdsa_verify(ctx, sig, &hash, pubkey) == 1
+        return self.key.isValidSignature(sig, for: message)
     }
 
     /// Returns this public key serialized as a hex string.
@@ -256,14 +142,6 @@ public final class Secp256k1PublicKey: @unchecked Sendable {
         case internalError
         case keyMalformed
         case signatureMalformed
-    }
-
-    // MARK: - Deinitialization
-
-    deinit {
-        if !ctxSelfManaged {
-            secp256k1_context_destroy(ctx)
-        }
     }
 }
 

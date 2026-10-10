@@ -13,17 +13,19 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
+import CryptoSwift
 import Foundation
 import Multibase
+import SwiftProtobuf
 
 extension LibP2PCrypto {
     public enum Keys {
-        public enum ElipticCurveType {
+        public enum ElipticCurveType: Sendable, Equatable, CaseIterable {
             case P256
             case P384
             case P521
 
-            var bits: Int {
+            public var bits: Int {
                 switch self {
                 case .P256:
                     return 256
@@ -72,9 +74,9 @@ extension LibP2PCrypto {
             case RSA(bits: RSABitLength = .B2048)
             case Ed25519
             case Secp256k1
+            case ECDSA(curve: ElipticCurveType = .P256)
 
             //case EC(curve:ElipticCurveType = .P256)
-            //case ECDSA(curve:ElipticCurveType = .P256)
             //case ECSECPrimeRandom(curve:ElipticCurveType = .P256)
             //case DSA(bits:Int)
             //case AES(bits:Int)
@@ -92,6 +94,8 @@ extension LibP2PCrypto {
                     return .ed25519
                 case .Secp256k1:
                     return .secp256K1
+                case .ECDSA:
+                    return .ecdsa
                 }
             }
 
@@ -107,6 +111,8 @@ extension LibP2PCrypto {
                     return "ED25519"
                 case .Secp256k1:
                     return "Secp256k1"
+                case .ECDSA:
+                    return "ECDSA"
                 }
             }
 
@@ -118,6 +124,8 @@ extension LibP2PCrypto {
                     return "ED25519 Curve"
                 case .Secp256k1:
                     return "Secp256k1"
+                case .ECDSA(let curve):
+                    return "\(curve.description) ECDSA"
                 }
             }
         }
@@ -153,6 +161,8 @@ extension LibP2PCrypto {
             case .ed25519:
                 return pubKeyProto.data.asString(base: base)
             case .secp256K1:
+                return pubKeyProto.data.asString(base: base)
+            case .ecdsa:
                 return pubKeyProto.data.asString(base: base)
             }
 

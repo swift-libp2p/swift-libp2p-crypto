@@ -291,8 +291,10 @@ extension LibP2PCrypto {
                 // Proceed with EC private key format
                 let ecPrivateKey = try ECPrivateKey(derEncoded: node)
                 // The named curve parameter is optional, but if present, it must match the Key.Type we're attempting to instantiate
-                if let namedCurve = ecPrivateKey.namedCurve, namedCurve != expectedPrimaryObjectIdentifier {
-                    throw Error.objectIdentifierMismatch(got: namedCurve, expected: expectedPrimaryObjectIdentifier)
+                // (the curve is the secondary objectIdentifier for id-ecPublicKey keys, otherwise the primary one, ex: Secp256k1)
+                let expectedCurve = expectedSecondaryObjectIdentifier ?? expectedPrimaryObjectIdentifier
+                if let namedCurve = ecPrivateKey.namedCurve, namedCurve != expectedCurve {
+                    throw Error.objectIdentifierMismatch(got: namedCurve, expected: expectedCurve)
                 }
                 return Array(ecPrivateKey.privateKey.bytes)
 

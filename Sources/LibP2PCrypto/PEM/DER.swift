@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+import CryptoSwift
 import Foundation
 import SwiftASN1
 

@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
+import CryptoSwift
 import Foundation
 import Multibase
 

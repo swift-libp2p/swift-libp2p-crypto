@@ -12,7 +12,7 @@
 //
 // This source file is part of the swift-libp2p open source project
 //
-// Copyright (c) 2022-2025 swift-libp2p project authors
+// Copyright (c) 2022-2026 swift-libp2p project authors
 // Licensed under MIT
 //
 // See LICENSE for license information
@@ -28,7 +28,11 @@
 //  Modified by Brandon Toms on 5/1/22.
 //  https://github.com/libp2p/js-libp2p-crypto/blob/master/src/keys/keys.proto.js
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -45,6 +49,7 @@ enum KeyType: Int, SwiftProtobuf.Enum, Swift.CaseIterable {
   case rsa = 0
   case ed25519 = 1
   case secp256K1 = 2
+  case ecdsa = 3
 
   init() {
     self = .rsa
@@ -58,20 +63,20 @@ struct PublicKey: Sendable {
   // methods supported on all messages.
 
   var type: KeyType {
-    get {return _type ?? .rsa}
+    get {_type ?? .rsa}
     set {_type = newValue}
   }
   /// Returns true if `type` has been explicitly set.
-  var hasType: Bool {return self._type != nil}
+  var hasType: Bool {self._type != nil}
   /// Clears the value of `type`. Subsequent reads from it will return its default value.
   mutating func clearType() {self._type = nil}
 
   var data: Data {
-    get {return _data ?? Data()}
+    get {_data ?? Data()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {return self._data != nil}
+  var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
   mutating func clearData() {self._data = nil}
 
@@ -89,20 +94,20 @@ struct PrivateKey: Sendable {
   // methods supported on all messages.
 
   var type: KeyType {
-    get {return _type ?? .rsa}
+    get {_type ?? .rsa}
     set {_type = newValue}
   }
   /// Returns true if `type` has been explicitly set.
-  var hasType: Bool {return self._type != nil}
+  var hasType: Bool {self._type != nil}
   /// Clears the value of `type`. Subsequent reads from it will return its default value.
   mutating func clearType() {self._type = nil}
 
   var data: Data {
-    get {return _data ?? Data()}
+    get {_data ?? Data()}
     set {_data = newValue}
   }
   /// Returns true if `data` has been explicitly set.
-  var hasData: Bool {return self._data != nil}
+  var hasData: Bool {self._data != nil}
   /// Clears the value of `data`. Subsequent reads from it will return its default value.
   mutating func clearData() {self._data = nil}
 
@@ -117,7 +122,7 @@ struct PrivateKey: Sendable {
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 extension KeyType: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RSA\0\u{1}Ed25519\0\u{1}Secp256k1\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RSA\0\u{1}Ed25519\0\u{1}Secp256k1\0\u{1}ECDSA\0")
 }
 
 extension PublicKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

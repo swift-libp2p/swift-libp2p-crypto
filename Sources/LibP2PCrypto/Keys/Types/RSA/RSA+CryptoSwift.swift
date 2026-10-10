@@ -15,6 +15,7 @@
 #if !canImport(Security)
 import Foundation
 import SwiftASN1
+import SwiftProtobuf
 @preconcurrency import CryptoSwift
 
 struct RSAPublicKey: CommonPublicKey {
