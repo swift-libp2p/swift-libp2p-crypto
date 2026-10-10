@@ -90,19 +90,4 @@ extension RSAPrivateKey: DERCodable {
             privateKey: self.privateKeyDER()
         ).serializedDERBytes()
     }
-
-    public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.privateKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.privateKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
-    }
 }
