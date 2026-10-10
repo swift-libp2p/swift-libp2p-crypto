@@ -153,8 +153,8 @@ extension Array where Element == UInt8 {
         return combined.byteArray  //nonce + ciphertext + tag
     }
 
+    /// Expects `data` in the combined `[ { nonce } { ciphertext } { tag } ]` format
     private func decryptGCM(data: [UInt8], withKey key: Data) throws -> [UInt8] {
         try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: SymmetricKey(data: key)).byteArray
-
     }
 }
