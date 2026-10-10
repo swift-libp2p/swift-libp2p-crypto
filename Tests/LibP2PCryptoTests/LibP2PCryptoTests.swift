@@ -1992,6 +1992,8 @@ struct RegressionTests {
         let decoded = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(bytes))
         #expect(decoded.pbkdfAlgorithm.iterations == LibP2PCrypto.PEM.defaultPBKDF2Iterations)
         #expect(decoded.pbkdfAlgorithm.salt.count == LibP2PCrypto.PEM.defaultPBKDF2SaltLength)
+        #expect(decoded.pbkdfAlgorithm.prf == .hmacWithSHA256)
+        #expect(decoded.cipherAlgorithm.desiredKeyLength == 32)
         #endif
     }
 
