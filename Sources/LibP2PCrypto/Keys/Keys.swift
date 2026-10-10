@@ -47,6 +47,7 @@ extension LibP2PCrypto {
             case B2048
             case B3072
             case B4096
+            /// - Warning: RSA Keys with less than 2048 bits are considered insecure
             case custom(bits: Int)
 
             var bits: Int {
@@ -60,7 +61,6 @@ extension LibP2PCrypto {
                 case .B4096:
                     return 4096
                 case .custom(let bits):
-                    if bits < 2048 { print("‼️ WARNING: RSA Keys less than 2048 are considered insecure! ‼️") }
                     return bits
                 }
             }
