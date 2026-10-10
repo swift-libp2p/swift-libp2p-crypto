@@ -27,8 +27,11 @@ extension LibP2PCrypto.Keys {
         public let privateKey: CommonPrivateKey?
 
         public struct Attributes {
+            /// The type of key (ex: RSA, ed25519, ecdsa or secp256k1)
             public let type: LibP2PCrypto.Keys.KeyPairType
+            /// The key size in bits (the RSA modulus size or the elliptic curve's size)
             public let size: Int
+            /// Wether this keypair contains a private key or not
             public let isPrivate: Bool
 
             internal init(type: LibP2PCrypto.Keys.KeyPairType, size: Int, isPrivate: Bool) {
@@ -77,23 +80,20 @@ extension LibP2PCrypto.Keys {
             privateKey != nil
         }
 
-        /// The public keys multihash value
+        /// The multihash of the marshaled public key, per the libp2p peer-id spec.
         ///
-        /// - Note: The multihash is the SHA-256 Hash of the DER representation of the PublicKey
+        /// - Note: Marshaled public keys of 42 bytes or less (Ed25519, Secp256k1) use the `identity`
+        ///   multihash, larger keys (RSA, ECDSA) are hashed with `sha2-256`.
         public func multihash() throws -> Multihash {
             try self.publicKey.multihash()
         }
 
-        /// The keys `rawID` is the SHA-256 multihash of its public key
-        /// The public key is a protobuf encoding containing a type and the DER encoding
-        /// of the PKCS SubjectPublicKeyInfo.
+        /// The keys `rawID` is the multihash (see ``multihash()``) of its marshaled public key
         public func rawID() throws -> [UInt8] {
             try self.multihash().value
         }
 
-        /// The key id is the base58 encoding of the SHA-256 multihash of its public key.
-        /// The public key is a protobuf encoding (marshaled) containing a type and the DER encoding
-        /// of the PKCS SubjectPublicKeyInfo.
+        /// The key id is the base58 encoding of the multihash (see ``multihash()``) of its marshaled public key
         public func id(withMultibasePrefix: Bool = true) throws -> String {
             //let mh = try Multihash(hashing: self.marshal(), codec: .sha2_256)
             let mh = try self.multihash()
