@@ -449,13 +449,10 @@ extension LibP2PCrypto.Keys.KeyPair {
                     expectedSecondaryObjectIdentifier: Curve25519.Signing.PrivateKey.secondaryObjectIdentifier
                 )
                 try self.init(privateKey: Curve25519.Signing.PrivateKey(privateDER: der))
-            } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
-                let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
-                    Data(decryptedPEM),
-                    expectedPrimaryObjectIdentifier: Secp256k1PrivateKey.primaryObjectIdentifier,
-                    expectedSecondaryObjectIdentifier: Secp256k1PrivateKey.secondaryObjectIdentifier
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp256k1) {
+                try self.init(
+                    privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: Secp256k1PrivateKey.self)
                 )
-                try self.init(privateKey: Secp256k1PrivateKey(privateDER: der))
             } else if ids.contains(ASN1ObjectIdentifier.LibP2P.prime256v1) {
                 try self.init(
                     privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P256.Signing.PrivateKey.self)
