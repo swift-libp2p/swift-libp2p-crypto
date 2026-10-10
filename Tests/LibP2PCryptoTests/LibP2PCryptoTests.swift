@@ -404,7 +404,7 @@ struct Libp2pCryptoTests {
             try marshed.id(withMultibasePrefix: false) == "12D3KooWF5Qbrbvhhha1AcqRULWAfYzFEnKvWVGBUjw489hpo5La"
         )
     }
-    
+
     @Test func attributeSizesAreInBits() throws {
         #expect(try LibP2PCrypto.Keys.generateKeyPair(.Ed25519).attributes()?.size == 256)
         #expect(try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1).attributes()?.size == 256)
@@ -926,7 +926,7 @@ struct AESCipherTests {
 
         #expect(msg == message)
     }
-    
+
     /// Regression: `decryptGCM(password:)` used to crash (`removeFirst(16)`) on payloads shorter than the salt
     @Test(arguments: [0, 1, 15, 16, 27, 43])
     func decryptingTruncatedPayloadThrows(length: Int) throws {
@@ -943,7 +943,7 @@ struct AESCipherTests {
             _ = try encrypted.decryptGCM(password: "mypassword")
         }
     }
-    
+
     let key256 = "12345678901234561234567890123456"
 
     /// Regression: keys created with a random IV couldn't be decrypted by any other `AESKey` instance
@@ -1042,7 +1042,7 @@ struct HMACTests {
         // Corrupted data, hash doesn't match...
         #expect(hmacKeyRemote.verify("HellØ world", hash: encrypted) == false)
     }
-    
+
     @Test(arguments: [
         LibP2PCrypto.HMAC.CryptoAlgorithm.MD5, .SHA1, .SHA256, .SHA384, .SHA512,
     ])
@@ -1944,7 +1944,7 @@ struct DERAndPEMTests {
 
         #expect(secp256k1Private.publicKey == secp256k1Public)
     }
-    
+
     /// PEMs with CRLF line endings, indentation or surrounding text should still parse
     @Test func importsPEMWithCRLFAndSurroundingText() throws {
         let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
@@ -1980,7 +1980,7 @@ struct DERAndPEMTests {
             _ = try LibP2PCrypto.PEM.pemToData(Array("no pem here".utf8))
         }
     }
-    
+
     /// Encrypted Secp256k1 exports wrapped a SEC1 ECPrivateKey instead of a PKCS #8 PrivateKeyInfo
     @Test func encryptedExportContainsPKCS8() throws {
         let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
