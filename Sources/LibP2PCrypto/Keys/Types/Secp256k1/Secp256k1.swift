@@ -229,16 +229,33 @@ extension Secp256k1PrivateKey: DERCodable {
         self.rawRepresentation.byteArray
     }
 
+    /// The DER encoded PKCS #8 PrivateKeyInfo (wrapping a SEC1 ECPrivateKey), as required when encrypting the key
     public func exportPrivateKeyPEMRaw() throws -> [UInt8] {
+        try PrivateKeyInfo(
+            algorithmIdentifier: AlgorithmIdentifier(
+                algorithm: Self.primaryObjectIdentifier,
+                parameters: .objectIdentifier(ASN1ObjectIdentifier.LibP2P.secp256k1)
+            ),
+            privateKey: ECPrivateKey(
+                privateKey: self.rawRepresentation.byteArray,
+                namedCurve: nil,
+                publicKey: self.publicKeyDER()
+            ).serializedDERBytes()
+        ).serializedDERBytes()
+    }
+
+    /// The DER encoded SEC1 ECPrivateKey (including the named curve and public key)
+    func sec1DER() throws -> [UInt8] {
         try ECPrivateKey(
             privateKey: self.rawRepresentation.byteArray,
-            namedCurve: Self.primaryObjectIdentifier,
+            namedCurve: ASN1ObjectIdentifier.LibP2P.secp256k1,
             publicKey: self.publicKeyDER()
         ).serializedDERBytes()
     }
 
+    /// Exports the private key as a SEC1 `EC PRIVATE KEY` PEM
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
+        let base64String = try self.sec1DER().toBase64()
         let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
         let bodyUTF8Bytes = bodyString.bytes
 
