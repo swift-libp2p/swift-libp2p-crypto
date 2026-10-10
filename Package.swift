@@ -40,7 +40,7 @@ let package = Package(
         // Secp256k1 Support
         .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", .upToNextMinor(from: "0.23.2")),
         // 🔑 Hashing (BCrypt, SHA2, HMAC), encryption (AES), public-key (RSA), PEM and DER file handling, and random data generation.
-        .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "4.3.0")),
+        .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "5.0.0")),
         .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.9.0")),
         // ASN.1 / DER Parsing and Serialization
         .package(url: "https://github.com/apple/swift-asn1.git", .upToNextMajor(from: "1.7.1")),
