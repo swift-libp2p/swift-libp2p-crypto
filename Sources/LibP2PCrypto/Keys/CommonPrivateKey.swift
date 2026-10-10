@@ -54,16 +54,12 @@ extension CommonPrivateKey {
 }
 
 extension CommonPrivateKey {
-    /// The keys `rawID` is the SHA-256 multihash of its public key
-    /// The public key is a protobuf encoding containing a type and the DER encoding
-    /// of the PKCS SubjectPublicKeyInfo.
+    /// The keys `rawID` is the multihash (see ``CommonPublicKey/multihash()``) of its marshaled public key
     public func rawID() throws -> [UInt8] {
         try self.derivePublicKey().rawID()
     }
 
-    /// The key id is the base58 encoding of the SHA-256 multihash of its public key.
-    /// The public key is a protobuf encoding containing a type and the DER encoding
-    /// of the PKCS SubjectPublicKeyInfo.
+    /// The key id is the base58 encoding of the multihash (see ``CommonPublicKey/multihash()``) of its marshaled public key
     public func id(withMultibasePrefix: Bool = true) throws -> String {
         try self.derivePublicKey().id(withMultibasePrefix: withMultibasePrefix)
     }
