@@ -180,8 +180,45 @@ extension Secp256k1PrivateKey: DERCodable {
         )
     }
 
+    /// Expects either the raw 32 byte private key scalar or a DER encoded SEC1 ECPrivateKey
+    /// (as nested inside a PKCS #8 PrivateKeyInfo, where the named curve parameter is optional)
     public convenience init(privateDER: [UInt8]) throws {
-        try self.init(rawRepresentation: Data(privateDER))
+        guard privateDER.count > 32 else {
+            // Raw scalar, left pad it in case an encoder stripped leading zeros
+            try self.init(rawRepresentation: Data(repeating: 0, count: 32 - privateDER.count) + privateDER)
+            return
+        }
+
+        let ecPrivateKey: ECPrivateKey
+        do {
+            ecPrivateKey = try ECPrivateKey(derEncoded: privateDER)
+        } catch {
+            throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                "Secp256k1: private key is not a valid ECPrivateKey"
+            )
+        }
+        if let namedCurve = ecPrivateKey.namedCurve, namedCurve != ASN1ObjectIdentifier.LibP2P.secp256k1 {
+            throw LibP2PCrypto.PEM.Error.objectIdentifierMismatch(
+                got: namedCurve,
+                expected: ASN1ObjectIdentifier.LibP2P.secp256k1
+            )
+        }
+        let scalar = Array(ecPrivateKey.privateKey.bytes)
+        guard !scalar.isEmpty, scalar.count <= 32 else {
+            throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                "Secp256k1: invalid private key length \(scalar.count)"
+            )
+        }
+        try self.init(rawRepresentation: Data(repeating: 0, count: 32 - scalar.count) + scalar)
+
+        // Ensure the (optional) attached public key matches the private key
+        if let attachedPublicKey = ecPrivateKey.publicKey {
+            guard try self.publicKeyDER() == Array(attachedPublicKey.bytes) else {
+                throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                    "Secp256k1: unable to validate attached public key"
+                )
+            }
+        }
     }
 
     public func publicKeyDER() throws -> [UInt8] {
