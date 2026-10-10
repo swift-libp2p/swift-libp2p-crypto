@@ -166,15 +166,6 @@ extension Secp256k1PrivateKey: Equatable {
     }
 }
 
-// MARK: - BytesConvertible
-
-extension Secp256k1PrivateKey {
-
-    public func makeBytes() -> [UInt8] {
-        rawPrivateKey
-    }
-}
-
 // MARK: - Hashable
 
 extension Secp256k1PrivateKey: Hashable {
