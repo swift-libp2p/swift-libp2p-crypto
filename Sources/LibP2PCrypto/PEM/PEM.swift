@@ -148,6 +148,21 @@ extension LibP2PCrypto {
             }
         }
 
+        /// Wraps DER encoded data with PEM armor, the base64 encoded body wrapped at 64 characters per line,
+        /// surrounded by the PEM type's header and footer lines.
+        /// - Parameters:
+        ///   - der: The DER encoded data
+        ///   - type: The PEM type, used for the header and footer
+        ///   - withHeaderAndFooter: When false only the wrapped base64 body is returned
+        /// - Returns: The UTF8 encoded PEM
+        internal static func armor(_ der: [UInt8], as type: PEMType, withHeaderAndFooter: Bool = true) -> [UInt8] {
+            let body = Array(
+                Data(der).base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed]).utf8
+            )
+            guard withHeaderAndFooter else { return body }
+            return type.headerBytes + [0x0a] + body + [0x0a] + type.footerBytes
+        }
+
         /// Converts UTF8 Encoding of PEM file into a PEMType and the base64 decoded key data
         /// - Parameter data: The `UTF8` encoding of the PEM file
         /// - Returns: A tuple containing the PEMType, and the actual base64 decoded PEM data (with the headers and footers removed).
