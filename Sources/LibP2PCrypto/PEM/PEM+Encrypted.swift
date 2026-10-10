@@ -39,7 +39,7 @@ extension LibP2PCrypto.PEM {
 
     /// Attempts to decode an encrypted Private Key PEM, returning all of the information necessary to decrypt the encrypted PEM
     /// - Parameter encryptedPEM: The raw base64 decoded PEM data
-    /// - Returns: An `EncryptedPEM` Struct containing the ciphertext, the pbkdf alogrithm for key derivation, the cipher algorithm for decrypting and the objectIdentifier describing the contents of this PEM data
+    /// - Returns: An `EncryptedPEM` Struct containing the ciphertext, the pbkdf alogrithm for key derivation and the cipher algorithm for decrypting
     ///
     /// To decrypt an encrypted PEM Private Key...
     /// 1) Strip the headers of the PEM and base64 decode the data
@@ -98,9 +98,9 @@ extension LibP2PCrypto.PEM {
     ) throws -> Data {
 
         // Defaults match OpenSSL 3's `openssl pkcs8 -topk8` (PBES2, PBKDF2-HMAC-SHA256, AES-256-CBC)
-        let cipher = try cipher ?? .aes_256_cbc(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
+        let cipher = cipher ?? .aes_256_cbc(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
         let pbkdf =
-            try pbkdf
+            pbkdf
             ?? .pbkdf2(
                 salt: LibP2PCrypto.randomBytes(length: defaultPBKDF2SaltLength),
                 iterations: defaultPBKDF2Iterations,
@@ -119,14 +119,6 @@ extension LibP2PCrypto.PEM {
             encryptionScheme: cipher.encodeCipher(),
             encryptedData: ciphertext
         ).serializedDERBytes()
-
-        let base64 = "\n" + encoded.toBase64().split(intoChunksOfLength: 64).joined(separator: "\n") + "\n"
-
-        return Data(
-            LibP2PCrypto.PEM.PEMType.encryptedPrivateKey.headerBytes + base64.bytes
-                + LibP2PCrypto.PEM.PEMType.encryptedPrivateKey.footerBytes
-        )
-    }
 
         return Data(armor(encoded, as: .encryptedPrivateKey))
     }
