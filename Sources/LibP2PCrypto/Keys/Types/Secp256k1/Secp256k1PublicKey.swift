@@ -106,12 +106,23 @@ public final class Secp256k1PublicKey: Sendable {
     /// - Parameter hexPublicKey: The uncompressed (or compressed) hex public key either with the hex prefix `0x` or without.
     /// - throws: SecP256k1PublicKey.Error.keyMalformed if the given `hexPublicKey` does not fulfill the requirements from above. Or a SecP256k1PublicKey.Error.internalError if a secp256k1 library fails to parse / validate the provided key.
     public convenience init(hexPublicKey: String) throws {
+        var hexPublicKey = Substring(hexPublicKey)
+        if hexPublicKey.hasPrefix("0x") || hexPublicKey.hasPrefix("0X") {
+            hexPublicKey = hexPublicKey.dropFirst(2)
+        }
+
         let byteCount = hexPublicKey.count
         guard byteCount == 128 || byteCount == 130 || byteCount == 64 || byteCount == 66 else {
             throw Error.keyMalformed
         }
 
-        try self.init(publicKey: try BaseEncoding.decode(hexPublicKey, as: .base16))
+        let bytes: [UInt8]
+        do {
+            bytes = try BaseEncoding.decode(String(hexPublicKey), as: .base16)
+        } catch {
+            throw Error.keyMalformed
+        }
+        try self.init(publicKey: bytes)
     }
 
     // MARK: - Signatures
