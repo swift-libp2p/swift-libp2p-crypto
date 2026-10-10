@@ -73,12 +73,22 @@ extension LibP2PCrypto.PEM {
     /// ```
     internal static func decodeEncryptedPEM(_ encryptedPEM: Data) throws -> EncryptedPEM {
         let encryptedPrivateKeyInfo = try EncryptedPrivateKeyInfo(derEncoded: encryptedPEM.byteArray)
+        let cipherAlgorithm = try decodeCipher(encryptedPrivateKeyInfo.encryptionScheme)
+
+        // If the PBKDF2 parameters specify a key length, it must match the cipher's key length
+        if let keyLength = encryptedPrivateKeyInfo.keyDerivationFunction.keyLength,
+            keyLength != cipherAlgorithm.desiredKeyLength
+        {
+            throw Error.invalidPEMFormat(
+                "EncryptedPrivateKey::PBKDF::key length \(keyLength), expected \(cipherAlgorithm.desiredKeyLength)"
+            )
+        }
 
         return EncryptedPEM(
             objectIdentifer: encryptedPrivateKeyInfo.encryptionAlgorithm,
             ciphertext: Array(encryptedPrivateKeyInfo.encryptedData.bytes),
             pbkdfAlgorithm: try decodePBKFD(encryptedPrivateKeyInfo.keyDerivationFunction),
-            cipherAlgorithm: try decodeCipher(encryptedPrivateKeyInfo.encryptionScheme)
+            cipherAlgorithm: cipherAlgorithm
         )
     }
 
