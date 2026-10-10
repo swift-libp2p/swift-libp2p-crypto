@@ -56,9 +56,6 @@ extension LibP2PCrypto {
             case encryptedPrivateKey
             case ecPrivateKey
 
-            // Others
-            //case certificate
-
             init(headerBytes: ArraySlice<UInt8>) throws {
                 guard headerBytes.count > 10 else { throw PEM.Error.unsupportedPEMType }
                 let bytes = headerBytes.dropFirst(5).dropLast(5)
