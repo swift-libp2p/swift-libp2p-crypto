@@ -244,8 +244,8 @@ extension LibP2PCrypto.Keys {
                             "Ed25519: attached public keys don't match"
                         )
                     }
-                    let privkey = try Curve25519.Signing.PrivateKey(marshaledData: parts[0])
-                    guard privkey.publicKey.rawRepresentation == parts[1] else {
+                    let privkey = try Curve25519.Signing.PrivateKey(marshaledData: Data(parts[0]))
+                    guard privkey.publicKey.rawRepresentation == Data(parts[1]) else {
                         throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
                             "Ed25519: unable to validate attached public key"
                         )
