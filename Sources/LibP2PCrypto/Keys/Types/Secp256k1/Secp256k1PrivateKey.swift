@@ -43,7 +43,7 @@ public final class Secp256k1PrivateKey: Sendable {
     }
 
     /// Convenience initializer for `init(privateKey:)`
-    public required convenience init(_ bytes: [UInt8]) throws {
+    public convenience init(_ bytes: [UInt8]) throws {
         try self.init(privateKey: bytes)
     }
 
