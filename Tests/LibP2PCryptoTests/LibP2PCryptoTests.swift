@@ -2097,8 +2097,9 @@ struct ASN1Tests {
         #expect(Curve25519.Signing.PublicKey.primaryObjectIdentifier == "1.3.101.112")
         #expect(Secp256k1PublicKey.primaryObjectIdentifier == "1.2.840.10045.2.1")
         #expect(Secp256k1PublicKey.secondaryObjectIdentifier == "1.3.132.0.10")
-        // Previously expressed as the TLV bytes [0x06, 0x05, 0x2B, 0x81, 0x04, 0x00, 0x0A]
-        #expect(Secp256k1PrivateKey.primaryObjectIdentifier == "1.3.132.0.10")
+        // Private keys use the same id-ecPublicKey + named curve pair as public keys (PKCS #8)
+        #expect(Secp256k1PrivateKey.primaryObjectIdentifier == "1.2.840.10045.2.1")
+        #expect(Secp256k1PrivateKey.secondaryObjectIdentifier == "1.3.132.0.10")
     }
 
     @Test func rsaAlgorithmIdentifierIncludesNullParameter() throws {
