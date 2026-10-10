@@ -2318,7 +2318,7 @@ struct RegressionTests {
     /// silently truncating any value above 65535. This exercises a genuinely large value; it only
     /// encodes/decodes an ASN.1 integer, so it does no key derivation and is cheap in any build.
     @Test func pbkdf2IterationEncodingSurvivesLargeValues() throws {
-        let salt = try LibP2PCrypto.randomBytes(length: 16)
+        let salt = LibP2PCrypto.randomBytes(length: 16)
         let pbkdf = LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(salt: salt, iterations: 310_000)
         let encoded = try pbkdf.encodePBKDF().serializedDERBytes()
         let decoded = try LibP2PCrypto.PEM.decodePBKFD(PBKDF2AlgorithmIdentifier(derEncoded: encoded))
