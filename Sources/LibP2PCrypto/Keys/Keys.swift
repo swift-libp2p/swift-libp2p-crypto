@@ -174,19 +174,19 @@ extension LibP2PCrypto {
             asKeyType: KeyPairType,
             fromBase base: BaseEncoding? = nil
         ) throws -> [UInt8] {
+            let decoded: [UInt8]
             do {
-                let decoded: [UInt8]
                 if let b = base {
                     decoded = try BaseEncoding.decode(raw, as: b)
                 } else {
                     decoded = try BaseEncoding.decode(raw).bytes
                 }
-                return try self.marshalPrivateKey(raw: Data(decoded), keyType: asKeyType)
             } catch {
                 throw KeyError.invalidParameters(
                     "Failed to decode raw private key, unknown base encoding: \(error)"
                 )
             }
+            return try self.marshalPrivateKey(raw: Data(decoded), keyType: asKeyType)
         }
 
         public static func marshalPrivateKey(raw: Data, keyType: KeyPairType) throws -> [UInt8] {
