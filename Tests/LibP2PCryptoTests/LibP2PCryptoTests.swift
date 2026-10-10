@@ -2111,7 +2111,7 @@ struct ASN1Tests {
 
     @Test func secp256k1ECPrivateKeyRoundTrips() throws {
         let key = try Secp256k1PrivateKey()
-        let der = try key.exportPrivateKeyPEMRaw()
+        let der = try key.sec1DER()
 
         let decoded = try ECPrivateKey(derEncoded: der)
         #expect(Array(decoded.privateKey.bytes) == key.rawRepresentation.byteArray)
