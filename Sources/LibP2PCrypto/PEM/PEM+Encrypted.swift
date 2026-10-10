@@ -99,12 +99,14 @@ extension LibP2PCrypto.PEM {
         andCipher cipher: CipherAlgorithm? = nil
     ) throws -> Data {
 
-        let cipher = try cipher ?? .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
+        // Defaults match OpenSSL 3's `openssl pkcs8 -topk8` (PBES2, PBKDF2-HMAC-SHA256, AES-256-CBC)
+        let cipher = try cipher ?? .aes_256_cbc(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
         let pbkdf =
             try pbkdf
             ?? .pbkdf2(
                 salt: LibP2PCrypto.randomBytes(length: defaultPBKDF2SaltLength),
-                iterations: defaultPBKDF2Iterations
+                iterations: defaultPBKDF2Iterations,
+                prf: .hmacWithSHA256
             )
 
         // Generate Encryption Key from Password
