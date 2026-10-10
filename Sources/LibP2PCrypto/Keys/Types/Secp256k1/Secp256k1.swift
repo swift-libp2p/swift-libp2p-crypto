@@ -115,29 +115,6 @@ extension Secp256k1PublicKey: DERCodable {
     public func privateKeyDER() throws -> [UInt8] {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("A public key has no private DER representation")
     }
-
-    public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let spki = try SubjectPublicKeyInfo(
-            algorithmIdentifier: AlgorithmIdentifier(
-                algorithm: Self.primaryObjectIdentifier,
-                parameters: .objectIdentifier(ASN1ObjectIdentifier.LibP2P.secp256k1)
-            ),
-            key: self.publicKeyDER()
-        )
-
-        let base64String = try spki.serializedDERBytes().toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.publicKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
-    }
 }
 
 extension Secp256k1PrivateKey: DERCodable {
