@@ -46,22 +46,14 @@ extension LibP2PCrypto.PEM {
 
         func decrypt(bytes: [UInt8], withKey key: [UInt8]) throws -> [UInt8] {
             switch self {
-            case .aes_128_cbc(let iv):
-                //print("128 IV: \(iv)")
+            case .aes_128_cbc(let iv), .aes_256_cbc(let iv):
                 return try AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).decrypt(bytes)
-            case .aes_256_cbc(let iv):
-                //print("256 IV: \(iv)")
-                return try AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).decrypt(bytes)
-            //default:
-            //throw Error.invalidPEMFormat
             }
         }
 
         func encrypt(bytes: [UInt8], withKey key: [UInt8]) throws -> [UInt8] {
             switch self {
-            case .aes_128_cbc(let iv):
-                return try AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).encrypt(bytes)
-            case .aes_256_cbc(let iv):
+            case .aes_128_cbc(let iv), .aes_256_cbc(let iv):
                 return try AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).encrypt(bytes)
             }
         }
@@ -94,9 +86,7 @@ extension LibP2PCrypto.PEM {
 
         var iv: [UInt8] {
             switch self {
-            case .aes_128_cbc(let iv):
-                return iv
-            case .aes_256_cbc(let iv):
+            case .aes_128_cbc(let iv), .aes_256_cbc(let iv):
                 return iv
             }
         }
