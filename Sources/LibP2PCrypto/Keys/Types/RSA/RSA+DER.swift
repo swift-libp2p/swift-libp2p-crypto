@@ -42,20 +42,7 @@ extension RSAPublicKey: DERCodable {
 
     /// RSA's `publicKeyDER()` is already the complete SubjectPublicKeyInfo, so it's armored directly
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let publicDER = try self.publicKeyDER()
-
-        let base64String = publicDER.toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.publicKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
+        try LibP2PCrypto.PEM.armor(self.publicKeyDER(), as: .publicKey, withHeaderAndFooter: withHeaderAndFooter)
     }
 }
 

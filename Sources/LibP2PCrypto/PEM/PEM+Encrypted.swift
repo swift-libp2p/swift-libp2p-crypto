@@ -128,16 +128,6 @@ extension LibP2PCrypto.PEM {
         )
     }
 
-    internal static func encryptPEMString(
-        _ pem: Data,
-        withPassword password: String,
-        usingPBKDF pbkdf: PBKDFAlgorithm? = nil,
-        andCipher cipher: CipherAlgorithm? = nil
-    ) throws -> String {
-        let data = try LibP2PCrypto.PEM.encryptPEM(pem, withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
-        guard let string = String(data: data, encoding: .utf8) else {
-            throw Error.encodingError
-        }
-        return string
+        return Data(armor(encoded, as: .encryptedPrivateKey))
     }
 }
