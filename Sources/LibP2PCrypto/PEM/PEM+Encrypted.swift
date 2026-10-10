@@ -32,7 +32,6 @@ extension LibP2PCrypto.PEM {
     internal static let defaultCipherIVLength = 16
 
     internal struct EncryptedPEM {
-        let objectIdentifer: ASN1ObjectIdentifier
         let ciphertext: [UInt8]
         let pbkdfAlgorithm: PBKDFAlgorithm
         let cipherAlgorithm: CipherAlgorithm
@@ -85,7 +84,6 @@ extension LibP2PCrypto.PEM {
         }
 
         return EncryptedPEM(
-            objectIdentifer: encryptedPrivateKeyInfo.encryptionAlgorithm,
             ciphertext: Array(encryptedPrivateKeyInfo.encryptedData.bytes),
             pbkdfAlgorithm: try decodePBKFD(encryptedPrivateKeyInfo.keyDerivationFunction),
             cipherAlgorithm: cipherAlgorithm
