@@ -1694,7 +1694,7 @@ struct DERAndPEMTests {
 
         let exportedPEM =
             "-----BEGIN ENCRYPTED PRIVATE KEY-----\n"
-            + encoded.toBase64().split(intoChunksOfLength: 64).joined(separator: "\n")
+            + Data(encoded).base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
             + "\n-----END ENCRYPTED PRIVATE KEY-----"
 
         #expect(exportedPEM == pem)
