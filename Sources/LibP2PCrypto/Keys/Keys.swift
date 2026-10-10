@@ -135,27 +135,16 @@ extension LibP2PCrypto {
             }.value
         }
 
-        /// Converts a protobuf serialized public key into its representative object.
+        /// Converts a protobuf serialized public key into its base encoded key data
+        /// (for every key type this is the protobuf's `Data` field, ex: the DER encoded SubjectPublicKeyInfo for RSA keys).
         public static func unmarshalPublicKey(buf: [UInt8], into base: BaseEncoding = .base16) throws -> String {
             let pubKeyProto = try PublicKey(serializedBytes: buf)
 
             guard !pubKeyProto.data.isEmpty else {
                 throw KeyError.invalidMarshaledData("Public key payload was empty")
             }
-            switch pubKeyProto.type {
-            case .rsa:
-                //let data = try RSAPublicKeyImporter().fromSubjectPublicKeyInfo( pubKeyProto.data )
-                //return data.asString(base: base)
-                return pubKeyProto.data.asString(base: base)
 
-            case .ed25519:
-                return pubKeyProto.data.asString(base: base)
-            case .secp256K1:
-                return pubKeyProto.data.asString(base: base)
-            case .ecdsa:
-                return pubKeyProto.data.asString(base: base)
-            }
-
+            return pubKeyProto.data.asString(base: base)
         }
 
         /// Converts a raw private key string into a protobuf serialized private key.
