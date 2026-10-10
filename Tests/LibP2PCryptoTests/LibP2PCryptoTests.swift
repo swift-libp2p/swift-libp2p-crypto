@@ -1669,8 +1669,6 @@ struct DERAndPEMTests {
                 )
         )
 
-        //print(pbkdf.iterations.bytes(totalBytes: 2))
-
         //        print("*** DER ***")
         //        print("***********")
         //

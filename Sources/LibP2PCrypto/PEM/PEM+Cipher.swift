@@ -23,7 +23,6 @@ extension LibP2PCrypto.PEM {
     public enum CipherAlgorithm {
         case aes_128_cbc(iv: [UInt8])
         case aes_256_cbc(iv: [UInt8])
-        //case des3(iv: [UInt8])
 
         init(objID: ASN1ObjectIdentifier, iv: [UInt8]) throws {
             let algorithm: CipherAlgorithm
@@ -32,8 +31,6 @@ extension LibP2PCrypto.PEM {
                 algorithm = .aes_128_cbc(iv: iv)
             case ASN1ObjectIdentifier.LibP2P.aes256CBC:
                 algorithm = .aes_256_cbc(iv: iv)
-            //case [42, 134, 72, 134, 247, 13, 3, 7]:
-            //  algorithm = .des3(iv: iv)
             default:
                 throw Error.unsupportedCipherAlgorithm(objID)
             }

@@ -56,8 +56,6 @@ extension LibP2PCrypto.Keys {
                 case .P384: try self.init(privateKey: P384.Signing.PrivateKey())
                 case .P521: try self.init(privateKey: P521.Signing.PrivateKey())
                 }
-            //default:
-            //    throw NSError(domain: "Unsupported Key Type", code: 0)
             }
         }
 
@@ -95,7 +93,6 @@ extension LibP2PCrypto.Keys {
 
         /// The key id is the base58 encoding of the multihash (see ``multihash()``) of its marshaled public key
         public func id(withMultibasePrefix: Bool = true) throws -> String {
-            //let mh = try Multihash(hashing: self.marshal(), codec: .sha2_256)
             let mh = try self.multihash()
             return mh.asString(base: .base58btc, withMultibasePrefix: withMultibasePrefix)
         }
@@ -152,10 +149,6 @@ extension LibP2PCrypto.Keys {
             guard bytes.isEmpty == false else { return nil }
             return bytes.count * 8
         }
-
-        //public func asString(base:BaseEncoding, withMultibasePrefix:Bool = false) -> String {
-        //    self.data.asString(base: base, withMultibasePrefix: withMultibasePrefix)
-        //}
 
         // - MARK: Encryption & Decryption
 
@@ -488,7 +481,6 @@ extension LibP2PCrypto.Keys.KeyPair {
 extension LibP2PCrypto.Keys.KeyPair {
 
     public func exportPublicPEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
-        //guard let der = publicKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
         try publicKey.exportPublicKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
     }
 
@@ -502,7 +494,6 @@ extension LibP2PCrypto.Keys.KeyPair {
     }
 
     public func exportPublicPEMString(withHeaderAndFooter: Bool = true) throws -> String {
-        //guard let der = publicKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
         try publicKey.exportPublicKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
     }
 

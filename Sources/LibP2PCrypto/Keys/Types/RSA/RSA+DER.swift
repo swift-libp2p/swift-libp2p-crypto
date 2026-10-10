@@ -40,6 +40,7 @@ extension RSAPublicKey: DERCodable {
         )
     }
 
+    /// RSA's `publicKeyDER()` is already the complete SubjectPublicKeyInfo, so it's armored directly
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
         let publicDER = try self.publicKeyDER()
 
@@ -82,6 +83,7 @@ extension RSAPrivateKey: DERCodable {
         try self.init(rawRepresentation: Data(privateDER))
     }
 
+    /// The DER encoded PKCS #8 PrivateKeyInfo (rsaEncryption requires an explicit NULL parameter, RFC 3279 §2.3.1)
     public func exportPrivateKeyPEMRaw() throws -> [UInt8] {
         try PrivateKeyInfo(
             algorithmIdentifier: .rsaEncryption,

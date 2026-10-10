@@ -80,6 +80,8 @@ extension Curve25519.Signing.PrivateKey: @retroactive Equatable {
     }
 }
 
+/// - Note: Ed25519 AlgorithmIdentifiers have no parameters (RFC 8410 §3), so the `DEREncodable`
+///   default PEM exports (driven by a `nil` secondaryObjectIdentifier) are used as is.
 extension Curve25519.Signing.PublicKey: DERCodable {
     /// id-Ed25519 (1.3.101.112)
     public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.ed25519 }

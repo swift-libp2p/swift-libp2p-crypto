@@ -71,24 +71,6 @@ extension String {
     public func decrypt(withKey key: Decryptable) throws -> Data {
         try key.decrypt(multibaseEncoded: self)
     }
-
-    //    func encrypt(withKeyPair key:LibP2PCrypto.Keys.KeyPair, using encoding:String.Encoding = .utf8) throws -> Data {
-    //        guard let d = self.data(using: .utf8) else { throw NSError(domain: "Error during string encoding", code: 0, userInfo: nil) }
-    //        return try LibP2PCrypto.Keys.encrypt(d, publicKey: key.publicKey)
-    //    }
-
-    //    func decrypt(withKeyPair key:LibP2PCrypto.Keys.KeyPair, using encoding:String.Encoding = .utf8) throws -> Data {
-    //        guard let d = self.data(using: .utf8) else { throw NSError(domain: "Error during string encoding", code: 0, userInfo: nil) }
-    //        return try LibP2PCrypto.Keys.decrypt(d, privateKey: key.privateKey)
-    //    }
-
-    //    func encrypt(withAESKey key:LibP2PCrypto.AES.AESKey, using encoding:String.Encoding = .utf8) throws -> Data {
-    //        try key.encrypt(string: self, using: encoding)
-    //    }
-
-    //    func encrypt(withHmacKey key:LibP2PCrypto.HMAC.HMACKey) -> Data {
-    //        key.encrypt(self)
-    //    }
 }
 
 extension Data {
@@ -183,14 +165,6 @@ extension Array where Element == UInt8 {
     }
 
     private func decryptGCM(data: [UInt8], withKey key: Data) throws -> [UInt8] {
-        //Strip the nonce off the front of the data
-        //let nonce = Array(data.prefix(12))
-
-        // AES - GCM (CryptoSwift)
-        //        let aesGCM = try AES(key: key.bytes, blockMode: GCM(iv: nonce, mode: .combined), padding: .noPadding)
-        // Decrypt the ciphertext
-        //        return try aesGCM.decrypt(data.dropFirst(12))
-
         try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: SymmetricKey(data: key)).byteArray
 
     }
