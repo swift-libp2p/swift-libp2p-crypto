@@ -140,13 +140,16 @@ extension Array where Element == UInt8 {
 
     /// Returns  decrypted data that was previously encrypted with `encryptGCM(password:)`
     public func decryptGCM(password: String) throws -> [UInt8] {
-        var data = self
+        // The payload must at least contain a salt, a nonce and an authentication tag
+        guard self.count >= 16 + 12 + 16 else {
+            throw LibP2PCrypto.Keys.KeyError.decryptionFailed(
+                "AES-GCM payload too short (\(self.count) bytes)"
+            )
+        }
 
-        // Generate a 128-bit salt using a CSPRNG.
-        let salt = data.prefix(16)
-
-        // Strip the salt
-        data.removeFirst(16)
+        // Split off the 128-bit salt that was prepended during encryption
+        let salt = self.prefix(16)
+        let data = Array(self.dropFirst(16))
 
         // Attempt to derive the aes encryption key from the password and salt
         // PBKDF2-SHA256
@@ -172,7 +175,11 @@ extension Array where Element == UInt8 {
 
         //let ciphertext = aesGCM
 
-        return aesGCM.combined?.byteArray ?? []  //nonce + ciphertext
+        // `combined` is only nil for non-standard nonce sizes, which should never happen here
+        guard let combined = aesGCM.combined else {
+            throw LibP2PCrypto.Keys.KeyError.encryptionFailed("AES-GCM failed to produce a combined sealed box")
+        }
+        return combined.byteArray  //nonce + ciphertext + tag
     }
 
     private func decryptGCM(data: [UInt8], withKey key: Data) throws -> [UInt8] {
