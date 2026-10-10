@@ -92,12 +92,10 @@ struct RSAPublicKey: CommonPublicKey {
 
     /// Verifies an RSA Signature for an expected block of data
     ///
-    /// - Note: We throw on false to match the SecKey implementation
+    /// - Returns: `false` if the signature doesn't match the data
+    /// - Throws: if verification couldn't be performed
     func verify(signature: Data, for expectedData: Data) throws -> Bool {
-        guard try RSA.verify(signature: signature, fromMessage: expectedData, usingKey: self.key) else {
-            throw LibP2PCrypto.Keys.KeyError.signatureFailed("RSA: invalid signature for expected data")
-        }
-        return true
+        try RSA.verify(signature: signature, fromMessage: expectedData, usingKey: self.key)
     }
 
     public func marshal() throws -> Data {
