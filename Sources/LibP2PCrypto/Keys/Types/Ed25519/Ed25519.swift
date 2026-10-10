@@ -104,27 +104,6 @@ extension Curve25519.Signing.PublicKey: DERCodable {
     public func privateKeyDER() throws -> [UInt8] {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("A public key has no private DER representation")
     }
-
-    public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        // Ed25519 AlgorithmIdentifiers have no parameters (RFC 8410 §3)
-        let spki = try SubjectPublicKeyInfo(
-            algorithmIdentifier: AlgorithmIdentifier(algorithm: Self.primaryObjectIdentifier),
-            key: self.publicKeyDER()
-        )
-
-        let base64String = try spki.serializedDERBytes().toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.publicKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
-    }
 }
 
 extension Curve25519.Signing.PrivateKey: DERCodable {
@@ -153,27 +132,5 @@ extension Curve25519.Signing.PrivateKey: DERCodable {
     public func privateKeyDER() throws -> [UInt8] {
         // CurvePrivateKey ::= OCTET STRING (RFC 8410 §7)
         try ASN1OctetString(contentBytes: self.rawRepresentation.byteArray[...]).serializedDERBytes()
-    }
-
-    public func exportPrivateKeyPEMRaw() throws -> [UInt8] {
-        try PrivateKeyInfo(
-            algorithmIdentifier: AlgorithmIdentifier(algorithm: Self.primaryObjectIdentifier),
-            privateKey: self.privateKeyDER()
-        ).serializedDERBytes()
-    }
-
-    public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.privateKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.privateKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
     }
 }
