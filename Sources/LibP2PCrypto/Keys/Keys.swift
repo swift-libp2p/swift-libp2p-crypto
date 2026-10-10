@@ -89,23 +89,6 @@ extension LibP2PCrypto {
                 }
             }
 
-            var toGenericType: GenericKeyType {
-                .init(self.toProtoType)
-            }
-
-            var name: String {
-                switch self {
-                case .RSA:
-                    return "RSA"
-                case .Ed25519:
-                    return "ED25519"
-                case .Secp256k1:
-                    return "Secp256k1"
-                case .ECDSA:
-                    return "ECDSA"
-                }
-            }
-
             var description: String {
                 switch self {
                 case .RSA(let bits):
