@@ -17,7 +17,6 @@ import CryptoSwift
 import Foundation
 import SwiftASN1
 import SwiftProtobuf
-import Multibase
 @preconcurrency import Security
 
 struct RSAPublicKey: CommonPublicKey {
@@ -111,7 +110,6 @@ struct RSAPublicKey: CommonPublicKey {
     public func marshal() throws -> Data {
         var publicKey = PublicKey()
         publicKey.type = .rsa
-        //RSAPublicKeyExporter().toSubjectPublicKeyInfo(self.rawRepresentation)
         publicKey.data = self.rawRepresentation
         return try publicKey.serializedData()
     }
@@ -235,17 +233,6 @@ extension RSAPrivateKey: Equatable {
 }
 
 extension SecKey {
-    func asString(base: BaseEncoding) throws -> String {
-        try self.rawRepresentation().asString(base: base)
-    }
-
-    func extractPubKey() throws -> SecKey {
-        guard let pubKey = SecKeyCopyPublicKey(self) else {
-            throw LibP2PCrypto.Keys.KeyError.publicKeyDerivationFailed("SecKey")
-        }
-        return pubKey
-    }
-
     /// Returns the DER Encoded representation of the SecKey ( this does not include ASN.1 Headers for SubjectKeyInfo format)
     /// - Note: The method returns data in the PKCS #1 format for an RSA key. For an elliptic curve public key, the format follows the ASN.1 X9.63 standard using a byte string of 04 || X || Y. For an elliptic curve private key, the output is formatted as the public key concatenated with the big endian encoding of the secret scalar, or 04 || X || Y || K. All of these representations use constant size integers, including leading zeros as needed.
     func rawRepresentation() throws -> Data {
@@ -255,10 +242,6 @@ extension SecKey {
         } else {
             throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("SecKey: \(error.debugDescription)")
         }
-    }
-
-    var attributes: CFDictionary? {
-        SecKeyCopyAttributes(self)
     }
 }
 
