@@ -124,8 +124,9 @@ extension Secp256k1PublicKey: DERCodable {
     /// secp256k1 named curve (1.3.132.0.10)
     public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { ASN1ObjectIdentifier.LibP2P.secp256k1 }
 
+    /// Expects the SubjectPublicKeyInfo's BIT STRING contents, either a 65 byte uncompressed (`0x04 || X || Y`)
+    /// or a 33 byte compressed (`0x02 / 0x03 || X`) EC point
     public convenience init(publicDER: [UInt8]) throws {
-        /// Expects a 0x0422 32byte long octetString as the rawRepresentation
         try self.init(rawRepresentation: Data(publicDER))
     }
 
