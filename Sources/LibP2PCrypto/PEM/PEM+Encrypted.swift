@@ -28,7 +28,7 @@ extension LibP2PCrypto.PEM {
     internal static let defaultPBKDF2Iterations = 310_000
     /// Default PBKDF2 salt length in bytes used when encrypting a new PEM (raised from 8).
     internal static let defaultPBKDF2SaltLength = 16
-    /// Default IV length in bytes for the default AES-128-CBC cipher.
+    /// Default IV length in bytes for the default AES-256-CBC cipher.
     internal static let defaultCipherIVLength = 16
 
     internal struct EncryptedPEM {
