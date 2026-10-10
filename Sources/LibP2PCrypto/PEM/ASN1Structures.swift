@@ -49,6 +49,21 @@ extension ASN1ObjectIdentifier {
         /// id-PBKDF2 (1.2.840.113549.1.5.12) [RFC 8018]
         public static let pbkdf2: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 1, 5, 12]
 
+        /// id-hmacWithSHA1 (1.2.840.113549.2.7) [RFC 8018] (the default for PBKDF2 PRF)
+        public static let hmacWithSHA1: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 2, 7]
+
+        /// id-hmacWithSHA224 (1.2.840.113549.2.8) [RFC 8018]
+        public static let hmacWithSHA224: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 2, 8]
+
+        /// id-hmacWithSHA256 (1.2.840.113549.2.9) [RFC 8018]
+        public static let hmacWithSHA256: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 2, 9]
+
+        /// id-hmacWithSHA384 (1.2.840.113549.2.10) [RFC 8018]
+        public static let hmacWithSHA384: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 2, 10]
+
+        /// id-hmacWithSHA512 (1.2.840.113549.2.11) [RFC 8018]
+        public static let hmacWithSHA512: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 2, 11]
+
         /// aes128-CBC-PAD (2.16.840.1.101.3.4.1.2)
         public static let aes128CBC: ASN1ObjectIdentifier = [2, 16, 840, 1, 101, 3, 4, 1, 2]
 
