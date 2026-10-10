@@ -87,6 +87,8 @@ struct PBKDF2: Sendable {
         rounds: Int
     ) -> Data? {
         guard let passwordData = password.data(using: .utf8) else { return nil }
+        // Empty buffers have a nil baseAddress, and CommonCrypto takes a UInt32 round count
+        guard !salt.isEmpty, keyByteCount > 0, rounds > 0, rounds <= UInt32.max else { return nil }
         var derivedKeyData = Data(repeating: 0, count: keyByteCount)
         let derivedCount = derivedKeyData.count
         let derivationStatus: Int32 = derivedKeyData.withUnsafeMutableBytes { derivedKeyBytes in
