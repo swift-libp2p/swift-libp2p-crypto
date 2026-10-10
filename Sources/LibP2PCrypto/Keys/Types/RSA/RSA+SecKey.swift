@@ -83,6 +83,10 @@ struct RSAPublicKey: CommonPublicKey {
         return encryptedData as Data
     }
 
+    /// Verifies an RSA PKCS#1 v1.5 SHA-256 signature for an expected block of data
+    ///
+    /// - Returns: `false` if the signature doesn't match the data
+    /// - Throws: if verification couldn't be performed
     func verify(signature: Data, for expectedData: Data) throws -> Bool {
         var error: Unmanaged<CFError>?
 
@@ -95,10 +99,12 @@ struct RSAPublicKey: CommonPublicKey {
             &error
         )
 
-        // Throw the error if we encountered one...
-        if let error = error { throw error.takeRetainedValue() as Error }
+        if let error = error?.takeRetainedValue() {
+            // A signature that simply doesn't match is reported as an error by Security, map it to `false`
+            if CFErrorGetCode(error) == Int(errSecVerifyFailed) { return false }
+            throw error as Error
+        }
 
-        // return the result of the verification
         return result
     }
 
