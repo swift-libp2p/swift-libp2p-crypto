@@ -18,16 +18,6 @@ import SwiftASN1
 
 // MARK: Encrypted PEM PBKDF Algorithms
 
-extension LibP2PCrypto {
-    public static func random8ByteSalt() throws -> [UInt8] {
-        try LibP2PCrypto.randomBytes(length: 8)
-    }
-
-    public static func random16ByteSalt() throws -> [UInt8] {
-        try LibP2PCrypto.randomBytes(length: 16)
-    }
-}
-
 extension LibP2PCrypto.PEM {
     // MARK: Add support for new PBKDF Algorithms here...
     public enum PBKDFAlgorithm {
