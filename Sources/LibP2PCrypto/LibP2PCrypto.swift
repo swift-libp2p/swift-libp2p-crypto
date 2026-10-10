@@ -23,13 +23,10 @@ import Multibase
 
 public enum LibP2PCrypto {
 
-    public static func randomBytes(length: Int) throws -> [UInt8] {
-        #if (os(macOS) || os(iOS) || os(watchOS) || os(tvOS)) || os(Linux) || os(Android) || os(Windows)
+    /// Returns `length` cryptographically secure random bytes (via `SystemRandomNumberGenerator`)
+    public static func randomBytes(length: Int) -> [UInt8] {
         var rng = SystemRandomNumberGenerator()
         return (0..<length).map { _ in rng.next() }
-        #else
-        fatalError("No secure random number generator on this platform.")
-        #endif
     }
 
 }
@@ -106,7 +103,7 @@ extension Array where Element == UInt8 {
     /// Returns the encrypted data in the format [ { salt }  { nonce}  { ciphertext }  { GCM algorithm tag } ]
     public func encryptGCM(password: String) throws -> [UInt8] {
         // Generate a 128-bit salt using a CSPRNG.
-        let salt = try LibP2PCrypto.randomBytes(length: 16)
+        let salt = LibP2PCrypto.randomBytes(length: 16)
 
         // Attempt to derive the aes encryption key from the password and salt
         // PBKDF2-SHA256
@@ -145,17 +142,9 @@ extension Array where Element == UInt8 {
     }
 
     private func encryptGCM(data: [UInt8], withKey key: Data) throws -> [UInt8] {
-        let nonce = try LibP2PCrypto.randomBytes(length: 12)
+        let nonce = LibP2PCrypto.randomBytes(length: 12)
 
-        // AES - GCM (CryptoSwift)
-        //let aesGCM = try AES(key: key.bytes, blockMode: GCM(iv: nonce, mode: .combined), padding: .noPadding)
-        // Encrypt and prepend nonce.
-        //let ciphertext = try aesGCM.encrypt(data)
-
-        // AES - GCM (swift-crypto)
         let aesGCM = try AES.GCM.seal(data, using: SymmetricKey(data: key), nonce: AES.GCM.Nonce(data: nonce))
-
-        //let ciphertext = aesGCM
 
         // `combined` is only nil for non-standard nonce sizes, which should never happen here
         guard let combined = aesGCM.combined else {
