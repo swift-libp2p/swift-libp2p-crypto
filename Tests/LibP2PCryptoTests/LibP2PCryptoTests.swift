@@ -877,9 +877,14 @@ struct AESCipherTests {
         //Ensure we can decrypt the data with the proper key
         #expect(decrypted2 == message)
 
+        //The IV is prepended to the ciphertext, so any key instance sharing the same secret can decrypt it
+        let decryptedSameSecret: String = try aes256Key.decrypt(encrypted2)
+        #expect(decryptedSameSecret == message)
+
         //Ensure that decryption fails when we use the wrong key
-        //Usually results in an String.Encoding Error (cause gibberish)
-        let decryptedWrongKey: String? = try? aes256Key.decrypt(encrypted2)
+        //Usually results in a padding or String.Encoding Error (cause gibberish)
+        let wrongKey = try LibP2PCrypto.AES.createKey(key: "65432109876543216543210987654321")
+        let decryptedWrongKey: String? = try? wrongKey.decrypt(encrypted2)
         #expect(decryptedWrongKey != message)
     }
 
