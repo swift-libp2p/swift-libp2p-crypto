@@ -151,33 +151,47 @@ extension LibP2PCrypto {
         /// Converts UTF8 Encoding of PEM file into a PEMType and the base64 decoded key data
         /// - Parameter data: The `UTF8` encoding of the PEM file
         /// - Returns: A tuple containing the PEMType, and the actual base64 decoded PEM data (with the headers and footers removed).
+        ///
+        /// - Note: Both `\n` and `\r\n` line endings are supported, as is explanatory text before the
+        ///   `-----BEGIN` line or after the `-----END` line (ex: OpenSSL's "Bag Attributes"). Only the first PEM block is decoded.
         internal static func pemToData(
             _ data: [UInt8]
         ) throws -> (type: PEMType, bytes: [UInt8], objectIdentifiers: [ASN1ObjectIdentifier]) {
             let fiveDashes = ArraySlice<UInt8>(repeating: 0x2D, count: 5)  // "-----".bytes.toHexString()
-            let chunks = data.split(separator: 0x0a)  // 0x0a == "\n" `new line` char
-            guard chunks.count > 2 else {
-                throw PEM.Error.invalidPEMFormat(
-                    "expected at least 3 chunks, a header, body and footer, but got \(chunks.count)"
-                )
+            let beginPrefix = ArraySlice("-----BEGIN ".utf8)
+            let endPrefix = ArraySlice("-----END ".utf8)
+
+            // Split into lines (0x0a == "\n"), trimming surrounding whitespace and any trailing "\r" (0x0d)
+            let isWhitespace: (UInt8) -> Bool = { $0 == 0x20 || $0 == 0x09 || $0 == 0x0d }
+            let chunks: [ArraySlice<UInt8>] = data.split(separator: 0x0a).compactMap { line in
+                guard let first = line.firstIndex(where: { !isWhitespace($0) }),
+                    let last = line.lastIndex(where: { !isWhitespace($0) })
+                else { return nil }
+                return line[first...last]
             }
 
             // Enforce a valid PEM header
-            guard let header = chunks.first,
-                header.count > 10,
-                header.prefix(5) == fiveDashes,
-                header.suffix(5) == fiveDashes
-            else {
+            guard let headerIndex = chunks.firstIndex(where: { $0.starts(with: beginPrefix) }) else {
+                throw PEM.Error.invalidPEMHeader
+            }
+            let header = chunks[headerIndex]
+            guard header.count > 10, header.suffix(5) == fiveDashes else {
                 throw PEM.Error.invalidPEMHeader
             }
 
             // Enforce a valid PEM footer
-            guard let footer = chunks.last,
-                footer.count > 10,
-                footer.prefix(5) == fiveDashes,
-                footer.suffix(5) == fiveDashes
+            guard
+                let footerIndex = chunks[(headerIndex + 1)...].firstIndex(where: { $0.starts(with: endPrefix) })
             else {
                 throw PEM.Error.invalidPEMFooter
+            }
+            let footer = chunks[footerIndex]
+            guard footer.count > 10, footer.suffix(5) == fiveDashes else {
+                throw PEM.Error.invalidPEMFooter
+            }
+
+            guard footerIndex - headerIndex > 1 else {
+                throw PEM.Error.invalidPEMFormat("expected a header, body and footer, but the body was empty")
             }
 
             // Attempt to classify the PEMType based on the header
@@ -185,7 +199,8 @@ extension LibP2PCrypto {
             // - Note: This just gives us a general idea of what direction to head in. Headers that don't match the underlying data will end up throwing an Error later
             let pemType: PEMType = try PEMType(headerBytes: header)
 
-            guard let base64 = String(data: Data(chunks[1..<chunks.count - 1].joined()), encoding: .utf8) else {
+            guard let base64 = String(data: Data(chunks[(headerIndex + 1)..<footerIndex].joined()), encoding: .utf8)
+            else {
                 throw Error.invalidPEMFormat("Unable to join chunked body data")
             }
             guard let pemData = Data(base64Encoded: base64) else {
