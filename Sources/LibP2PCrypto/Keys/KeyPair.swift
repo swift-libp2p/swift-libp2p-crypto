@@ -237,7 +237,8 @@ extension LibP2PCrypto.Keys {
                 case 96:
                     // [private key][public key][public key]
                     // Ensure the two pubkeys match and we can derive the attached public key
-                    let parts = Array(proto.data.chunks(ofCount: 32))
+                    let bytes = Array(proto.data)
+                    let parts = [bytes[0..<32], bytes[32..<64], bytes[64..<96]]
                     guard parts[1] == parts[2] else {
                         throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
                             "Ed25519: attached public keys don't match"
