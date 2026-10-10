@@ -120,10 +120,10 @@ extension LibP2PCrypto.Keys {
                 return Attributes(type: type, size: bits, isPrivate: isPrivate)
 
             case .ed25519:
-                return Attributes(type: .Ed25519, size: 32, isPrivate: isPrivate)
+                return Attributes(type: .Ed25519, size: 256, isPrivate: isPrivate)
 
             case .secp256k1:
-                return Attributes(type: .Secp256k1, size: 64, isPrivate: isPrivate)
+                return Attributes(type: .Secp256k1, size: 256, isPrivate: isPrivate)
 
             case .ecdsa:
                 guard let ecdsaKey = self.publicKey as? any ECDSAPublicKeyBacking else { return nil }
