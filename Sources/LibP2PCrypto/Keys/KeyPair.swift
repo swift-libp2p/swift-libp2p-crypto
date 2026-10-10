@@ -393,7 +393,7 @@ extension LibP2PCrypto.Keys.KeyPair {
                 try self.init(
                     privateKey: Curve25519.Signing.PrivateKey(pem: pemBytes, asType: Curve25519.Signing.PrivateKey.self)
                 )
-            } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp256k1) {
                 try self.init(privateKey: Secp256k1PrivateKey(pem: pemBytes, asType: Secp256k1PrivateKey.self))
             } else if ids.contains(ASN1ObjectIdentifier.LibP2P.prime256v1) {
                 try self.init(privateKey: P256.Signing.PrivateKey(pem: pemBytes, asType: P256.Signing.PrivateKey.self))
