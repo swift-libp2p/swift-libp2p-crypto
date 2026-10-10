@@ -654,14 +654,15 @@ struct SignAndVerifyTests {
         #expect(try rsa.publicKey.verify(signature: signedData, for: message))
 
         // Ensure that the signature is no longer valid if it is tweaked in any way
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.shuffled()), for: message) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.dropLast()), for: message) }
+        // (a mismatched signature returns false, a malformed / truncated one may throw instead)
+        #expect(try rsa.publicKey.verify(signature: Data(signedData.reversed()), for: message) == false)
+        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message)) != true)
+        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropLast()), for: message)) != true)
 
         // Ensure that the signature is no longer valid if the message is tweaked in any way
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.shuffled())) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.dropLast())) }
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.reversed())) == false)
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) == false)
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropLast())) == false)
     }
 
     @Test func testRSAMessageSignVerify_DynamicKey() throws {
@@ -686,14 +687,15 @@ struct SignAndVerifyTests {
         #expect(try rsa.publicKey.verify(signature: signedData, for: message))
 
         // Ensure that the signature is no longer valid if it is tweaked in any way
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.shuffled()), for: message) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.dropLast()), for: message) }
+        // (a mismatched signature returns false, a malformed / truncated one may throw instead)
+        #expect(try rsa.publicKey.verify(signature: Data(signedData.reversed()), for: message) == false)
+        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message)) != true)
+        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropLast()), for: message)) != true)
 
         // Ensure that the signature is no longer valid if the message is tweaked in any way
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.shuffled())) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.dropLast())) }
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.reversed())) == false)
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) == false)
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropLast())) == false)
     }
 
     @Test func testED25519MessageSignVerify() throws {
