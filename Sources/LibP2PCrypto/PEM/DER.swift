@@ -2,7 +2,7 @@
 //
 // This source file is part of the swift-libp2p open source project
 //
-// Copyright (c) 2022-2025 swift-libp2p project authors
+// Copyright (c) 2022-2026 swift-libp2p project authors
 // Licensed under MIT
 //
 // See LICENSE for license information
@@ -17,45 +17,46 @@ import SwiftASN1
 
 /// Conform to this protocol if your type can be instantiated from a ASN1 DER representation
 public protocol DERDecodable {
+
     /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> 1.2.840.113549.1.1.1)
     static var primaryObjectIdentifier: ASN1ObjectIdentifier { get }
+
     /// The keys secondary ASN1 object identifier, if any (ex: Secp256k1 public key --> secp256k1 --> 1.3.132.0.10)
     static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { get }
+
     /// Instantiates an instance of your Public Key when given a DER representation of your Public Key
     init(publicDER: [UInt8]) throws
+
     /// Instantiates an instance of your Private Key when given a DER representation of your Private Key
     init(privateDER: [UInt8]) throws
-    /// Instantiates a DERDecodable Key from a PEM string
-    init<Key: DERDecodable>(pem: String, password: String?, asType: Key.Type) throws
-    /// Instantiates a DERDecodable Key from ut8 decoded PEM data
-    init<Key: DERDecodable>(pem: Data, password: String?, asType: Key.Type) throws
 }
 
 extension DERDecodable {
+
     /// Instantiates a DERDecodable Key from a PEM string
     /// - Parameters:
     ///   - pem: The PEM file to import
     ///   - password: A password to use to decrypt an encrypted PEM file
-    ///   - asType: The underlying DERDecodable Key Type (ex: RSA.self)
-    public init<Key: DERDecodable>(pem: String, password: String? = nil, asType: Key.Type = Key.self) throws {
-        try self.init(pem: Array(pem.utf8), password: password, asType: Key.self)
+    /// - Throws: if the PEM can't be decoded, or its object identifiers don't match those of `Self`
+    public init(pem: String, password: String? = nil) throws {
+        try self.init(pem: Array(pem.utf8), password: password)
     }
 
     /// Instantiates a DERDecodable Key from ut8 decoded PEM data
     /// - Parameters:
     ///   - pem: The PEM file to import
     ///   - password: A password to use to decrypt an encrypted PEM file
-    ///   - asType: The underlying DERDecodable Key Type (ex: RSA.self)
-    public init<Key: DERDecodable>(pem: Data, password: String? = nil, asType: Key.Type = Key.self) throws {
-        try self.init(pem: Array(pem), password: password, asType: Key.self)
+    /// - Throws: if the PEM can't be decoded, or its object identifiers don't match those of `Self`
+    public init(pem: Data, password: String? = nil) throws {
+        try self.init(pem: Array(pem), password: password)
     }
 
     /// Instantiates a DERDecodable Key from ut8 decoded PEM bytes
     /// - Parameters:
     ///   - pem: The PEM file to import
     ///   - password: A password to use to decrypt an encrypted PEM file
-    ///   - asType: The underlying DERDecodable Key Type (ex: RSA.self)
-    public init<Key: DERDecodable>(pem: [UInt8], password: String? = nil, asType: Key.Type = Key.self) throws {
+    /// - Throws: if the PEM can't be decoded, or its object identifiers don't match those of `Self`
+    public init(pem: [UInt8], password: String? = nil) throws {
         let (type, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem)
 
         if password != nil {
@@ -72,15 +73,15 @@ extension DERDecodable {
         case .publicKey:
             let der = try LibP2PCrypto.PEM.decodePublicKeyPEM(
                 Data(bytes),
-                expectedPrimaryObjectIdentifier: Key.primaryObjectIdentifier,
-                expectedSecondaryObjectIdentifier: Key.secondaryObjectIdentifier
+                expectedPrimaryObjectIdentifier: Self.primaryObjectIdentifier,
+                expectedSecondaryObjectIdentifier: Self.secondaryObjectIdentifier
             )
             try self.init(publicDER: der)
         case .privateKey, .ecPrivateKey:
             let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
                 Data(bytes),
-                expectedPrimaryObjectIdentifier: Key.primaryObjectIdentifier,
-                expectedSecondaryObjectIdentifier: Key.secondaryObjectIdentifier
+                expectedPrimaryObjectIdentifier: Self.primaryObjectIdentifier,
+                expectedSecondaryObjectIdentifier: Self.secondaryObjectIdentifier
             )
             try self.init(privateDER: der)
         case .encryptedPrivateKey:
@@ -107,8 +108,8 @@ extension DERDecodable {
             // Proceed with the unencrypted PEM (can public PEM keys be encrypted as well, wouldn't really make sense but idk if we should support it)?
             let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
                 Data(decryptedPEM),
-                expectedPrimaryObjectIdentifier: Key.primaryObjectIdentifier,
-                expectedSecondaryObjectIdentifier: Key.secondaryObjectIdentifier
+                expectedPrimaryObjectIdentifier: Self.primaryObjectIdentifier,
+                expectedSecondaryObjectIdentifier: Self.secondaryObjectIdentifier
             )
 
             try self.init(privateDER: der)
@@ -118,8 +119,10 @@ extension DERDecodable {
 
 /// Conform to this protocol if your type can be described in an ASN1 DER representation
 public protocol DEREncodable {
+
     /// The keys ASN1 object identifier (ex: RSA --> rsaEncryption --> 1.2.840.113549.1.1.1)
     static var primaryObjectIdentifier: ASN1ObjectIdentifier { get }
+
     /// The keys secondary ASN1 object identifier, if any (ex: RSA --> nil)
     static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { get }
 
