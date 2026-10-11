@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CryptoSwift
 import Foundation
 import SwiftASN1
 
@@ -35,7 +34,7 @@ extension LibP2PCrypto.PEM {
                 throw Error.unsupportedCipherAlgorithm(objID)
             }
             // Validate the IV length up front so a malformed PEM fails here with a clear
-            // error rather than deep inside CryptoSwift's CBC block-mode at decrypt time.
+            // error rather than deep inside the AES-CBC implementation at decrypt time.
             guard iv.count == algorithm.expectedIVLength else {
                 throw Error.invalidPEMFormat(
                     "EncryptedPrivateKey::CIPHER::IV length \(iv.count), expected \(algorithm.expectedIVLength)"
@@ -47,14 +46,14 @@ extension LibP2PCrypto.PEM {
         func decrypt(bytes: [UInt8], withKey key: [UInt8]) throws -> [UInt8] {
             switch self {
             case .aes_128_cbc(let iv), .aes_256_cbc(let iv):
-                return try AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).decrypt(bytes)
+                return try Array(LibP2PCrypto.AES.cbc(bytes, key: Data(key), iv: Data(iv), encrypt: false))
             }
         }
 
         func encrypt(bytes: [UInt8], withKey key: [UInt8]) throws -> [UInt8] {
             switch self {
             case .aes_128_cbc(let iv), .aes_256_cbc(let iv):
-                return try AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).encrypt(bytes)
+                return try Array(LibP2PCrypto.AES.cbc(bytes, key: Data(key), iv: Data(iv), encrypt: true))
             }
         }
 
