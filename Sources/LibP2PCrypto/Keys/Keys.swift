@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import CryptoSwift
 import Foundation
 import Multibase
 import SwiftProtobuf
@@ -41,25 +40,33 @@ extension LibP2PCrypto {
             }
         }
 
+        /// The RSA modulus size
+        ///
+        /// - Note: RSA keys must be between 2048 and 8192 bits (``supportedBitRange``),
+        ///   matching swift-crypto and go-libp2p's limits.
         public enum RSABitLength: Sendable {
-            /// - Warning: RSA Keys with less than 2048 bits are considered insecure
-            case B1024
+
+            /// The range of RSA key sizes (in bits) that we accept
+            public static let supportedBitRange: ClosedRange<Int> = 2048...8192
+
             case B2048
             case B3072
             case B4096
-            /// - Warning: RSA Keys with less than 2048 bits are considered insecure
+            /// - Note: Generating 8192 bit keys can take a few seconds
+            case B8192
+            /// - Note: Must be within ``supportedBitRange``
             case custom(bits: Int)
 
             var bits: Int {
                 switch self {
-                case .B1024:
-                    return 1024
                 case .B2048:
                     return 2048
                 case .B3072:
                     return 3072
                 case .B4096:
                     return 4096
+                case .B8192:
+                    return 8192
                 case .custom(let bits):
                     return bits
                 }
