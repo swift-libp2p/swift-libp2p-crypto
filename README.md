@@ -38,8 +38,11 @@ As specified by libp2p, Secp256k1 signatures are ECDSA signatures over the SHA-2
 #### ECDSA Keys:
 ECDSA keys follow the libp2p spec and go-libp2p, public keys are marshaled as DER encoded SubjectPublicKeyInfo structures, private keys as DER encoded SEC1 ECPrivateKey structures, and messages are hashed with SHA-256 (regardless of the curve) before being signed, producing DER encoded signatures. P-256 is the default curve.
 
-## Disclaimer
-‼️ This is a work in progress ‼️ 
+#### RSA Keys:
+RSA keys are backed by swift-crypto's `_RSA` on every platform. Signatures are RSASSA-PKCS1-v1_5 over SHA-256 and encryption uses RSAES-PKCS1-v1_5, as specified by libp2p. Keys must be between 2048 and 8192 bits (`RSABitLength.supportedBitRange`), matching go-libp2p, both when generating and when importing keys.
+
+#### Encrypted PEMs:
+Encrypted private key PEMs are PKCS#8 `ENCRYPTED PRIVATE KEY` (PBES2) files. New exports default to PBKDF2-HMAC-SHA256 (310,000 iterations, 16 byte salt) with AES-256-CBC, matching OpenSSL 3's `openssl pkcs8 -topk8`. Imports support PBKDF2 with HMAC-SHA1/224/256/384/512 and AES-128/256-CBC.
 
 ## Install
 
@@ -72,27 +75,26 @@ check out the [tests](https://github.com/SwiftEthereum/libp2p-crypto/blob/main/T
 import LibP2PCrypto
 
 /// Generate a new Public / Private Key Pair
-let rsaKeyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
+let rsaKeyPair = try LibP2PCrypto.Keys.generateKeyPair(.rsa(bits: .b2048))
 rsaKeyPair.keyType          // -> .rsa
-rsaKeyPair.publicKey        // -> PublicKey
+rsaKeyPair.publicKey        // -> CommonPublicKey
 rsaKeyPair.publicKey.data   // -> raw public key data
-rsaKeyPair.privateKey       // -> optional(PrivateKey)
+rsaKeyPair.privateKey       // -> optional(CommonPrivateKey)
+rsaKeyPair.attributes()     // -> RSA (2048 bit) private key (2048 bits)
 
 /// Key Types
-try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))    // RSA w/ Bit Options... 2048, 3072, 4096, 8192 (minimum 2048) 
-try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)              // Ed25519 Elliptic Key
-try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)            // Secp256k1 Key
-try LibP2PCrypto.Keys.generateKeyPair(.ECDSA(curve: .P256))  // ECDSA w/ Curve Options... P256 (default), P384, P521
+try LibP2PCrypto.Keys.generateKeyPair(.rsa(bits: .b2048))    // RSA w/ Bit Options... 2048, 3072, 4096, 8192 or .custom(bits:) (2048-8192)
+try LibP2PCrypto.Keys.generateKeyPair(.ed25519)              // Ed25519 Elliptic Key
+try LibP2PCrypto.Keys.generateKeyPair(.secp256k1)            // Secp256k1 Key
+try LibP2PCrypto.Keys.generateKeyPair(.ecdsa(curve: .p256))  // ECDSA w/ Curve Options... p256 (default), p384, p521
 
+/// Wrap a key you already have
+let keyPair = try LibP2PCrypto.Keys.KeyPair(privateKey: P256.Signing.PrivateKey())
 
-/// Importing Marshalled Keys 
-let pubKey = try LibP2PCrypto.Keys.importMarshaledPublicKey(marshaledPublicKeyData)
-/// or using a marshaled private key...
-let privateKey = try LibP2PCrypto.Keys.importMarshaledPrivateKey(marshaledPrivateKeyData)
-/// or instantiate a KeyPair instead... (if you pass in a public key, the private key will be nil, if you pass in a private key, both public and private keys will be imported/extracted)
+/// Importing Marshalled Keys (if you pass in a public key, the private key will be nil, if you pass in a private key, both public and private keys will be imported/extracted)
+let keyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPublicKeyData)
 let keyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaledPrivateKeyData)
 let keyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaledPrivateKeyAsBase64String, base: .base64Pad) // Or you can use a String encoding of the key data
-
 
 /// Importing PEM files (PEM, Encrypted PEM, DER and CERTIFICATES are supported. See the tests for more examples...)
 let pem = """
@@ -110,15 +112,17 @@ keyPair.privateKey  // -> nil (private key is nil when importing public keys...)
 /// You can import encrypted PEM files as well...
 let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: encryptedPem, password: "mypassword")
 
+/// Or import a PEM directly into a specific key type
+let publicKey = try Curve25519.Signing.PublicKey(pem: pem)
 
 /// Once you have a KeyPair, you can use it to.... 
 
 /// Sign & Verify Messages 
-let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
-let message = "Hello, world!".data(using: .utf8)!
-let signedData = try keyPair.privateKey!.sign(message: message)
+let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.ed25519)
+let message = Data("Hello, world!".utf8)
+let signedData = try keyPair.sign(message: message)
 
-if try keyPair.publicKey.verfiy(signedData, for: message) {
+if try keyPair.verify(signature: signedData, for: message) {
  // The signature is valid! It means that the public key used to verify the signed message was derived from the same private key that signed the message
 } else { 
  // Invalid signature. This public key does not belong to the private key that signed the message. 
@@ -128,42 +132,34 @@ if try keyPair.publicKey.verfiy(signedData, for: message) {
 try keyPair.publicKey.marshal()
 
 /// If you want to safely store the Private key between sessions you can export it as an encrypted PEM String
-try keyPair.exportEncryptedPrivatePEMString(withPassword "mypassword")
+/// (PBKDF2-HMAC-SHA256 + AES-256-CBC by default, see `usingPBKDF:` and `andCipher:` to customize)
+try keyPair.exportEncryptedPrivatePEMString(withPassword: "mypassword")
 
-
-
-/// AES Cipher (streaming encryption cipher)
+/// AES-CBC Cipher
 let message = "Hello World!"
-let key256  = "12345678901234561234567890123456"   // 32 bytes for AES256
-let iv      = "abcdefghijklmnop"                   // 16 bytes for AES128
+let key256  = "12345678901234561234567890123456"   // 32 bytes for AES256 (or 16 bytes for AES128)
+let iv      = "abcdefghijklmnop"                   // 16 bytes
 
-let aes256Key = try LibP2PCrypto.AES.createKey(key: key256, iv: iv)
+let aes256Key = try LibP2PCrypto.AES.AESKey(key: key256, iv: iv)
 
-let encrypted = try aes256Key.encrypt(message)
-let decrypted:String = try aes256Key.decrypt(encrypted)
+let encrypted = try aes256Key.encrypt(message)                         // The IV is prepended to the ciphertext
+let decrypted = try aes256Key.decrypt(encrypted, intoString: .utf8)    // So any AESKey with the same key can decrypt it
 
 /// AES GCM 
 let message = "Hello World!"
 let encrypted = try message.encryptGCM(password: "mypassword")
 let decrypted = try encrypted.decryptGCM(password: "mypassword")
 
-
-
 /// HMAC (Hashed Message Authentication Codes)
 let message = "Hello World!"
-let key = "secret"
-let hmacKeyLocal = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
-let hmacKeyRemote = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
+let key = "secret"   // The secret can also be `Data` or a `SymmetricKey`
+let hmacKeyLocal = LibP2PCrypto.HMAC.HMACKey(algorithm: .sha256, secret: key)
+let hmacKeyRemote = LibP2PCrypto.HMAC.HMACKey(algorithm: .sha256, secret: key)
 
-let encrypted = hmacKeyLocal.encrypt(message)
+let code = hmacKeyLocal.authenticationCode(for: message)
 
-hmacKeyRemote.verify(message, hash: encrypted)          // -> Returns true. Correct data + correct HMAC == true 
-hmacKeyRemote.verify("HellØ world!", hash: encrypted)   // -> Returns false. Corrupted data + correct HMAC == false 
-
-
-/// PBKDF2 (password based key derivation function 2)
-let key = PBKDF2.SHA1(password: "mypassword", salt: salt, keyByteCount: 16, rounds: itterations)
-
+hmacKeyRemote.verify(message, hash: code)          // -> Returns true. Correct data + correct HMAC == true 
+hmacKeyRemote.verify("HellØ world!", hash: code)   // -> Returns false. Corrupted data + correct HMAC == false 
 
 ```
 
@@ -171,36 +167,41 @@ let key = PBKDF2.SHA1(password: "mypassword", salt: salt, keyByteCount: 16, roun
 ```Swift
 
 /// Generate Keys
-LibP2PCrypto.Keys.generateKeyPair(_ type:KeyPairType) throws -> KeyPair
+LibP2PCrypto.Keys.generateKeyPair(_ type: KeyPairType) throws -> KeyPair
+LibP2PCrypto.Keys.generateKeyPair(_ type: KeyPairType) async throws -> KeyPair
+LibP2PCrypto.Keys.KeyPair(privateKey: CommonPrivateKey) throws
+LibP2PCrypto.Keys.KeyPair(publicKey: CommonPublicKey) throws
 
 /// Import Marshaled Keys
-LibP2PCrypto.Keys.KeyPair(marshaledPublicKey str:String, base:BaseEncoding) throws
-LibP2PCrypto.Keys.KeyPair(marshaledPublicKey data:Data) throws
-LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey str:String, base:BaseEncoding) throws
-LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey data:Data) throws
+LibP2PCrypto.Keys.KeyPair(marshaledPublicKey str: String, base: BaseEncoding) throws
+LibP2PCrypto.Keys.KeyPair(marshaledPublicKey data: Data) throws
+LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey str: String, base: BaseEncoding) throws
+LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey data: Data) throws
 
 /// Import PEM formatted Keys
-LibP2PCrypto.Keys.KeyPair(pem:String, password:String? = nil) throws -> KeyPair
-LibP2PCrypto.Keys.KeyPair(pem:Data, password:String? = nil) throws -> KeyPair
+LibP2PCrypto.Keys.KeyPair(pem: String, password: String? = nil) throws
+LibP2PCrypto.Keys.KeyPair(pem: Data, password: String? = nil) throws
+DERDecodable(pem: String, password: String? = nil) throws   // ex: RSAPublicKey(pem:), P256.Signing.PrivateKey(pem:password:)
+
+/// Export Keys
+LibP2PCrypto.Keys.KeyPair.marshalPublicKey() throws -> Data
+LibP2PCrypto.Keys.KeyPair.marshalPrivateKey() throws -> Data
+LibP2PCrypto.Keys.KeyPair.exportPublicPEMString(withHeaderAndFooter: Bool = true) throws -> String
+LibP2PCrypto.Keys.KeyPair.exportEncryptedPrivatePEMString(withPassword: String, usingPBKDF: PEM.PBKDFAlgorithm? = nil, andCipher: PEM.CipherAlgorithm? = nil) throws -> String
 
 /// Sign & Verify
-RawPrivateKey.sign(message: Data) throws -> Data
-RawPublicKey.verfiy(_ signature: Data, for expectedData:Data) throws -> Bool
+LibP2PCrypto.Keys.KeyPair.sign(message: Data) throws -> Data
+LibP2PCrypto.Keys.KeyPair.verify(signature: Data, for data: Data) throws -> Bool
 
 /// AES CIPHER
-LibP2PCrypto.AES.createKey(key:String, iv:String) throws -> AESKey
-LibP2PCrypto.AES.AESKey.encrypt(_ data:Data) throws -> Data
+LibP2PCrypto.AES.AESKey(key: String, iv: String) throws
+LibP2PCrypto.AES.AESKey.encrypt(_ data: Data) throws -> Data
 LibP2PCrypto.AES.AESKey.decrypt(_ data: Data) throws -> Data
 
 /// HMAC
-LibP2PCrypto.HMAC.create(algorithm:CryptoAlgorithm, secret:String) -> LibP2PCrypto.HMAC.HMACKey
-LibP2PCrypto.HMAC.HMACKey.encrypt(_ message:Data) -> Data
-LibP2PCrypto.HMAC.HMACKey.verify(_ data:Data, hash:Data) -> Bool
-
-/// PBKDF2
-LibP2PCrypto.PBKDF2.SHA1(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data?
-LibP2PCrypto.PBKDF2.SHA256(password: String, salt: Data, keyByteCount: Int = 16, rounds: Int = 32767) -> Data?
-LibP2PCrypto.PBKDF2.SHA512(password: String, salt: Data, keyByteCount: Int, rounds: Int) -> Data?
+LibP2PCrypto.HMAC.HMACKey(algorithm: CryptoAlgorithm, secret: String)   // or `secret: Data`, or `key: SymmetricKey`
+LibP2PCrypto.HMAC.HMACKey.authenticationCode(for message: Data) -> Data
+LibP2PCrypto.HMAC.HMACKey.verify(_ data: Data, hash: Data) -> Bool
 
 ```
 
@@ -211,12 +212,11 @@ Contributions are welcomed! This code is very much a proof of concept. I can gua
 Let's make this code better together! 🤝
 
 ## Credits
-
+- [swift-crypto](https://github.com/apple/swift-crypto.git)
 - [krzyzanowskim - CryptoSwift](https://github.com/krzyzanowskim/CryptoSwift)
 - [21-DOT-DEV - swift-secp256k1](https://github.com/21-DOT-DEV/swift-secp256k1)
 - [siemensikkema - JWT-Kit](https://github.com/vapor/jwt-kit.git) 
 - [RSA Import/Export](https://github.com/nextincrement/rsa-public-key-importer-exporter.git)
-- [CommonCrypto, Crypto-Kit and swift-crypto libraries]
 
 ## Resources
 ### Links
@@ -235,7 +235,7 @@ Let's make this code better together! 🤝
 
 ## License
 
-[MIT](LICENSE) © 2022 Breth Inc.
+[MIT](LICENSE) © 2026 Breth Inc.
 
 
 
