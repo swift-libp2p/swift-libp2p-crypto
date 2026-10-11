@@ -12,7 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CryptoSwift
+import Crypto
+import CryptoExtras
 import Foundation
 import SwiftASN1
 
@@ -47,13 +48,13 @@ extension LibP2PCrypto.PEM {
                 self = prf
             }
 
-            fileprivate var variant: HMAC.Variant {
+            fileprivate var hashFunction: KDF.Insecure.PBKDF2.HashFunction {
                 switch self {
-                case .hmacWithSHA1: return .sha1
-                case .hmacWithSHA224: return .sha2(.sha224)
-                case .hmacWithSHA256: return .sha2(.sha256)
-                case .hmacWithSHA384: return .sha2(.sha384)
-                case .hmacWithSHA512: return .sha2(.sha512)
+                case .hmacWithSHA1: return .insecureSHA1
+                case .hmacWithSHA224: return .insecureSHA224
+                case .hmacWithSHA256: return .sha256
+                case .hmacWithSHA384: return .sha384
+                case .hmacWithSHA512: return .sha512
                 }
             }
         }
@@ -90,13 +91,15 @@ extension LibP2PCrypto.PEM {
         func deriveKey(password: String, ofLength keyLength: Int) throws -> [UInt8] {
             switch self {
             case .pbkdf2(let salt, let iterations, let prf):
-                return try PKCS5.PBKDF2(
-                    password: password.bytes,
+                // `unsafeUncheckedRounds` because imported PEMs may legitimately use fewer than swift-crypto's 210k minimum
+                let key = try KDF.Insecure.PBKDF2.deriveKey(
+                    from: Array(password.utf8),
                     salt: salt,
-                    iterations: iterations,
-                    keyLength: keyLength,
-                    variant: prf.variant
-                ).calculate()
+                    using: prf.hashFunction,
+                    outputByteCount: keyLength,
+                    unsafeUncheckedRounds: iterations
+                )
+                return key.withUnsafeBytes { Array($0) }
             }
         }
 
