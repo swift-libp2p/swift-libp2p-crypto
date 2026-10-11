@@ -97,7 +97,7 @@ extension LibP2PCrypto.PEM {
     ) throws -> Data {
 
         // Defaults match OpenSSL 3's `openssl pkcs8 -topk8` (PBES2, PBKDF2-HMAC-SHA256, AES-256-CBC)
-        let cipher = cipher ?? .aes_256_cbc(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
+        let cipher = cipher ?? .aes256CBC(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
         let pbkdf =
             pbkdf
             ?? .pbkdf2(
