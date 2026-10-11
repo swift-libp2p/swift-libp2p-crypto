@@ -20,10 +20,13 @@ import SwiftASN1
 // MARK: Encrypted PEM PBKDF Algorithms
 
 extension LibP2PCrypto.PEM {
+
     // MARK: Add support for new PBKDF Algorithms here...
-    public enum PBKDFAlgorithm {
+    public enum PBKDFAlgorithm: Sendable, Hashable, CustomStringConvertible {
+
         /// The pseudorandom function used by PBKDF2
-        public enum PRF: Sendable, CaseIterable {
+        public enum PRF: Sendable, Hashable, CaseIterable, CustomStringConvertible {
+
             /// HMAC-SHA1, the RFC 8018 default (used when a PEM doesn't specify a PRF)
             case hmacWithSHA1
             case hmacWithSHA224
@@ -55,6 +58,16 @@ extension LibP2PCrypto.PEM {
                 case .hmacWithSHA256: return .sha256
                 case .hmacWithSHA384: return .sha384
                 case .hmacWithSHA512: return .sha512
+                }
+            }
+
+            public var description: String {
+                switch self {
+                case .hmacWithSHA1: return "HMAC-SHA1"
+                case .hmacWithSHA224: return "HMAC-SHA224"
+                case .hmacWithSHA256: return "HMAC-SHA256"
+                case .hmacWithSHA384: return "HMAC-SHA384"
+                case .hmacWithSHA512: return "HMAC-SHA512"
                 }
             }
         }
@@ -138,6 +151,13 @@ extension LibP2PCrypto.PEM {
                 iterationCount: self.iterations,
                 prf: self.prf.objectIdentifier
             )
+        }
+
+        public var description: String {
+            switch self {
+            case .pbkdf2(_, let iterations, let prf):
+                return "PBKDF2 (\(prf), \(iterations) iterations)"
+            }
         }
     }
 
