@@ -874,9 +874,9 @@ struct HMACTests {
     @Test func testHMAC() throws {
         let message = "Hello World"
         let key = "secret"
-        let hmac = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
-        let hmac2 = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
-        let hmac3 = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: "Secret")
+        let hmac = LibP2PCrypto.HMAC.authenticationCode(for: message, algorithm: .sha256, secret: key)
+        let hmac2 = LibP2PCrypto.HMAC.authenticationCode(for: message, algorithm: .sha256, secret: key)
+        let hmac3 = LibP2PCrypto.HMAC.authenticationCode(for: message, algorithm: .sha256, secret: "Secret")
 
         #expect(hmac == hmac2)  //Same message, same key -> Same hash
         #expect(hmac != hmac3)  //Same message, different key -> Different hash
@@ -885,10 +885,10 @@ struct HMACTests {
     @Test func testHMACKey() throws {
         let message = "Hello World"
         let key = "secret"
-        let hmacKey = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
+        let hmacKey = LibP2PCrypto.HMAC.create(algorithm: .sha256, secret: key)
 
-        let encrypted = hmacKey.encrypt(message)
-        let encrypted2 = hmacKey.encrypt(message)
+        let encrypted = hmacKey.authenticationCode(for: message)
+        let encrypted2 = hmacKey.authenticationCode(for: message)
 
         #expect(encrypted == encrypted2)
     }
@@ -896,7 +896,7 @@ struct HMACTests {
     @Test func testHMACBaseEncoded() throws {
         let message = "Hello World"
         let key = "secret"
-        let hmac = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
+        let hmac = LibP2PCrypto.HMAC.authenticationCode(for: message, algorithm: .sha256, secret: key)
 
         print(hmac.asString(base: .base16))
         print(hmac.asString(base: .base32Hex))
@@ -906,10 +906,10 @@ struct HMACTests {
     @Test func testHMACVerify() throws {
         let message = "Hello World"
         let key = "secret"
-        let hmacKeyLocal = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
-        let hmacKeyRemote = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
+        let hmacKeyLocal = LibP2PCrypto.HMAC.create(algorithm: .sha256, secret: key)
+        let hmacKeyRemote = LibP2PCrypto.HMAC.create(algorithm: .sha256, secret: key)
 
-        let encrypted = hmacKeyLocal.encrypt(message)
+        let encrypted = hmacKeyLocal.authenticationCode(for: message)
 
         // Correct data, hash matches...
         #expect(hmacKeyRemote.verify(message, hash: encrypted))
@@ -918,11 +918,11 @@ struct HMACTests {
     }
 
     @Test(arguments: [
-        LibP2PCrypto.HMAC.CryptoAlgorithm.MD5, .SHA1, .SHA256, .SHA384, .SHA512,
+        LibP2PCrypto.HMAC.CryptoAlgorithm.md5, .sha1, .sha256, .sha384, .sha512,
     ])
     func verifyAcceptsValidAndRejectsInvalidCodes(algorithm: LibP2PCrypto.HMAC.CryptoAlgorithm) throws {
         let key = LibP2PCrypto.HMAC.HMACKey(algorithm: algorithm, secret: "secret")
-        let code = key.encrypt("Hello World")
+        let code = key.authenticationCode(for: "Hello World")
 
         #expect(key.verify("Hello World", hash: code))
         #expect(key.verify(Data("Hello World".utf8), hash: code))
