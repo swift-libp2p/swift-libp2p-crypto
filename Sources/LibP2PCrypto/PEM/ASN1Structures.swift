@@ -293,44 +293,6 @@ struct ECPrivateKey: DERImplicitlyTaggable, Hashable {
     }
 }
 
-// MARK: RSAPublicKey (PKCS #1)
-
-/// ```
-/// RSAPublicKey ::= SEQUENCE {
-///     modulus           INTEGER,  -- n
-///     publicExponent    INTEGER   -- e
-/// }
-/// ```
-/// [RFC 8017 §A.1.1](https://datatracker.ietf.org/doc/html/rfc8017#appendix-A.1.1)
-///
-/// The integers are exposed as unsigned big-endian magnitudes (no DER sign byte).
-struct RSAPublicKeyPKCS1: DERImplicitlyTaggable, Hashable {
-    static var defaultIdentifier: ASN1Identifier { .sequence }
-
-    var modulus: ArraySlice<UInt8>
-    var publicExponent: ArraySlice<UInt8>
-
-    init(modulus: ArraySlice<UInt8>, publicExponent: ArraySlice<UInt8>) {
-        self.modulus = modulus
-        self.publicExponent = publicExponent
-    }
-
-    init(derEncoded rootNode: ASN1Node, withIdentifier identifier: ASN1Identifier) throws {
-        self = try DER.sequence(rootNode, identifier: identifier) { nodes in
-            let modulus = try ArraySlice<UInt8>(derEncoded: &nodes)
-            let publicExponent = try ArraySlice<UInt8>(derEncoded: &nodes)
-            return RSAPublicKeyPKCS1(modulus: modulus, publicExponent: publicExponent)
-        }
-    }
-
-    func serialize(into coder: inout DER.Serializer, withIdentifier identifier: ASN1Identifier) throws {
-        try coder.appendConstructedNode(identifier: identifier) { coder in
-            try coder.serialize(self.modulus)
-            try coder.serialize(self.publicExponent)
-        }
-    }
-}
-
 // MARK: Encrypted Private Keys (PKCS #8 / PKCS #5 v2)
 
 /// ```
