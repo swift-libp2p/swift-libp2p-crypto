@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CryptoSwift
 import Foundation
 import SwiftASN1
 
@@ -23,18 +22,18 @@ extension RSAPublicKey: DERCodable {
     public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
 
     public func publicKeyDER() throws -> [UInt8] {
-        self.rawRepresentation.byteArray
+        Array(self.rawRepresentation)
     }
 
     public func privateKeyDER() throws -> [UInt8] {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("A public key has no private DER representation")
     }
 
-    init(publicDER: [UInt8]) throws {
+    public init(publicDER: [UInt8]) throws {
         try self.init(rawRepresentation: Data(publicDER))
     }
 
-    init(privateDER: [UInt8]) throws {
+    public init(privateDER: [UInt8]) throws {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
             "Can't instantiate a public key from a private DER representation"
         )
@@ -50,23 +49,23 @@ extension RSAPrivateKey: DERCodable {
     /// rsaEncryption (1.2.840.113549.1.1.1)
     public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.rsaEncryption }
 
-    static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
+    public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
 
-    func publicKeyDER() throws -> [UInt8] {
-        try self.derivePublicKey().rawRepresentation.byteArray
+    public func publicKeyDER() throws -> [UInt8] {
+        try Array(self.derivePublicKey().rawRepresentation)
     }
 
-    func privateKeyDER() throws -> [UInt8] {
-        self.rawRepresentation.byteArray
+    public func privateKeyDER() throws -> [UInt8] {
+        Array(self.rawRepresentation)
     }
 
-    init(publicDER: [UInt8]) throws {
+    public init(publicDER: [UInt8]) throws {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
             "Can't instantiate a private key from a public DER representation"
         )
     }
 
-    init(privateDER: [UInt8]) throws {
+    public init(privateDER: [UInt8]) throws {
         try self.init(rawRepresentation: Data(privateDER))
     }
 

@@ -79,7 +79,7 @@ rsaKeyPair.publicKey.data   // -> raw public key data
 rsaKeyPair.privateKey       // -> optional(PrivateKey)
 
 /// Key Types
-try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))    // RSA w/ Bit Options... 1024, 2048, 3072, 4096 
+try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))    // RSA w/ Bit Options... 2048, 3072, 4096, 8192 (minimum 2048) 
 try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)              // Ed25519 Elliptic Key
 try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)            // Secp256k1 Key
 try LibP2PCrypto.Keys.generateKeyPair(.ECDSA(curve: .P256))  // ECDSA w/ Curve Options... P256 (default), P384, P521

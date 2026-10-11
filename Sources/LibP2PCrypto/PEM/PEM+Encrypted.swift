@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CryptoSwift
 import Foundation
 import SwiftASN1
 
@@ -71,7 +70,7 @@ extension LibP2PCrypto.PEM {
     /// }
     /// ```
     internal static func decodeEncryptedPEM(_ encryptedPEM: Data) throws -> EncryptedPEM {
-        let encryptedPrivateKeyInfo = try EncryptedPrivateKeyInfo(derEncoded: encryptedPEM.byteArray)
+        let encryptedPrivateKeyInfo = try EncryptedPrivateKeyInfo(derEncoded: Array(encryptedPEM))
         let cipherAlgorithm = try decodeCipher(encryptedPrivateKeyInfo.encryptionScheme)
 
         // If the PBKDF2 parameters specify a key length, it must match the cipher's key length
@@ -111,7 +110,7 @@ extension LibP2PCrypto.PEM {
         let key = try pbkdf.deriveKey(password: password, ofLength: cipher.desiredKeyLength)
 
         // Encrypt Plaintext
-        let ciphertext = try cipher.encrypt(bytes: pem.byteArray, withKey: key)
+        let ciphertext = try cipher.encrypt(bytes: Array(pem), withKey: key)
 
         // Encode Encrypted PEM (including pbkdf and cipher algos used)
         let encoded = try EncryptedPrivateKeyInfo(

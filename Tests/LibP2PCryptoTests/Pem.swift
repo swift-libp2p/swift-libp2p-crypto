@@ -120,6 +120,41 @@ struct TestPEMKeys {
         -----END PUBLIC KEY-----
         """
 
+    /// RSA 8192 Public Key
+    ///
+    /// Generated with (8192 bit key generation is too slow to run in the test suite)
+    /// ```
+    /// openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:8192 -out rsa_8192_priv.pem
+    /// openssl pkey -in rsa_8192_priv.pem -pubout
+    /// ```
+    static let RSA_8192_PUBLIC = """
+        -----BEGIN PUBLIC KEY-----
+        MIIEIjANBgkqhkiG9w0BAQEFAAOCBA8AMIIECgKCBAEA1cW+JLaKzLzWJL8oBQ2j
+        z71M0dRpfb2A9R4PTSwl9w/4TMtLrLxMlb5ZqPJAQ8hWovE2jvQW6UBJHyFGSHBq
+        XwAHn6wCjQwTvCGqponRwCc+dQmrWysKldH/HJGRqPRj6/Dbdh2R4L8d6bA2r1yF
+        2YwIiT5rpKLWsOWoTeYR1qv7vJxhvEgd+IFYRa5mFcJp9GYRbl1cv7OLlzsP2EMv
+        T2hRaKTJwZFml2Sb7NlCUxHp3qnTd0lMuGq5+1YQynby/yL9mNrKBaL/5VkyLtZw
+        Dw6Lan5oL6qL4gAtm/FdvCKFwUSckU7UEQgdi8p6ghKI0QsWcVStUF1oSgAz95D1
+        UM/Jdqz4VlKvDpS73GU/ITJ6XSjTyCbQnANlIoy9KtSciYe1BCo5j4gIwzSh66vA
+        tUIITHtwtFw+YE4M9z4tJxdzQeyxAmYuEqrjwmdxwkWODwOmGvzGs45hjlrQgm8b
+        U+IEoy0rbtx8K/sLsxDv7qhoaVuULej4ce1l264QuFC7Pn1ZEwTy5pCUEoyK7JED
+        fQB3nPlN0anFQtxI5MCjqMkwJSXkosTHfzD87Hq9MrmzVDY5/seBvs1e4Ov+oVqZ
+        FgLlF5YIC2XtBjyssmlDXNqE/aMETe667WinsF034Rf93Inz6CrXnWfte03o4RTz
+        fSTlSawp/LzivOzP9aSmm2Ot7bgw9iDCfkk9eSlZVAVSq7JTDi6nb5qF9ov9xY25
+        Bgts23/bGmC+XrYqs5mdJwi10cRfGCod3Mlq67bPyeCkWAbrTrsBU7KwDjJuKsmk
+        oeY6FoQiYt7za+XroTavRHXRJECxO3Zbi7HRmPhMxzC163c5vJsvuV0CQfjMQh2n
+        o7qz8PrMupogQTmz+rZEYVWQGQgnC0ASBE+c2UWwSV4+L6+5+FuzyyXIJSIhHe8x
+        p4Utq5brkWrCichEOrQzU53x+SznhVcIL/RntnXKaThBp/k+kMIkqGD7erhiFsSl
+        6n360l4APhYfdoAvpAo3W+fiMwT4u/Ywd7Xc5PmsfkVY26EOORgS2TWkTwmMGeGL
+        gyiyLsmzdeNnnTNtR7ayfxD16kJ6XUpuYvAdS2YeGEObwI7blDebFDUujdkJGVsn
+        S/IqirTg4gBYQzn+wMETlQtVP4lFQm+P3bWQNKWa20+iRMk8xN4jDlgG81OMgRGs
+        747pZCa0FB/9Bpf4IpReXSxq0uLyctgFiTKSB277at2I+FF4RxIllo61YGONGdPt
+        ZItZj4UmVFFRI3cnU2p5+0VT1oJkp+7o+vseHWRq/fw88QXKaWPPQ8BtG7syr3rr
+        LlL/Zru/yOBDwxKZuGVcw29mNTEE/0f/lT5ENuJbFfY8J2P+yYs7ttdCBAsiNI7r
+        5wIDAQAB
+        -----END PUBLIC KEY-----
+        """
+
     /// RSA 1024 Private Key
     ///
     /// openssl asn1parse -i -in rsa_1024_priv.pem
@@ -312,7 +347,7 @@ struct TestPEMKeys {
         -----END PRIVATE KEY-----
         """
 
-    /// An encrypted RSA 1024 private key and it's original unencrypted pem file for testing AES CBC PBKDF2 decryption of PEM files...
+    /// An encrypted RSA 2048 private key and it's original unencrypted pem file for testing AES CBC PBKDF2 decryption of PEM files...
     ///
     /// To decrypt an encrypted private RSA key...
     /// 1) Strip the headers of the PEM and base64 decode the data
@@ -320,38 +355,53 @@ struct TestPEMKeys {
     /// 3) Derive the encryption key using PBKDF2 (sha1, salt and itterations)
     /// 4) Use encryption key to instantiate the AES CBC Cipher along with the IV
     /// 5) Decrypt the encrypted octet string
-    /// 6) The decrypted octet string can be ASN1 parsed again for the private key octet string
-    /// 7) This raw data can be used to instantiate a SecKey
-    struct RSA_1024_PRIVATE_ENCRYPTED_PAIR {
-        /// An unencrypted RSA 1024 Private Key
+    /// 6) The decrypted octet string is the PKCS#8 PrivateKeyInfo of the RSA key
+    struct RSA_2048_PRIVATE_ENCRYPTED_PAIR {
+        /// The password used to encrypt `ENCRYPTED` and `ENCRYPTED_DES3`
+        static let PASSWORD = "mypassword"
+
+        /// An unencrypted RSA 2048 Private Key
         ///
         /// Generated with
         /// ```
         /// openssl genpkey -algorithm RSA
-        ///   -pkeyopt rsa_keygen_bits:1024
+        ///   -pkeyopt rsa_keygen_bits:2048
         ///   -pkeyopt rsa_keygen_pubexp:65537
         ///   -out foo.pem
         /// ```
         static let UNENCRYPTED = """
             -----BEGIN PRIVATE KEY-----
-            MIICdQIBADANBgkqhkiG9w0BAQEFAASCAl8wggJbAgEAAoGBAMrTsyVLP/Ureyqm
-            zJDcolbO9cafCafeGXHrWJ4ar6QL+tT/apk+6kkgqvRU4QpJFurbzDXhmLpiUk9u
-            t2Oy6lw0LrF7Nz/XGHXfNHutLS6+jrHI+9x55l87CQyObsdaTt1jhP3IHp6FIA/S
-            rAAiCrFiPG7L97OdqREa2uWYIrupAgMBAAECgYAigSMvy/5kafI5Dkkst6wSUoDz
-            Oij9WsY/YAciVm3c3YDdbVooGdDngdwzVqE2C7sPVzcFT4yY4JMaGj6ugkhl+2mm
-            8BP6GkOGYbwrMgyjPXLjg4mmeQS75NxxzVFcGxM3405G4p833DxNJyFZyJpfA0b6
-            5qhn4J2ZrxTwGu/TxQJBAPUxawoM1E3kRrJ+l30zHLVu0cbS4yXCYD24a9cWy6GI
-            aSNnJAzsb5eGkfg7epKNIov/sTh5RLeUu9x6d3Xe0qcCQQDTxEDSmBqdB0GhQF/9
-            7JXVdS25WEB4vJ/eVPPMDSoSS6IAR3+noVpQuLXqdIrAPA6alTsX1oxEKl6M6hTQ
-            0lkvAkA9t2Kp9PC7amohI5wd92+Se4Jx+UMTjgmLf5AlY6d90UglkSCR4DF2gnjb
-            cp03pi677nA9NskFLHrc1DadhKihAkAE443/jqVmpKk+OMc+jHy1Ddx9X+01HF2w
-            e1OZjWBAReC6kuv+iboVDP6eKAyf/YL0zKctmLVqSXQfWrQaUhDfAkBNmxhdcL3M
-            18PnvSVbfuwhKuNQd3lf8Xpr9eSHOnpYglqAbLObNHqZN24v+MI5M6Rdp6+yXryE
-            vcUs0rZnDXkl
+            MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQC51VSB3uldiJv2
+            E+yM5hNYkaxC3I7WVoE+jNVAHdSbWPDDbj3SclqLnCi7buLH5PHy1KLXLX94KAar
+            M0x2dU4q94nlUVgMSZTFejgT/siLl6ZYCR4o64aI/BL+wUENGrjJ46WE4jNqvmQD
+            yUjpgWMgZWfCnGrDVjtjynUARgXGxoRc8pyGGr3jTMVPBGjN34x+T/J/59ySFYFg
+            KaS4dQc9AFA60hVGGKlltYnQm8xDWrpcOC3itmUlCL0TyDhDb+S9rt5NAsPF0ABo
+            81yIZPOUyRPC+7cnVp1unjZqEiHAvelY4Kq4tIp0fszJWH123C8baOhOV/3iKpYz
+            WzxomntTAgMBAAECggEAJMenOSkQURXXoGWjHOPwkkgKqxUSJDPs0p93GYCN8s0w
+            oc1w6PT/HMCkgyxYMC4NAP262RHFN9fcMgguKwfel7x0i3GFFrF9g3REIxj7Qj2a
+            i7QKRxkOgJA7hjZjlJ9kUXj/6oQGnyrdiq5NAwI7x06qsabZrp2jlYWdkJdLT2Lm
+            Cm233YCU2y9b4Rw6XfyamlsxYjO6K6/DddlCcXkcy8nnZP183GxReZ4JIqe16Av7
+            lERSZ47DQ5UtGjba2yEyfaJJgawn/BAk+AqUPpYv8L5wH+RPKOIdMGC8jBhfhXU0
+            k4Xsxn/3iTQIlnXIPp5Tb1WqfULQPV7cLT5LN4AICQKBgQD3el5XBuQ/uN4t0iEe
+            NOpol3EcfQZnI68qubUWvwnpTIw0WdoStz7RiTKfh3NeaFwQZj8oIcdbpGAnk/ux
+            dzV9YNpMyCr3kFwenc1WxPo+Lxn/Ni/eBbUTtN6THMMDWVxKyebUNgS+wHH2AH2K
+            36EF74wdhdUoZcd8zMrm65kYpQKBgQDAO4kdWU9ut4DJkcRLwfhildE+Ju/RxPbx
+            lo2nSBOUu/X4aiiLaVkvHfJuK4lnAwClGcvQIeUiDDmm+le5vNAhjvwY+F3LYCPK
+            lHfS8GMtuyKAPqG/4oJBJTbi5VHjsQrvzHHZQ+QJfpK8Ays4m3ueX1U0/GRU10BQ
+            IKDxXrSKlwKBgQCBVk+1teFWODzNv7MVQVx82yD/XYwaHTkv4Cx3PdJlPl9MAOWK
+            wIAxLD3rx/OQlIQBAh7hz32MNIUYSivRnNa0twh/9mEWTzkFuz0Uqw+Jrj4s9lnf
+            9CWlrfJg+jglKO+mGozrvWuPca5dffYevS8/lekpiMdVPJQccj9cnia+DQKBgQC5
+            ydCfWO34Z8pFBmjdfz78qSduFlu6Nc8ldwi5IGQsX+0+hfthohPcAemIqPNHaBN7
+            fg8JvXijC4W86D9Y+C9//52O1JxyLxzocc3NRR/V1wNlRyM1PUn+hGUjrdcTZMzZ
+            LpLqFT+UHYzbwYRIVZ2IV0MWzsh5ZwB1cNOb9JgxSQKBgQC6xXw6vonSVQehgNGF
+            mPMgGM5uuNnpM2YUepAYKPzC/ABK4Habc64HYB2RwkT1Qnu7g1dcSI0LsBd2y+GL
+            jOReqTOXIsJ0E6Gy3QfwA+xbVGyzQA0YTpnP573ozVVmQZa8FV+lFPX//RIgPNNv
+            Q8LVTXtUTTw2yke2HgXUkHnDYA==
             -----END PRIVATE KEY-----
             """
 
-        /// The encrypted version of the RSA 1024 Private Key
+        /// The encrypted version of the RSA 2048 Private Key
+        /// (PBES2, PBKDF2-HMAC-SHA1, 2048 iterations, 8 byte salt, AES-128-CBC)
         ///
         /// Encrypted with
         /// ```
@@ -363,22 +413,77 @@ struct TestPEMKeys {
         /// ```
         static let ENCRYPTED = """
             -----BEGIN ENCRYPTED PRIVATE KEY-----
-            MIICzzBJBgkqhkiG9w0BBQ0wPDAbBgkqhkiG9w0BBQwwDgQI49PtP+7yJmgCAggA
-            MB0GCWCGSAFlAwQBAgQQYz/oWtq4qhWPNrAQiO3i5wSCAoCjWvOSqAMdA4qDF8BB
-            aaqGRnZ/Lvewsrs4keppFogFnYpeVkzEmeleQLIYkO2mnNvsjhfh2Vk1LW/qNPIl
-            NvwjXyNbP1E6TlLmTNEAgIfyViHOCuk+17tkgAtK98huFTi0U+LbMcaxSnJ7CsNY
-            9JODko7fLXMpEaGy5qcuXWsMHG1iKcggYs0J1kmWSVw9ZQP7Uh9hs31zz60kFe+T
-            1I8EOjC06EcKY2HmOhzS+p378nWD3Lxi49FWkHslx1OtQwAXqMG5xWSo+kTWgmUx
-            fB3Olmv7opDcQ5OtOSxRjM/6SCtrtIlPRjIS7Uu4foW2BpFS+mkkvaJR0lMiEFjA
-            qMdLu3MZzT8U9lEDpd+ki+OjIC2bOXkv/OgHFmHjrTrGTVnK+HP5B0XkcaN0kmi5
-            ypd8/XB4zDqO/eSSTKnDe5cvw9Ruj5vt9cesUGjckTlVlZ7Sip2nqtngEAh0k7gc
-            p8p0LpNRyOM5edxNCsRLWj3Z9oskkbEFbL3INuVr6HZ5C1IpUHaxzdii1FBeLSqY
-            RYCC7iOgfqRILkBN2dsnWhdLLvcVpeQqSccnNCYSrXgr40T8BqZKLnuhHT7/iZaw
-            OiKp9MyygPf0wO5IFaSglpk02dohJpg/LYxFBZk+qJKPR9883NrtSPSzXxDogu2f
-            /tc8OCoH919cB8WAsU1cvKYMxsr9HTfoxS7itrJX9d7tE3J2Ky7fQrPWt247BXSE
-            FMUJ8BQpLL/2lNIxW9clLEuzr0RZKu3AhBU0V0o8KDucrsLPdbLvV9/J8+G8VJWB
-            DZjkXrHO2Oob0rOBtz0gnIF4TSwMWlI28OFWLwN3ByGeT0KcDN7SghLtDSyEQKNW
-            ZHiA
+            MIIFHzBJBgkqhkiG9w0BBQ0wPDAbBgkqhkiG9w0BBQwwDgQItFN8Rv+HfeQCAggA
+            MB0GCWCGSAFlAwQBAgQQSRG1ZyfCgGRU1vAqzEP8WASCBNBhmHklRhwhYxV4m0/4
+            7BoZzhObOTflYi8vZ13MZlgjd/UCfp/HdeHkIuX+E2UPBz6DZaMTalHbkXJNKehI
+            ZC8+1miGehBXcLg748gYytYFcGwomMsWUXs7v1EWahVxzVg6s7NwITweJ2TzlIwU
+            w5QbVQHglq1difGNF0daysOrUOk1wod6U23pO9O04aYPEygqlF6aIbDTkcfEUUhr
+            3GUOBtbr9Id+K4nuHT36W8gWbAmvkxa3pG0/5TcRmn7dHBRvBwyfuv37ejcYFcRR
+            J4iwFaQYRrsKoYRe+IXPQosNtWGp49+mewR0cguvoIsr1EKv3UOKMg1GIu1wltkq
+            ZflGYbh8j1f6l/y+92jZxpoK2XfvR0HeCZZZBnp/ooeX1qgpKMdLNssomvGRV6bd
+            FXZRoC9cA9l1lYriy3ISgXG1a2DCfK2sszljZCriii51/Ba+G+/+VjOzgpYOCPsS
+            LJJBQ2jFo0LE+fLEbkhcqZzrW8KMJjZPAHhO/ShV2EYMPASbOUgtJ+OWYtMJU9zK
+            HjtlTe8ezH5GbUZw51ANL4tX1I9wnAMeAoUVVETBmeARZBDy2TVhZ655SXCgUJs4
+            rW+jVqHRofhtEJoIjTwTFLYyDwaMXoIJUngDp4oTeNM9w28pdfX1Z/ezHX2GOV71
+            mQGs7SgZ7dSsicVac8LTzH0rraf7A+GCgfMSNcsuvqIxFhk48h0w/IqT+QIOlycU
+            InIMHvX6x3AoAeOwZequrKXFHp2HWLFkweM6XeebA+dl1M2E3MbsPI+Dpi7VSEW/
+            F/qAfURbcqXVGv1BGnB4uPk61c/t4NdQ7jxe+6sI8nf8tMGR2lb2qZt4+qS9qw6A
+            rS1wc/YmsX8jHU6lk399NCbREe//F/D4wlQjam+8lvM3klZdVm+722BC48O9hIhD
+            TFDrynzeVLga+2k38gKGjkxG7vcXiuPOLUl9WZbAkMmek+S066wALRj+4r+d5U2X
+            1DGoLy5drkqO+CLYbOzXS7KeEcQyu/w+oX2reFy6kpnhXnn609uv7tYodzglxD1K
+            r+TfPP1w2woxV7bPEf4Ylf4pzGtD+FSk9M++swWleBGkVrwKC30eJWyQxm5A4N1U
+            ZBZ+hf7HZiRvHSihm7Q2QeGyvWUc2ATxt/+J1kC2DzWEtU3UikJZ3UN5I13d5sJQ
+            2/BIfleypg2U/ch/yJx6qiI5lZRbbqcPdIxREj84DtNvpTKKRL6Y3IHztu7SpEY/
+            uoW2smQ74JL+bZWRXeFSoSA8CdascvMbq8ZL4tH2Hr0xyrGnf5+DbN7DcD+XUHfA
+            8Vnm0jbVAtrUNrtyQ1CSIpPV7OR2VyJyuwsR0kfau1bSM405FPLoeimimSBVqJhg
+            68GVHLmc6X+79RCgdbglBOaB01HRzY++DLqLwgsiaWqMUhNIHnulS7SnXu6zTViH
+            jcDm0TWLVgxfDvylWcqqbybXHI7QJibkc0p+5dhi5LYChMKEXHybHwlXI0cq3QHQ
+            INVmehRRj17fmoJpLWYdnnUW57mpISHKmfHHXi15YKqKlfTUAotB/6wmFhLq3XEM
+            v2pHEIESHG0ZBBMKZ/zDiIkmsNpd5tcPXJ+YFweHDYWOWBMx7Lby9xKDtiayy4fq
+            EBYIkwH7JeccEi7Z7+wR20+qeg==
+            -----END ENCRYPTED PRIVATE KEY-----
+            """
+
+        /// The same RSA 2048 Private Key encrypted with an unsupported cipher (DES-EDE3-CBC)
+        ///
+        /// Encrypted with
+        /// ```
+        /// openssl pkcs8
+        ///     -in foo.pem
+        ///     -topk8
+        ///     -v2 des3
+        ///     -passout pass:mypassword
+        /// ```
+        static let ENCRYPTED_DES3 = """
+            -----BEGIN ENCRYPTED PRIVATE KEY-----
+            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
+            mgU=
             -----END ENCRYPTED PRIVATE KEY-----
             """
     }

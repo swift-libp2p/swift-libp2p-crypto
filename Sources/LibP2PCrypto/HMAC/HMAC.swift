@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import CryptoSwift
 import Foundation
 import Multibase
 
@@ -25,23 +24,23 @@ extension LibP2PCrypto {
             internal func encrypt(_ message: Data, key: String) -> Data {
                 switch self {
                 case .MD5:
-                    var hmac = Crypto.HMAC<Insecure.MD5>(key: SymmetricKey(data: key.bytes))
+                    var hmac = Crypto.HMAC<Insecure.MD5>(key: SymmetricKey(data: Data(key.utf8)))
                     hmac.update(data: message)
                     return Data(hmac.finalize())
                 case .SHA1:
-                    var hmac = Crypto.HMAC<Insecure.SHA1>(key: SymmetricKey(data: key.bytes))
+                    var hmac = Crypto.HMAC<Insecure.SHA1>(key: SymmetricKey(data: Data(key.utf8)))
                     hmac.update(data: message)
                     return Data(hmac.finalize())
                 case .SHA256:
-                    var hmac = Crypto.HMAC<SHA256>(key: SymmetricKey(data: key.bytes))
+                    var hmac = Crypto.HMAC<SHA256>(key: SymmetricKey(data: Data(key.utf8)))
                     hmac.update(data: message)
                     return Data(hmac.finalize())
                 case .SHA384:
-                    var hmac = Crypto.HMAC<SHA384>(key: SymmetricKey(data: key.bytes))
+                    var hmac = Crypto.HMAC<SHA384>(key: SymmetricKey(data: Data(key.utf8)))
                     hmac.update(data: message)
                     return Data(hmac.finalize())
                 case .SHA512:
-                    var hmac = Crypto.HMAC<SHA512>(key: SymmetricKey(data: key.bytes))
+                    var hmac = Crypto.HMAC<SHA512>(key: SymmetricKey(data: Data(key.utf8)))
                     hmac.update(data: message)
                     return Data(hmac.finalize())
                 }
@@ -49,7 +48,7 @@ extension LibP2PCrypto {
 
             /// Verifies the authentication code
             internal func isValid(_ code: Data, for message: Data, key: String) -> Bool {
-                let key = SymmetricKey(data: key.bytes)
+                let key = SymmetricKey(data: Data(key.utf8))
                 switch self {
                 case .MD5:
                     return Crypto.HMAC<Insecure.MD5>.isValidAuthenticationCode(

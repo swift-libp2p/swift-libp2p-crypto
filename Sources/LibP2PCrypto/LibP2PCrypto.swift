@@ -15,7 +15,7 @@
 //  - TODO: Support JWK https://tools.ietf.org/html/rfc7517
 
 import Crypto
-import CryptoSwift
+import CryptoExtras
 import Foundation
 import Multibase
 /// Re-exported so consumers can use `ASN1ObjectIdentifier` (used by `DERDecodable` / `DEREncodable`)
@@ -74,12 +74,12 @@ extension Data {
 
     /// Returns the encrypted data in the format [ { salt }  { nonce}  { ciphertext }  { GCM algorithm tag } ]
     public func encryptGCM(password: String) throws -> Data {
-        try Data(self.byteArray.encryptGCM(password: password))
+        try Data(Array(self).encryptGCM(password: password))
     }
 
     /// Returns  decrypted data that was previously encrypted with `encryptGCM(password:)`
     public func decryptGCM(password: String) throws -> Data {
-        try Data(self.byteArray.decryptGCM(password: password))
+        try Data(Array(self).decryptGCM(password: password))
     }
 
     public func encrypt(withKey key: Encryptable) throws -> Data {
@@ -106,12 +106,7 @@ extension Array where Element == UInt8 {
         let salt = LibP2PCrypto.randomBytes(length: 16)
 
         // Attempt to derive the aes encryption key from the password and salt
-        // PBKDF2-SHA256
-        guard let key = PBKDF2.SHA256(password: password, salt: Data(salt), keyByteCount: 16, rounds: 32767) else {
-            throw LibP2PCrypto.Keys.KeyError.encryptionFailed(
-                "Failed to derive AES-GCM encryption key from plaintext password"
-            )
-        }
+        let key = try deriveGCMKey(password: password, salt: salt)
 
         // Return the salt prepended to the encrypted data
         return try salt + encryptGCM(data: self, withKey: key)
@@ -131,30 +126,37 @@ extension Array where Element == UInt8 {
         let data = Array(self.dropFirst(16))
 
         // Attempt to derive the aes encryption key from the password and salt
-        // PBKDF2-SHA256
-        guard let key = PBKDF2.SHA256(password: password, salt: Data(salt), keyByteCount: 16, rounds: 32767) else {
-            throw LibP2PCrypto.Keys.KeyError.decryptionFailed(
-                "Failed to derive AES-GCM encryption key from plaintext password"
-            )
-        }
+        let key = try deriveGCMKey(password: password, salt: salt)
 
         return try decryptGCM(data: data, withKey: key)
     }
 
-    private func encryptGCM(data: [UInt8], withKey key: Data) throws -> [UInt8] {
+    /// Derives the 128-bit AES-GCM key from the password and salt via PBKDF2-HMAC-SHA256 (32767 rounds)
+    private func deriveGCMKey(password: String, salt: some DataProtocol) throws -> SymmetricKey {
+        // `unsafeUncheckedRounds` because the libp2p format fixes the round count below swift-crypto's 210k minimum
+        try KDF.Insecure.PBKDF2.deriveKey(
+            from: Array(password.utf8),
+            salt: salt,
+            using: .sha256,
+            outputByteCount: 16,
+            unsafeUncheckedRounds: 32767
+        )
+    }
+
+    private func encryptGCM(data: [UInt8], withKey key: SymmetricKey) throws -> [UInt8] {
         let nonce = LibP2PCrypto.randomBytes(length: 12)
 
-        let aesGCM = try AES.GCM.seal(data, using: SymmetricKey(data: key), nonce: AES.GCM.Nonce(data: nonce))
+        let aesGCM = try AES.GCM.seal(data, using: key, nonce: AES.GCM.Nonce(data: nonce))
 
         // `combined` is only nil for non-standard nonce sizes, which should never happen here
         guard let combined = aesGCM.combined else {
             throw LibP2PCrypto.Keys.KeyError.encryptionFailed("AES-GCM failed to produce a combined sealed box")
         }
-        return combined.byteArray  //nonce + ciphertext + tag
+        return Array(combined)  //nonce + ciphertext + tag
     }
 
     /// Expects `data` in the combined `[ { nonce } { ciphertext } { tag } ]` format
-    private func decryptGCM(data: [UInt8], withKey key: Data) throws -> [UInt8] {
-        try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: SymmetricKey(data: key)).byteArray
+    private func decryptGCM(data: [UInt8], withKey key: SymmetricKey) throws -> [UInt8] {
+        try Array(AES.GCM.open(AES.GCM.SealedBox(combined: data), using: key))
     }
 }

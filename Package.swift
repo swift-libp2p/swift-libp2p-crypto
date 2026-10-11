@@ -39,9 +39,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-protobuf.git", .upToNextMajor(from: "1.33.3")),
         // Secp256k1 Support
         .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", .upToNextMinor(from: "0.23.2")),
-        // 🔑 Hashing (BCrypt, SHA2, HMAC), encryption (AES), public-key (RSA), PEM and DER file handling, and random data generation.
+        // Hashing, encryption, public/private keys and key derivation
         .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "4.3.0")),
-        .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", .upToNextMajor(from: "1.9.0")),
         // ASN.1 / DER Parsing and Serialization
         .package(url: "https://github.com/apple/swift-asn1.git", .upToNextMajor(from: "1.7.1")),
     ],
@@ -57,15 +56,13 @@ let package = Package(
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
                 .product(name: "P256K", package: "swift-secp256k1"),
                 .product(name: "Crypto", package: "swift-crypto"),
-                .product(name: "CryptoSwift", package: "CryptoSwift"),
+                .product(name: "CryptoExtras", package: "swift-crypto"),
                 .product(name: "SwiftASN1", package: "swift-asn1"),
             ],
             exclude: [
                 "Protobufs/keys.proto"
             ],
             swiftSettings: [
-                // P256K vends public extensions that collide with CryptoSwift's (ex: a throwing, hex decoding `String.bytes`).
-                // Restrict extension members to the files that explicitly import their module.
                 .enableUpcomingFeature("MemberImportVisibility")
             ]
         ),

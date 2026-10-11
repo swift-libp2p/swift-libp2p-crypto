@@ -12,13 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Crypto
+import CryptoExtras
 import Foundation
-
-#if canImport(CommonCrypto)
-import CommonCrypto
-#else
-import CryptoSwift
-#endif
 
 extension LibP2PCrypto {
     public enum AES {
@@ -104,47 +100,21 @@ extension LibP2PCrypto {
             }
         }
 
-        #if canImport(CommonCrypto)
-        /// AES-CBC (PKCS#7 padded) Encrypt / Decrypt data via CommonCrypto
-        private static func cbc(_ data: Data, key: Data, iv: Data, encrypt: Bool) throws -> Data {
-            let cryptLength = data.count + kCCBlockSizeAES128
-            var cryptData = Data(count: cryptLength)
-            var bytesLength = 0
-
-            let status = cryptData.withUnsafeMutableBytes { cryptBytes in
-                data.withUnsafeBytes { dataBytes in
-                    iv.withUnsafeBytes { ivBytes in
-                        key.withUnsafeBytes { keyBytes in
-                            CCCrypt(
-                                CCOperation(encrypt ? kCCEncrypt : kCCDecrypt),
-                                CCAlgorithm(kCCAlgorithmAES),
-                                CCOptions(kCCOptionPKCS7Padding),
-                                keyBytes.baseAddress,
-                                key.count,
-                                ivBytes.baseAddress,
-                                dataBytes.baseAddress,
-                                data.count,
-                                cryptBytes.baseAddress,
-                                cryptLength,
-                                &bytesLength
-                            )
-                        }
-                    }
+        /// AES-CBC (PKCS#7 padded) Encrypt / Decrypt data via swift-crypto
+        static func cbc<Bytes: DataProtocol>(_ data: Bytes, key: Data, iv: Data, encrypt: Bool) throws -> Data {
+            let symmetricKey = SymmetricKey(data: key)
+            let iv = try Crypto.AES._CBC.IV(ivBytes: iv)
+            do {
+                if encrypt {
+                    return try Crypto.AES._CBC.encrypt(data, using: symmetricKey, iv: iv)
+                } else {
+                    return try Crypto.AES._CBC.decrypt(data, using: symmetricKey, iv: iv)
                 }
+            } catch {
+                throw encrypt
+                    ? LibP2PCrypto.Keys.KeyError.encryptionFailed("AES-CBC: \(error)")
+                    : LibP2PCrypto.Keys.KeyError.decryptionFailed("AES-CBC: \(error)")
             }
-
-            guard Int(status) == kCCSuccess else {
-                throw LibP2PCrypto.Keys.KeyError.internalError("AES: CCCrypt failed with status \(status)")
-            }
-
-            return Data(cryptData.prefix(bytesLength))
         }
-        #else
-        /// AES-CBC (PKCS#7 padded) Encrypt / Decrypt data via CryptoSwift
-        private static func cbc(_ data: Data, key: Data, iv: Data, encrypt: Bool) throws -> Data {
-            let aes = try CryptoSwift.AES(key: key.byteArray, blockMode: CBC(iv: iv.byteArray), padding: .pkcs7)
-            return try Data(encrypt ? aes.encrypt(data.byteArray) : aes.decrypt(data.byteArray))
-        }
-        #endif
     }
 }
