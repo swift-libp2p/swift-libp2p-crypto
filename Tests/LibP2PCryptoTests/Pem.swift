@@ -120,6 +120,41 @@ struct TestPEMKeys {
         -----END PUBLIC KEY-----
         """
 
+    /// RSA 8192 Public Key
+    ///
+    /// Generated with (8192 bit key generation is too slow to run in the test suite)
+    /// ```
+    /// openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:8192 -out rsa_8192_priv.pem
+    /// openssl pkey -in rsa_8192_priv.pem -pubout
+    /// ```
+    static let RSA_8192_PUBLIC = """
+        -----BEGIN PUBLIC KEY-----
+        MIIEIjANBgkqhkiG9w0BAQEFAAOCBA8AMIIECgKCBAEA1cW+JLaKzLzWJL8oBQ2j
+        z71M0dRpfb2A9R4PTSwl9w/4TMtLrLxMlb5ZqPJAQ8hWovE2jvQW6UBJHyFGSHBq
+        XwAHn6wCjQwTvCGqponRwCc+dQmrWysKldH/HJGRqPRj6/Dbdh2R4L8d6bA2r1yF
+        2YwIiT5rpKLWsOWoTeYR1qv7vJxhvEgd+IFYRa5mFcJp9GYRbl1cv7OLlzsP2EMv
+        T2hRaKTJwZFml2Sb7NlCUxHp3qnTd0lMuGq5+1YQynby/yL9mNrKBaL/5VkyLtZw
+        Dw6Lan5oL6qL4gAtm/FdvCKFwUSckU7UEQgdi8p6ghKI0QsWcVStUF1oSgAz95D1
+        UM/Jdqz4VlKvDpS73GU/ITJ6XSjTyCbQnANlIoy9KtSciYe1BCo5j4gIwzSh66vA
+        tUIITHtwtFw+YE4M9z4tJxdzQeyxAmYuEqrjwmdxwkWODwOmGvzGs45hjlrQgm8b
+        U+IEoy0rbtx8K/sLsxDv7qhoaVuULej4ce1l264QuFC7Pn1ZEwTy5pCUEoyK7JED
+        fQB3nPlN0anFQtxI5MCjqMkwJSXkosTHfzD87Hq9MrmzVDY5/seBvs1e4Ov+oVqZ
+        FgLlF5YIC2XtBjyssmlDXNqE/aMETe667WinsF034Rf93Inz6CrXnWfte03o4RTz
+        fSTlSawp/LzivOzP9aSmm2Ot7bgw9iDCfkk9eSlZVAVSq7JTDi6nb5qF9ov9xY25
+        Bgts23/bGmC+XrYqs5mdJwi10cRfGCod3Mlq67bPyeCkWAbrTrsBU7KwDjJuKsmk
+        oeY6FoQiYt7za+XroTavRHXRJECxO3Zbi7HRmPhMxzC163c5vJsvuV0CQfjMQh2n
+        o7qz8PrMupogQTmz+rZEYVWQGQgnC0ASBE+c2UWwSV4+L6+5+FuzyyXIJSIhHe8x
+        p4Utq5brkWrCichEOrQzU53x+SznhVcIL/RntnXKaThBp/k+kMIkqGD7erhiFsSl
+        6n360l4APhYfdoAvpAo3W+fiMwT4u/Ywd7Xc5PmsfkVY26EOORgS2TWkTwmMGeGL
+        gyiyLsmzdeNnnTNtR7ayfxD16kJ6XUpuYvAdS2YeGEObwI7blDebFDUujdkJGVsn
+        S/IqirTg4gBYQzn+wMETlQtVP4lFQm+P3bWQNKWa20+iRMk8xN4jDlgG81OMgRGs
+        747pZCa0FB/9Bpf4IpReXSxq0uLyctgFiTKSB277at2I+FF4RxIllo61YGONGdPt
+        ZItZj4UmVFFRI3cnU2p5+0VT1oJkp+7o+vseHWRq/fw88QXKaWPPQ8BtG7syr3rr
+        LlL/Zru/yOBDwxKZuGVcw29mNTEE/0f/lT5ENuJbFfY8J2P+yYs7ttdCBAsiNI7r
+        5wIDAQAB
+        -----END PUBLIC KEY-----
+        """
+
     /// RSA 1024 Private Key
     ///
     /// openssl asn1parse -i -in rsa_1024_priv.pem
