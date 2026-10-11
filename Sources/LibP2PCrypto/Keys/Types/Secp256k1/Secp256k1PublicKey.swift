@@ -18,17 +18,20 @@ import P256K
 
 public final class Secp256k1PublicKey: Sendable {
 
-    static let UNCOMPRESSED_LENGTH = 64
-    static let UNCOMPRESSED_LENGTH_WITH_HEADER = 65
-    static let COMPRESSED_LENGTH = 32
-    static let COMPRESSED_LENGTH_WITH_HEADER = 33
+    /// The length of an uncompressed public key without its 0x04 prefix (`X || Y`)
+    private static let uncompressedLength = 64
+    /// The length of an uncompressed public key with its 0x04 prefix (`0x04 || X || Y`)
+    private static let uncompressedLengthWithPrefix = 65
+    /// The length of a compressed public key with its 0x02 / 0x03 prefix (`0x02 / 0x03 || X`)
+    private static let compressedLengthWithPrefix = 33
 
-    public enum KeyFormat: UInt8 {
-        case EVEN = 0x02
-        case ODD = 0x03
-        case UNCOMPRESSED = 0x04
-        case HYBRID_EVEN = 0x06
-        case HYBRID_ODD = 0x07
+    /// SEC1 EC point encoding prefixes
+    private enum Prefix: UInt8 {
+        case even = 0x02
+        case odd = 0x03
+        case uncompressed = 0x04
+        //case hybridEven = 0x06
+        //case hybridOdd = 0x07
     }
 
     // MARK: - Properties
@@ -42,7 +45,7 @@ public final class Secp256k1PublicKey: Sendable {
     // MARK: - Initialization
 
     /// Convenient initializer for `init(publicKey:)`
-    public required convenience init(_ bytes: [UInt8]) throws {
+    public convenience init(_ bytes: [UInt8]) throws {
         try self.init(publicKey: bytes)
     }
 
@@ -54,11 +57,9 @@ public final class Secp256k1PublicKey: Sendable {
     public init(publicKey rawPublicKeyData: [UInt8]) throws {
         var rawPublicKeyData = rawPublicKeyData
 
-        // WARNING:
-        // We assume if we're provided a 64 byte key its the standard uncompressed key without the 0x04 header
-        // This is a bad assumption because it would also be a hybrid key
-        if rawPublicKeyData.count == Secp256k1PublicKey.UNCOMPRESSED_LENGTH {
-            rawPublicKeyData.insert(KeyFormat.UNCOMPRESSED.rawValue, at: 0)
+        // A 64 byte key is an uncompressed `X || Y` key missing its 0x04 prefix
+        if rawPublicKeyData.count == Self.uncompressedLength {
+            rawPublicKeyData.insert(Prefix.uncompressed.rawValue, at: 0)
         }
 
         // Parse and validate the key (P256K selects the format based on the length)
@@ -71,12 +72,12 @@ public final class Secp256k1PublicKey: Sendable {
 
         // `uncompressedRepresentation` is re-serialized by libsecp256k1, so it's always the canonical 0x04 form
         let uncompressed = [UInt8](parsed.uncompressedRepresentation)
-        guard uncompressed.count == Secp256k1PublicKey.UNCOMPRESSED_LENGTH_WITH_HEADER else {
+        guard uncompressed.count == Self.uncompressedLengthWithPrefix else {
             throw Error.keyMalformed
         }
 
         // Normalize the stored key to its compressed format (0x02 / 0x03 prefix based on the parity of Y)
-        let parity = uncompressed[64] & 1 == 0 ? KeyFormat.EVEN : KeyFormat.ODD
+        let parity = uncompressed[64] & 1 == 0 ? Prefix.even : Prefix.odd
         let compressed = [parity.rawValue] + uncompressed[1...32]
         do {
             self.key = try P256K.Signing.PublicKey(dataRepresentation: compressed, format: .compressed)
@@ -96,7 +97,7 @@ public final class Secp256k1PublicKey: Sendable {
     /// Returns the 33 byte compressed public key (with the 0x02 / 0x03 header prefix)
     public func compressPublicKey() throws -> [UInt8] {
         let compressed = [UInt8](self.key.dataRepresentation)
-        guard compressed.count == Secp256k1PublicKey.COMPRESSED_LENGTH_WITH_HEADER else {
+        guard compressed.count == Self.compressedLengthWithPrefix else {
             throw Error.internalError
         }
         return compressed
@@ -106,12 +107,23 @@ public final class Secp256k1PublicKey: Sendable {
     /// - Parameter hexPublicKey: The uncompressed (or compressed) hex public key either with the hex prefix `0x` or without.
     /// - throws: SecP256k1PublicKey.Error.keyMalformed if the given `hexPublicKey` does not fulfill the requirements from above. Or a SecP256k1PublicKey.Error.internalError if a secp256k1 library fails to parse / validate the provided key.
     public convenience init(hexPublicKey: String) throws {
+        var hexPublicKey = Substring(hexPublicKey)
+        if hexPublicKey.hasPrefix("0x") || hexPublicKey.hasPrefix("0X") {
+            hexPublicKey = hexPublicKey.dropFirst(2)
+        }
+
         let byteCount = hexPublicKey.count
         guard byteCount == 128 || byteCount == 130 || byteCount == 64 || byteCount == 66 else {
             throw Error.keyMalformed
         }
 
-        try self.init(publicKey: try BaseEncoding.decode(hexPublicKey, as: .base16))
+        let bytes: [UInt8]
+        do {
+            bytes = try BaseEncoding.decode(String(hexPublicKey), as: .base16)
+        } catch {
+            throw Error.keyMalformed
+        }
+        try self.init(publicKey: bytes)
     }
 
     // MARK: - Signatures
@@ -151,15 +163,6 @@ extension Secp256k1PublicKey: Equatable {
 
     public static func == (_ lhs: Secp256k1PublicKey, _ rhs: Secp256k1PublicKey) -> Bool {
         lhs.rawPublicKey == rhs.rawPublicKey
-    }
-}
-
-// MARK: - BytesConvertible
-
-extension Secp256k1PublicKey {
-
-    public func makeBytes() -> [UInt8] {
-        rawPublicKey
     }
 }
 

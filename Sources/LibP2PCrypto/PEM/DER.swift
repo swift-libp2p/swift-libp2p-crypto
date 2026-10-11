@@ -158,18 +158,11 @@ extension DEREncodable {
     }
 
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
-        let base64String = try self.exportPublicKeyPEMRaw().toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.publicKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
+        try LibP2PCrypto.PEM.armor(
+            self.exportPublicKeyPEMRaw(),
+            as: .publicKey,
+            withHeaderAndFooter: withHeaderAndFooter
+        )
     }
 
     public func exportPublicKeyPEMString(withHeaderAndFooter: Bool = true) throws -> String {
@@ -188,18 +181,11 @@ extension DEREncodable {
     }
 
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
-        let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.privateKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.privateKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
+        try LibP2PCrypto.PEM.armor(
+            self.exportPrivateKeyPEMRaw(),
+            as: .privateKey,
+            withHeaderAndFooter: withHeaderAndFooter
+        )
     }
 
     public func exportPrivateKeyPEMString(withHeaderAndFooter: Bool = true) throws -> String {

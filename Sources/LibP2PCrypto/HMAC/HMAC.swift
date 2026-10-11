@@ -46,6 +46,31 @@ extension LibP2PCrypto {
                     return Data(hmac.finalize())
                 }
             }
+
+            /// Verifies the authentication code
+            internal func isValid(_ code: Data, for message: Data, key: String) -> Bool {
+                let key = SymmetricKey(data: key.bytes)
+                switch self {
+                case .MD5:
+                    return Crypto.HMAC<Insecure.MD5>.isValidAuthenticationCode(
+                        code,
+                        authenticating: message,
+                        using: key
+                    )
+                case .SHA1:
+                    return Crypto.HMAC<Insecure.SHA1>.isValidAuthenticationCode(
+                        code,
+                        authenticating: message,
+                        using: key
+                    )
+                case .SHA256:
+                    return Crypto.HMAC<SHA256>.isValidAuthenticationCode(code, authenticating: message, using: key)
+                case .SHA384:
+                    return Crypto.HMAC<SHA384>.isValidAuthenticationCode(code, authenticating: message, using: key)
+                case .SHA512:
+                    return Crypto.HMAC<SHA512>.isValidAuthenticationCode(code, authenticating: message, using: key)
+                }
+            }
         }
 
         public struct HMACKey: Encryptable, Sendable {
@@ -69,12 +94,14 @@ extension LibP2PCrypto {
                 LibP2PCrypto.HMAC.encrypt(message: message, algorithm: self.algorithm, key: self.secret)
             }
 
+            /// Verifies that `hash` is the authentication code for `str`
             public func verify(_ str: String, hash: Data) -> Bool {
-                self.encrypt(str) == hash
+                self.verify(Data(str.utf8), hash: hash)
             }
 
+            /// Verifies that `hash` is the authentication code for `data`
             public func verify(_ data: Data, hash: Data) -> Bool {
-                self.encrypt(data) == hash
+                self.algorithm.isValid(hash, for: data, key: self.secret)
             }
         }
 
@@ -94,8 +121,7 @@ extension LibP2PCrypto {
         ///   - key: The shared secret key to hash the data against
         /// - Returns: The encrypted / hashed HMAC data
         public static func encrypt(message: String, algorithm: CryptoAlgorithm, key: String) -> Data {
-            let data = message.data(using: .utf8)
-            return self.encrypt(data!, algorithm: algorithm, key: key)
+            self.encrypt(Data(message.utf8), algorithm: algorithm, key: key)
         }
 
         /// A one offf, stateless, HMAC hashing / encryption method

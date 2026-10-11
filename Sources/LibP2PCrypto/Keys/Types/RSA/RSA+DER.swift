@@ -40,21 +40,9 @@ extension RSAPublicKey: DERCodable {
         )
     }
 
+    /// RSA's `publicKeyDER()` is already the complete SubjectPublicKeyInfo, so it's armored directly
     public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let publicDER = try self.publicKeyDER()
-
-        let base64String = publicDER.toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.publicKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
+        try LibP2PCrypto.PEM.armor(self.publicKeyDER(), as: .publicKey, withHeaderAndFooter: withHeaderAndFooter)
     }
 }
 
@@ -82,25 +70,11 @@ extension RSAPrivateKey: DERCodable {
         try self.init(rawRepresentation: Data(privateDER))
     }
 
+    /// The DER encoded PKCS #8 PrivateKeyInfo (rsaEncryption requires an explicit NULL parameter, RFC 3279 §2.3.1)
     public func exportPrivateKeyPEMRaw() throws -> [UInt8] {
         try PrivateKeyInfo(
             algorithmIdentifier: .rsaEncryption,
             privateKey: self.privateKeyDER()
         ).serializedDERBytes()
-    }
-
-    public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.privateKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.privateKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
     }
 }

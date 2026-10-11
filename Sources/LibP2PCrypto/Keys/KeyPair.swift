@@ -27,8 +27,11 @@ extension LibP2PCrypto.Keys {
         public let privateKey: CommonPrivateKey?
 
         public struct Attributes {
+            /// The type of key (ex: RSA, ed25519, ecdsa or secp256k1)
             public let type: LibP2PCrypto.Keys.KeyPairType
+            /// The key size in bits (the RSA modulus size or the elliptic curve's size)
             public let size: Int
+            /// Wether this keypair contains a private key or not
             public let isPrivate: Bool
 
             internal init(type: LibP2PCrypto.Keys.KeyPairType, size: Int, isPrivate: Bool) {
@@ -53,8 +56,6 @@ extension LibP2PCrypto.Keys {
                 case .P384: try self.init(privateKey: P384.Signing.PrivateKey())
                 case .P521: try self.init(privateKey: P521.Signing.PrivateKey())
                 }
-            //default:
-            //    throw NSError(domain: "Unsupported Key Type", code: 0)
             }
         }
 
@@ -77,25 +78,21 @@ extension LibP2PCrypto.Keys {
             privateKey != nil
         }
 
-        /// The public keys multihash value
+        /// The multihash of the marshaled public key, per the libp2p peer-id spec.
         ///
-        /// - Note: The multihash is the SHA-256 Hash of the DER representation of the PublicKey
+        /// - Note: Marshaled public keys of 42 bytes or less (Ed25519, Secp256k1) use the `identity`
+        ///   multihash, larger keys (RSA, ECDSA) are hashed with `sha2-256`.
         public func multihash() throws -> Multihash {
             try self.publicKey.multihash()
         }
 
-        /// The keys `rawID` is the SHA-256 multihash of its public key
-        /// The public key is a protobuf encoding containing a type and the DER encoding
-        /// of the PKCS SubjectPublicKeyInfo.
+        /// The keys `rawID` is the multihash (see ``multihash()``) of its marshaled public key
         public func rawID() throws -> [UInt8] {
             try self.multihash().value
         }
 
-        /// The key id is the base58 encoding of the SHA-256 multihash of its public key.
-        /// The public key is a protobuf encoding (marshaled) containing a type and the DER encoding
-        /// of the PKCS SubjectPublicKeyInfo.
+        /// The key id is the base58 encoding of the multihash (see ``multihash()``) of its marshaled public key
         public func id(withMultibasePrefix: Bool = true) throws -> String {
-            //let mh = try Multihash(hashing: self.marshal(), codec: .sha2_256)
             let mh = try self.multihash()
             return mh.asString(base: .base58btc, withMultibasePrefix: withMultibasePrefix)
         }
@@ -120,10 +117,10 @@ extension LibP2PCrypto.Keys {
                 return Attributes(type: type, size: bits, isPrivate: isPrivate)
 
             case .ed25519:
-                return Attributes(type: .Ed25519, size: 32, isPrivate: isPrivate)
+                return Attributes(type: .Ed25519, size: 256, isPrivate: isPrivate)
 
             case .secp256k1:
-                return Attributes(type: .Secp256k1, size: 64, isPrivate: isPrivate)
+                return Attributes(type: .Secp256k1, size: 256, isPrivate: isPrivate)
 
             case .ecdsa:
                 guard let ecdsaKey = self.publicKey as? any ECDSAPublicKeyBacking else { return nil }
@@ -152,10 +149,6 @@ extension LibP2PCrypto.Keys {
             guard bytes.isEmpty == false else { return nil }
             return bytes.count * 8
         }
-
-        //public func asString(base:BaseEncoding, withMultibasePrefix:Bool = false) -> String {
-        //    self.data.asString(base: base, withMultibasePrefix: withMultibasePrefix)
-        //}
 
         // - MARK: Encryption & Decryption
 
@@ -244,14 +237,15 @@ extension LibP2PCrypto.Keys {
                 case 96:
                     // [private key][public key][public key]
                     // Ensure the two pubkeys match and we can derive the attached public key
-                    let parts = Array(proto.data.chunks(ofCount: 32))
+                    let bytes = Array(proto.data)
+                    let parts = [bytes[0..<32], bytes[32..<64], bytes[64..<96]]
                     guard parts[1] == parts[2] else {
                         throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
                             "Ed25519: attached public keys don't match"
                         )
                     }
-                    let privkey = try Curve25519.Signing.PrivateKey(marshaledData: parts[0])
-                    guard privkey.publicKey.rawRepresentation == parts[1] else {
+                    let privkey = try Curve25519.Signing.PrivateKey(marshaledData: Data(parts[0]))
+                    guard privkey.publicKey.rawRepresentation == Data(parts[1]) else {
                         throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
                             "Ed25519: unable to validate attached public key"
                         )
@@ -393,7 +387,7 @@ extension LibP2PCrypto.Keys.KeyPair {
                 try self.init(
                     privateKey: Curve25519.Signing.PrivateKey(pem: pemBytes, asType: Curve25519.Signing.PrivateKey.self)
                 )
-            } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp256k1) {
                 try self.init(privateKey: Secp256k1PrivateKey(pem: pemBytes, asType: Secp256k1PrivateKey.self))
             } else if ids.contains(ASN1ObjectIdentifier.LibP2P.prime256v1) {
                 try self.init(privateKey: P256.Signing.PrivateKey(pem: pemBytes, asType: P256.Signing.PrivateKey.self))
@@ -449,13 +443,10 @@ extension LibP2PCrypto.Keys.KeyPair {
                     expectedSecondaryObjectIdentifier: Curve25519.Signing.PrivateKey.secondaryObjectIdentifier
                 )
                 try self.init(privateKey: Curve25519.Signing.PrivateKey(privateDER: der))
-            } else if ids.contains(Secp256k1PrivateKey.primaryObjectIdentifier) {
-                let der = try LibP2PCrypto.PEM.decodePrivateKeyPEM(
-                    Data(decryptedPEM),
-                    expectedPrimaryObjectIdentifier: Secp256k1PrivateKey.primaryObjectIdentifier,
-                    expectedSecondaryObjectIdentifier: Secp256k1PrivateKey.secondaryObjectIdentifier
+            } else if ids.contains(ASN1ObjectIdentifier.LibP2P.secp256k1) {
+                try self.init(
+                    privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: Secp256k1PrivateKey.self)
                 )
-                try self.init(privateKey: Secp256k1PrivateKey(privateDER: der))
             } else if ids.contains(ASN1ObjectIdentifier.LibP2P.prime256v1) {
                 try self.init(
                     privateKey: Self.privateKey(fromDecryptedPEM: decryptedPEM, as: P256.Signing.PrivateKey.self)
@@ -491,7 +482,6 @@ extension LibP2PCrypto.Keys.KeyPair {
 extension LibP2PCrypto.Keys.KeyPair {
 
     public func exportPublicPEM(withHeaderAndFooter: Bool = true) throws -> [UInt8] {
-        //guard let der = publicKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
         try publicKey.exportPublicKeyPEM(withHeaderAndFooter: withHeaderAndFooter)
     }
 
@@ -505,7 +495,6 @@ extension LibP2PCrypto.Keys.KeyPair {
     }
 
     public func exportPublicPEMString(withHeaderAndFooter: Bool = true) throws -> String {
-        //guard let der = publicKey as? DEREncodable else { throw NSError(domain: "Unknown private key type", code: 0) }
         try publicKey.exportPublicKeyPEMString(withHeaderAndFooter: withHeaderAndFooter)
     }
 

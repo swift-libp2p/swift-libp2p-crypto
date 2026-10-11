@@ -404,6 +404,29 @@ struct Libp2pCryptoTests {
             try marshed.id(withMultibasePrefix: false) == "12D3KooWF5Qbrbvhhha1AcqRULWAfYzFEnKvWVGBUjw489hpo5La"
         )
     }
+
+    @Test func attributeSizesAreInBits() throws {
+        #expect(try LibP2PCrypto.Keys.generateKeyPair(.Ed25519).attributes()?.size == 256)
+        #expect(try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1).attributes()?.size == 256)
+        #expect(try LibP2PCrypto.Keys.generateKeyPair(.ECDSA(curve: .P384)).attributes()?.size == 384)
+    }
+
+    @Test func secp256k1HexPublicKeyAcceptsPrefix() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
+        let hex = (kp.publicKey as! Secp256k1PublicKey).hex()
+        let plain = try Secp256k1PublicKey(hexPublicKey: hex)
+        let prefixed = try Secp256k1PublicKey(hexPublicKey: "0x" + hex)
+        #expect(plain == prefixed)
+        #expect(throws: Secp256k1PublicKey.Error.self) {
+            _ = try Secp256k1PublicKey(hexPublicKey: "0x" + String(repeating: "z", count: 128))
+        }
+    }
+
+    @Test func marshalPrivateKeyStillReportsBadBaseEncoding() {
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
+            _ = try LibP2PCrypto.Keys.marshalPrivateKey(raw: "not a valid base", asKeyType: .Ed25519, fromBase: .base16)
+        }
+    }
 }
 
 @Suite("Marshalling Tests")
@@ -654,14 +677,15 @@ struct SignAndVerifyTests {
         #expect(try rsa.publicKey.verify(signature: signedData, for: message))
 
         // Ensure that the signature is no longer valid if it is tweaked in any way
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.shuffled()), for: message) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.dropLast()), for: message) }
+        // (a mismatched signature returns false, a malformed / truncated one may throw instead)
+        #expect(try rsa.publicKey.verify(signature: Data(signedData.reversed()), for: message) == false)
+        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message)) != true)
+        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropLast()), for: message)) != true)
 
         // Ensure that the signature is no longer valid if the message is tweaked in any way
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.shuffled())) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.dropLast())) }
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.reversed())) == false)
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) == false)
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropLast())) == false)
     }
 
     @Test func testRSAMessageSignVerify_DynamicKey() throws {
@@ -686,14 +710,15 @@ struct SignAndVerifyTests {
         #expect(try rsa.publicKey.verify(signature: signedData, for: message))
 
         // Ensure that the signature is no longer valid if it is tweaked in any way
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.shuffled()), for: message) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: Data(signedData.dropLast()), for: message) }
+        // (a mismatched signature returns false, a malformed / truncated one may throw instead)
+        #expect(try rsa.publicKey.verify(signature: Data(signedData.reversed()), for: message) == false)
+        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message)) != true)
+        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropLast()), for: message)) != true)
 
         // Ensure that the signature is no longer valid if the message is tweaked in any way
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.shuffled())) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) }
-        #expect(throws: Error.self) { try rsa.publicKey.verify(signature: signedData, for: Data(message.dropLast())) }
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.reversed())) == false)
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) == false)
+        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropLast())) == false)
     }
 
     @Test func testED25519MessageSignVerify() throws {
@@ -875,9 +900,14 @@ struct AESCipherTests {
         //Ensure we can decrypt the data with the proper key
         #expect(decrypted2 == message)
 
+        //The IV is prepended to the ciphertext, so any key instance sharing the same secret can decrypt it
+        let decryptedSameSecret: String = try aes256Key.decrypt(encrypted2)
+        #expect(decryptedSameSecret == message)
+
         //Ensure that decryption fails when we use the wrong key
-        //Usually results in an String.Encoding Error (cause gibberish)
-        let decryptedWrongKey: String? = try? aes256Key.decrypt(encrypted2)
+        //Usually results in a padding or String.Encoding Error (cause gibberish)
+        let wrongKey = try LibP2PCrypto.AES.createKey(key: "65432109876543216543210987654321")
+        let decryptedWrongKey: String? = try? wrongKey.decrypt(encrypted2)
         #expect(decryptedWrongKey != message)
     }
 
@@ -895,6 +925,72 @@ struct AESCipherTests {
         print(msg ?? "NIL")
 
         #expect(msg == message)
+    }
+
+    /// Regression: `decryptGCM(password:)` used to crash (`removeFirst(16)`) on payloads shorter than the salt
+    @Test(arguments: [0, 1, 15, 16, 27, 43])
+    func decryptingTruncatedPayloadThrows(length: Int) throws {
+        let payload = [UInt8](repeating: 0x2a, count: length)
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
+            _ = try payload.decryptGCM(password: "mypassword")
+        }
+    }
+
+    @Test func decryptingTamperedPayloadThrows() throws {
+        var encrypted = try Array("Hello World!".utf8).encryptGCM(password: "mypassword")
+        encrypted[encrypted.count - 1] ^= 0x01
+        #expect(throws: (any Error).self) {
+            _ = try encrypted.decryptGCM(password: "mypassword")
+        }
+    }
+
+    let key256 = "12345678901234561234567890123456"
+
+    /// Regression: keys created with a random IV couldn't be decrypted by any other `AESKey` instance
+    @Test func ciphertextDecryptsWithADifferentKeyInstance() throws {
+        let encryptor = try LibP2PCrypto.AES.AESKey(key: key256)
+        let decryptor = try LibP2PCrypto.AES.AESKey(key: key256)
+        #expect(encryptor.iv != decryptor.iv)
+
+        let encrypted = try encryptor.encrypt("Hello World!")
+        #expect(encrypted.prefix(16) == encryptor.iv)
+
+        let decrypted: String = try decryptor.decrypt(encrypted)
+        #expect(decrypted == "Hello World!")
+    }
+
+    @Test func staticPasswordDecryption() throws {
+        let encrypted = try LibP2PCrypto.AES.AESKey(key: key256).encrypt("Hello World!")
+        let decrypted = try LibP2PCrypto.AES.decrypt(encrypted, withPassword: key256)
+        #expect(String(data: decrypted, encoding: .utf8) == "Hello World!")
+    }
+
+    /// Regression: the String based initializer skipped key / IV length validation on Apple platforms
+    @Test func stringInitializerValidatesLengths() throws {
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
+            _ = try LibP2PCrypto.AES.AESKey(key: "short", iv: "abcdefghijklmnop")
+        }
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
+            _ = try LibP2PCrypto.AES.AESKey(key: "1234567890123456", iv: "short")
+        }
+        // 16 characters but 17 UTF-8 bytes
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
+            _ = try LibP2PCrypto.AES.AESKey(key: "é234567890123456")
+        }
+    }
+
+    @Test func decryptingTruncatedCiphertextThrows() throws {
+        let key = try LibP2PCrypto.AES.AESKey(key: key256)
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
+            _ = try key.decrypt(Data(repeating: 0, count: 16))
+        }
+    }
+
+    @Test func emptyMessageRoundTrips() throws {
+        let key = try LibP2PCrypto.AES.AESKey(key: key256)
+        let encrypted = try key.encrypt(Data())
+        #expect(encrypted.count == 32)
+        #expect(try key.decrypt(encrypted).isEmpty)
     }
 }
 
@@ -947,26 +1043,26 @@ struct HMACTests {
         #expect(hmacKeyRemote.verify("HellØ world", hash: encrypted) == false)
     }
 
-    //    func testAES() throws {
-    //        let keyPair = try LibP2PCrypto.Keys.generateRawKeyPair()
-    //    }
-    //    func testAES() throws {
-    //        let bits = [256, 512, 1024, 2048]
-    //        for bitLength in bits {
-    //            do {
-    //                let keyPair = try LibP2PCrypto.Keys.generateRawKeyPair(.AES(bits: bitLength))
-    //                print(keyPair)
-    //            } catch {
-    //                print(error)
-    //            }
-    //        }
-    //    }
+    @Test(arguments: [
+        LibP2PCrypto.HMAC.CryptoAlgorithm.MD5, .SHA1, .SHA256, .SHA384, .SHA512,
+    ])
+    func verifyAcceptsValidAndRejectsInvalidCodes(algorithm: LibP2PCrypto.HMAC.CryptoAlgorithm) throws {
+        let key = LibP2PCrypto.HMAC.HMACKey(algorithm: algorithm, secret: "secret")
+        let code = key.encrypt("Hello World")
 
-    //    func testThreeDES() throws {
-    //        let keyPair = try LibP2PCrypto.Keys.generateRawKeyPair(.ThreeDES)
-    //        print(keyPair)
-    //    }
+        #expect(key.verify("Hello World", hash: code))
+        #expect(key.verify(Data("Hello World".utf8), hash: code))
 
+        var tampered = code
+        tampered[tampered.startIndex] ^= 0x01
+        #expect(key.verify("Hello World", hash: tampered) == false)
+        #expect(key.verify("Hello World", hash: code.dropLast()) == false)
+        #expect(key.verify("Hello World", hash: Data()) == false)
+        #expect(key.verify("Hello World!", hash: code) == false)
+        #expect(
+            LibP2PCrypto.HMAC.HMACKey(algorithm: algorithm, secret: "Secret").verify("Hello World", hash: code) == false
+        )
+    }
 }
 
 @Suite("DER and PEM Tests")
@@ -1573,8 +1669,6 @@ struct DERAndPEMTests {
                 )
         )
 
-        //print(pbkdf.iterations.bytes(totalBytes: 2))
-
         //        print("*** DER ***")
         //        print("***********")
         //
@@ -1600,7 +1694,7 @@ struct DERAndPEMTests {
 
         let exportedPEM =
             "-----BEGIN ENCRYPTED PRIVATE KEY-----\n"
-            + encoded.toBase64().split(intoChunksOfLength: 64).joined(separator: "\n")
+            + Data(encoded).base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
             + "\n-----END ENCRYPTED PRIVATE KEY-----"
 
         #expect(exportedPEM == pem)
@@ -1850,6 +1944,267 @@ struct DERAndPEMTests {
 
         #expect(secp256k1Private.publicKey == secp256k1Public)
     }
+
+    /// PEMs with CRLF line endings, indentation or surrounding text should still parse
+    @Test func importsPEMWithCRLFAndSurroundingText() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let pem = try kp.exportPrivatePEMString()
+
+        let crlf = pem.replacingOccurrences(of: "\n", with: "\r\n") + "\r\n"
+        #expect(
+            try LibP2PCrypto.Keys.KeyPair(pem: crlf).privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation
+        )
+
+        let decorated = """
+            Bag Attributes
+                localKeyID: 01 02 03 04
+            Key Attributes: <No Attributes>
+            \(pem)
+
+            trailing notes
+            """
+        #expect(
+            try LibP2PCrypto.Keys.KeyPair(pem: decorated).privateKey?.rawRepresentation
+                == kp.privateKey?.rawRepresentation
+        )
+    }
+
+    @Test func rejectsPEMWithoutFooterOrBody() {
+        #expect(throws: LibP2PCrypto.PEM.Error.self) {
+            _ = try LibP2PCrypto.PEM.pemToData(Array("-----BEGIN PUBLIC KEY-----\nAAAA\n".utf8))
+        }
+        #expect(throws: LibP2PCrypto.PEM.Error.self) {
+            _ = try LibP2PCrypto.PEM.pemToData(Array("-----BEGIN PUBLIC KEY-----\n-----END PUBLIC KEY-----".utf8))
+        }
+        #expect(throws: LibP2PCrypto.PEM.Error.self) {
+            _ = try LibP2PCrypto.PEM.pemToData(Array("no pem here".utf8))
+        }
+    }
+
+    /// Encrypted Secp256k1 exports wrapped a SEC1 ECPrivateKey instead of a PKCS #8 PrivateKeyInfo
+    @Test func encryptedExportContainsPKCS8() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
+        let password = "pw"
+        let pem = try kp.exportEncryptedPrivatePEM(
+            withPassword: password,
+            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: 2048)
+        )
+
+        // Manually decrypt the container
+        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem)
+        let encrypted = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(bytes))
+        let key = try encrypted.pbkdfAlgorithm.deriveKey(
+            password: password,
+            ofLength: encrypted.cipherAlgorithm.desiredKeyLength
+        )
+        let decrypted = try encrypted.cipherAlgorithm.decrypt(bytes: encrypted.ciphertext, withKey: key)
+
+        let privateKeyInfo = try PrivateKeyInfo(derEncoded: decrypted)
+        #expect(privateKeyInfo.algorithmIdentifier.algorithm == ASN1ObjectIdentifier.LibP2P.idEcPublicKey)
+        #expect(
+            privateKeyInfo.algorithmIdentifier.parameters == .objectIdentifier(ASN1ObjectIdentifier.LibP2P.secp256k1)
+        )
+        let sec1 = try ECPrivateKey(derEncoded: Array(privateKeyInfo.privateKey.bytes))
+        #expect(Data(sec1.privateKey.bytes) == kp.privateKey?.rawRepresentation)
+
+        let restored = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
+        #expect(restored.keyType == .secp256k1)
+        #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
+    }
+
+    @Test func importsUnencryptedPKCS8() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
+        let pkcs8 = try kp.privateKey!.exportPrivateKeyPEMRaw()
+        let body = Data(pkcs8).base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
+        let pem = "-----BEGIN PRIVATE KEY-----\n\(body)\n-----END PRIVATE KEY-----"
+
+        let restored = try LibP2PCrypto.Keys.KeyPair(pem: pem)
+        #expect(restored.keyType == .secp256k1)
+        #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
+    }
+
+    @Test func rejectsMismatchedAttachedPublicKey() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
+        let other = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
+        let sec1 = try ECPrivateKey(
+            privateKey: kp.privateKey!.rawRepresentation.byteArray,
+            namedCurve: nil,
+            publicKey: other.privateKey!.publicKeyDER()
+        ).serializedDERBytes()
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
+            _ = try Secp256k1PrivateKey(privateDER: sec1)
+        }
+    }
+
+    /// P-256 keys share id-ecPublicKey with Secp256k1 and must still be classified by their named curve
+    @Test func p256PKCS8IsNotMistakenForSecp256k1() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.ECDSA(curve: .P256))
+        let restored = try LibP2PCrypto.Keys.KeyPair(pem: kp.exportPrivatePEMString())
+        #expect(restored.keyType == .ecdsa)
+        #expect(restored.attributes()?.size == 256)
+        #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
+    }
+}
+
+@Suite("Encrypted PEM PRF Tests")
+struct EncryptedPEMPRFTests {
+    let password = "mypassword"
+    let salt: [UInt8] = Array(0..<16)
+    let iv: [UInt8] = Array(16..<32)
+    let iterations = 2048
+
+    /// Minimal DER TLV encoder, kept independent of the library's own ASN.1 serializers
+    static func tlv(_ tag: UInt8, _ content: [UInt8]) -> [UInt8] {
+        var length: [UInt8]
+        if content.count < 0x80 {
+            length = [UInt8(content.count)]
+        } else {
+            var count = content.count
+            var bytes: [UInt8] = []
+            while count > 0 {
+                bytes.insert(UInt8(count & 0xff), at: 0)
+                count >>= 8
+            }
+            length = [0x80 | UInt8(bytes.count)] + bytes
+        }
+        return [tag] + length + content
+    }
+
+    static func sequence(_ children: [UInt8]...) -> [UInt8] { tlv(0x30, children.flatMap { $0 }) }
+
+    static let pbes2OID: [UInt8] = [0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x05, 0x0D]
+    static let pbkdf2OID: [UInt8] = [0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x05, 0x0C]
+    static let hmacWithSHA256OID: [UInt8] = [0x06, 0x08, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x02, 0x09]
+    static let hmacWithSHA1OID: [UInt8] = [0x06, 0x08, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x02, 0x07]
+    static let aes256CBCOID: [UInt8] = [0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x2A]
+    static let null: [UInt8] = [0x05, 0x00]
+
+    /// Builds an `ENCRYPTED PRIVATE KEY` PEM the way OpenSSL 3's `openssl pkcs8 -topk8` does
+    /// (PBES2, PBKDF2 with the specified PRF, AES-256-CBC)
+    func encryptedPEM(
+        wrapping pkcs8: [UInt8],
+        prfOID: [UInt8]?,
+        variant: CryptoSwift.HMAC.Variant,
+        keyLength: Int? = nil
+    ) throws -> String {
+        let key = try PKCS5.PBKDF2(
+            password: Array(password.utf8),
+            salt: salt,
+            iterations: iterations,
+            keyLength: 32,
+            variant: variant
+        ).calculate()
+        let ciphertext = try CryptoSwift.AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).encrypt(pkcs8)
+
+        var pbkdf2Params = Self.tlv(0x04, salt) + Self.tlv(0x02, [0x08, 0x00])
+        if let keyLength { pbkdf2Params += Self.tlv(0x02, [UInt8(keyLength)]) }
+        if let prfOID { pbkdf2Params += Self.sequence(prfOID, Self.null) }
+
+        let der = Self.sequence(
+            Self.sequence(
+                Self.pbes2OID,
+                Self.sequence(
+                    Self.sequence(Self.pbkdf2OID, Self.tlv(0x30, pbkdf2Params)),
+                    Self.sequence(Self.aes256CBCOID, Self.tlv(0x04, iv))
+                )
+            ),
+            Self.tlv(0x04, ciphertext)
+        )
+
+        let body = Data(der).base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
+        return "-----BEGIN ENCRYPTED PRIVATE KEY-----\n\(body)\n-----END ENCRYPTED PRIVATE KEY-----"
+    }
+
+    /// The optional `prf` (and `keyLength`) PBKDF2 parameters weren't parsed, so PEMs
+    /// encrypted by OpenSSL 1.1+ / 3.x (hmacWithSHA256) failed to import
+    @Test(arguments: [nil, 32] as [Int?])
+    func importsSHA256PRFEncryptedPEM(keyLength: Int?) throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let pem = try encryptedPEM(
+            wrapping: kp.privateKey!.exportPrivateKeyPEMRaw(),
+            prfOID: Self.hmacWithSHA256OID,
+            variant: .sha2(.sha256),
+            keyLength: keyLength
+        )
+
+        let restored = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
+        #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
+    }
+
+    @Test func importsExplicitSHA1PRFEncryptedPEM() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let pem = try encryptedPEM(
+            wrapping: kp.privateKey!.exportPrivateKeyPEMRaw(),
+            prfOID: Self.hmacWithSHA1OID,
+            variant: .sha1
+        )
+
+        let restored = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
+        #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
+    }
+
+    @Test func rejectsMismatchedKeyLength() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let pem = try encryptedPEM(
+            wrapping: kp.privateKey!.exportPrivateKeyPEMRaw(),
+            prfOID: Self.hmacWithSHA256OID,
+            variant: .sha2(.sha256),
+            keyLength: 16
+        )
+        #expect(throws: LibP2PCrypto.PEM.Error.self) {
+            _ = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
+        }
+    }
+
+    @Test func rejectsUnsupportedPRF() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        // id-hmacWithMD5 isn't an RFC 8018 PBKDF2 PRF
+        let unknownOID: [UInt8] = [0x06, 0x08, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x02, 0x06]
+        let pem = try encryptedPEM(
+            wrapping: kp.privateKey!.exportPrivateKeyPEMRaw(),
+            prfOID: unknownOID,
+            variant: .md5
+        )
+        #expect(throws: LibP2PCrypto.PEM.Error.self) {
+            _ = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
+        }
+    }
+
+    /// DER requires the DEFAULT (hmacWithSHA1) PRF to be omitted, while any other PRF must be encoded
+    @Test func prfEncoding() throws {
+        let sha1 = try LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(salt: salt, iterations: iterations).encodePBKDF()
+        let sha1Bytes = try sha1.serializedDERBytes()
+        #expect(
+            sha1Bytes.count
+                == Self.sequence(Self.pbkdf2OID, Self.tlv(0x30, Self.tlv(0x04, salt) + Self.tlv(0x02, [0x08, 0x00])))
+                .count
+        )
+
+        let sha256 = try LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(
+            salt: salt,
+            iterations: iterations,
+            prf: .hmacWithSHA256
+        )
+        .encodePBKDF()
+        let decoded = try LibP2PCrypto.PEM.decodePBKFD(
+            PBKDF2AlgorithmIdentifier(derEncoded: sha256.serializedDERBytes())
+        )
+        #expect(decoded.prf == .hmacWithSHA256)
+        #expect(decoded.salt == salt)
+        #expect(decoded.iterations == iterations)
+    }
+
+    @Test func roundTripsEveryPRF() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        for prf in LibP2PCrypto.PEM.PBKDFAlgorithm.PRF.allCases {
+            let pem = try kp.exportEncryptedPrivatePEM(
+                withPassword: password,
+                usingPBKDF: .pbkdf2(salt: salt, iterations: iterations, prf: prf)
+            )
+            let restored = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
+            #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
+        }
+    }
 }
 
 /// Regression and enhancement coverage added alongside the bug-fix / modernization pass.
@@ -1963,7 +2318,7 @@ struct RegressionTests {
     /// silently truncating any value above 65535. This exercises a genuinely large value; it only
     /// encodes/decodes an ASN.1 integer, so it does no key derivation and is cheap in any build.
     @Test func pbkdf2IterationEncodingSurvivesLargeValues() throws {
-        let salt = try LibP2PCrypto.randomBytes(length: 16)
+        let salt = LibP2PCrypto.randomBytes(length: 16)
         let pbkdf = LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(salt: salt, iterations: 310_000)
         let encoded = try pbkdf.encodePBKDF().serializedDERBytes()
         let decoded = try LibP2PCrypto.PEM.decodePBKFD(PBKDF2AlgorithmIdentifier(derEncoded: encoded))
@@ -1985,6 +2340,8 @@ struct RegressionTests {
         let decoded = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(bytes))
         #expect(decoded.pbkdfAlgorithm.iterations == LibP2PCrypto.PEM.defaultPBKDF2Iterations)
         #expect(decoded.pbkdfAlgorithm.salt.count == LibP2PCrypto.PEM.defaultPBKDF2SaltLength)
+        #expect(decoded.pbkdfAlgorithm.prf == .hmacWithSHA256)
+        #expect(decoded.cipherAlgorithm.desiredKeyLength == 32)
         #endif
     }
 
@@ -2090,8 +2447,9 @@ struct ASN1Tests {
         #expect(Curve25519.Signing.PublicKey.primaryObjectIdentifier == "1.3.101.112")
         #expect(Secp256k1PublicKey.primaryObjectIdentifier == "1.2.840.10045.2.1")
         #expect(Secp256k1PublicKey.secondaryObjectIdentifier == "1.3.132.0.10")
-        // Previously expressed as the TLV bytes [0x06, 0x05, 0x2B, 0x81, 0x04, 0x00, 0x0A]
-        #expect(Secp256k1PrivateKey.primaryObjectIdentifier == "1.3.132.0.10")
+        // Private keys use the same id-ecPublicKey + named curve pair as public keys (PKCS #8)
+        #expect(Secp256k1PrivateKey.primaryObjectIdentifier == "1.2.840.10045.2.1")
+        #expect(Secp256k1PrivateKey.secondaryObjectIdentifier == "1.3.132.0.10")
     }
 
     @Test func rsaAlgorithmIdentifierIncludesNullParameter() throws {
@@ -2103,7 +2461,7 @@ struct ASN1Tests {
 
     @Test func secp256k1ECPrivateKeyRoundTrips() throws {
         let key = try Secp256k1PrivateKey()
-        let der = try key.exportPrivateKeyPEMRaw()
+        let der = try key.sec1DER()
 
         let decoded = try ECPrivateKey(derEncoded: der)
         #expect(Array(decoded.privateKey.bytes) == key.rawRepresentation.byteArray)

@@ -29,27 +29,15 @@ public protocol CommonPublicKey: DERCodable, Sendable {
     /// Encryption
     func encrypt(data: Data) throws -> Data
 
-    // Signature Verification
+    /// Signature Verification
     func verify(signature: Data, for: Data) throws -> Bool
 
-    /// Imports
-    //init(fromMarshaledData:Data) throws
-    //init(pem:String) throws
-    //init(der:String) throws
-
-    /// Exports
-    //func exportPEM() throws -> Data
-    //func exportJWK() throws -> Data
-    //func exportCID() throws -> Data
+    /// The protobuf-marshaled representation of the public key
     func marshal() throws -> Data
 
-    ///Misc
+    /// Misc
     func asString(base: BaseEncoding, withMultibasePrefix: Bool) -> String
     var data: Data { get }
-    //func attributes() -> CommonKeyPair.Attributes
-    //func id() throws -> String
-
-    //var type:LibP2PCrypto.Keys.KeyPairType
 }
 
 extension CommonPublicKey {
@@ -72,18 +60,13 @@ extension CommonPublicKey {
         }
     }
 
-    /// The keys `rawID` is the SHA-256 multihash of its public key
-    /// The public key is a protobuf encoding containing a type and the DER encoding
-    /// of the PKCS SubjectPublicKeyInfo.
+    /// The keys `rawID` is the multihash (see ``multihash()``) of its marshaled public key
     public func rawID() throws -> [UInt8] {
         try self.multihash().value
     }
 
-    /// The key id is the base58 encoding of the SHA-256 multihash of its public key.
-    /// The public key is a protobuf encoding (marshaled) containing a type and the DER encoding
-    /// of the PKCS SubjectPublicKeyInfo.
+    /// The key id is the base58 encoding of the multihash (see ``multihash()``) of its marshaled public key
     public func id(withMultibasePrefix: Bool = true) throws -> String {
-        //let mh = try Multihash(hashing: self.marshal(), codec: .sha2_256)
         let mh = try self.multihash()
         return mh.asString(base: .base58btc, withMultibasePrefix: withMultibasePrefix)
     }

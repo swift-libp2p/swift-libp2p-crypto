@@ -49,34 +49,6 @@ extension Secp256k1PublicKey: CommonPublicKey {
         publicKey.data = try Data(self.compressPublicKey())
         return try publicKey.serializedData()
     }
-
-    //    public convenience init(pem:String) throws {
-    //        let chunks = pem.split(separator: "\n")
-    //        guard chunks.count > 3,
-    //              let f = chunks.first, f.hasPrefix("-----BEGIN"),
-    //              let l = chunks.last, l.hasSuffix("-----") else {
-    //            throw NSError(domain: "Invalid PEM Format", code: 0, userInfo: nil)
-    //        }
-    //
-    //        //print("Attempting to decode: \(chunks[1..<chunks.count-1].joined())")
-    //        let raw = try BaseEncoding.decode(chunks[1..<chunks.count-1].joined(), as: .base64)
-    //        //print(raw.data)
-    //
-    //        //let key = try LibP2PCrypto.Keys.stripKeyHeader(keyData: raw.data)
-    //
-    //        let asn1 = try LibP2PCrypto.Keys.parseASN1(pemData: raw.data)
-    //
-    //        guard asn1.isPrivateKey == false else {
-    //            throw NSError(domain: "The provided PEM isn't a Public Key. Try importPrivatePem() instead...", code: 0, userInfo: nil)
-    //        }
-    //
-    //        if asn1.objectIdentifier.prefix(5) == Data([0x2a, 0x86, 0x48, 0xce, 0x3d]) {
-    //            print("Trying to Init EC Key")
-    //            self = try Secp256k1PublicKey(publicKey: asn1.keyBits.bytes)
-    //        }
-    //
-    //        throw NSError(domain: "Failed to parse PEM into known key type \(asn1)", code: 0, userInfo: nil)
-    //    }
 }
 
 extension Secp256k1PrivateKey: CommonPrivateKey {
@@ -124,8 +96,9 @@ extension Secp256k1PublicKey: DERCodable {
     /// secp256k1 named curve (1.3.132.0.10)
     public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { ASN1ObjectIdentifier.LibP2P.secp256k1 }
 
+    /// Expects the SubjectPublicKeyInfo's BIT STRING contents, either a 65 byte uncompressed (`0x04 || X || Y`)
+    /// or a 33 byte compressed (`0x02 / 0x03 || X`) EC point
     public convenience init(publicDER: [UInt8]) throws {
-        /// Expects a 0x0422 32byte long octetString as the rawRepresentation
         try self.init(rawRepresentation: Data(publicDER))
     }
 
@@ -142,35 +115,13 @@ extension Secp256k1PublicKey: DERCodable {
     public func privateKeyDER() throws -> [UInt8] {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("A public key has no private DER representation")
     }
-
-    public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let spki = try SubjectPublicKeyInfo(
-            algorithmIdentifier: AlgorithmIdentifier(
-                algorithm: Self.primaryObjectIdentifier,
-                parameters: .objectIdentifier(ASN1ObjectIdentifier.LibP2P.secp256k1)
-            ),
-            key: self.publicKeyDER()
-        )
-
-        let base64String = try spki.serializedDERBytes().toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.publicKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.publicKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
-    }
 }
 
 extension Secp256k1PrivateKey: DERCodable {
+    /// id-ecPublicKey (1.2.840.10045.2.1)
+    public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.idEcPublicKey }
     /// secp256k1 named curve (1.3.132.0.10)
-    public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.secp256k1 }
-    public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
+    public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { ASN1ObjectIdentifier.LibP2P.secp256k1 }
 
     public convenience init(publicDER: [UInt8]) throws {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation(
@@ -178,8 +129,45 @@ extension Secp256k1PrivateKey: DERCodable {
         )
     }
 
+    /// Expects either the raw 32 byte private key scalar or a DER encoded SEC1 ECPrivateKey
+    /// (as nested inside a PKCS #8 PrivateKeyInfo, where the named curve parameter is optional)
     public convenience init(privateDER: [UInt8]) throws {
-        try self.init(rawRepresentation: Data(privateDER))
+        guard privateDER.count > 32 else {
+            // Raw scalar, left pad it in case an encoder stripped leading zeros
+            try self.init(rawRepresentation: Data(repeating: 0, count: 32 - privateDER.count) + privateDER)
+            return
+        }
+
+        let ecPrivateKey: ECPrivateKey
+        do {
+            ecPrivateKey = try ECPrivateKey(derEncoded: privateDER)
+        } catch {
+            throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                "Secp256k1: private key is not a valid ECPrivateKey"
+            )
+        }
+        if let namedCurve = ecPrivateKey.namedCurve, namedCurve != ASN1ObjectIdentifier.LibP2P.secp256k1 {
+            throw LibP2PCrypto.PEM.Error.objectIdentifierMismatch(
+                got: namedCurve,
+                expected: ASN1ObjectIdentifier.LibP2P.secp256k1
+            )
+        }
+        let scalar = Array(ecPrivateKey.privateKey.bytes)
+        guard !scalar.isEmpty, scalar.count <= 32 else {
+            throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                "Secp256k1: invalid private key length \(scalar.count)"
+            )
+        }
+        try self.init(rawRepresentation: Data(repeating: 0, count: 32 - scalar.count) + scalar)
+
+        // Ensure the (optional) attached public key matches the private key
+        if let attachedPublicKey = ecPrivateKey.publicKey {
+            guard try self.publicKeyDER() == Array(attachedPublicKey.bytes) else {
+                throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding(
+                    "Secp256k1: unable to validate attached public key"
+                )
+            }
+        }
     }
 
     public func publicKeyDER() throws -> [UInt8] {
@@ -190,27 +178,32 @@ extension Secp256k1PrivateKey: DERCodable {
         self.rawRepresentation.byteArray
     }
 
+    /// The DER encoded PKCS #8 PrivateKeyInfo (wrapping a SEC1 ECPrivateKey), as required when encrypting the key
     public func exportPrivateKeyPEMRaw() throws -> [UInt8] {
+        try PrivateKeyInfo(
+            algorithmIdentifier: AlgorithmIdentifier(
+                algorithm: Self.primaryObjectIdentifier,
+                parameters: .objectIdentifier(ASN1ObjectIdentifier.LibP2P.secp256k1)
+            ),
+            privateKey: ECPrivateKey(
+                privateKey: self.rawRepresentation.byteArray,
+                namedCurve: nil,
+                publicKey: self.publicKeyDER()
+            ).serializedDERBytes()
+        ).serializedDERBytes()
+    }
+
+    /// The DER encoded SEC1 ECPrivateKey (including the named curve and public key)
+    func sec1DER() throws -> [UInt8] {
         try ECPrivateKey(
             privateKey: self.rawRepresentation.byteArray,
-            namedCurve: Self.primaryObjectIdentifier,
+            namedCurve: ASN1ObjectIdentifier.LibP2P.secp256k1,
             publicKey: self.publicKeyDER()
         ).serializedDERBytes()
     }
 
+    /// Exports the private key as a SEC1 `EC PRIVATE KEY` PEM
     public func exportPrivateKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        let base64String = try self.exportPrivateKeyPEMRaw().toBase64()
-        let bodyString = base64String.chunks(ofCount: 64).joined(separator: "\n")
-        let bodyUTF8Bytes = bodyString.bytes
-
-        if withHeaderAndFooter {
-            let header = LibP2PCrypto.PEM.PEMType.ecPrivateKey.headerBytes + [0x0a]
-            let footer = [0x0a] + LibP2PCrypto.PEM.PEMType.ecPrivateKey.footerBytes
-
-            return header + bodyUTF8Bytes + footer
-        } else {
-            return bodyUTF8Bytes
-        }
+        try LibP2PCrypto.PEM.armor(self.sec1DER(), as: .ecPrivateKey, withHeaderAndFooter: withHeaderAndFooter)
     }
-
 }

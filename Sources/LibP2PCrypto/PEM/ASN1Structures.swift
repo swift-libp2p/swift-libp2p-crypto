@@ -49,6 +49,21 @@ extension ASN1ObjectIdentifier {
         /// id-PBKDF2 (1.2.840.113549.1.5.12) [RFC 8018]
         public static let pbkdf2: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 1, 5, 12]
 
+        /// id-hmacWithSHA1 (1.2.840.113549.2.7) [RFC 8018] (the default for PBKDF2 PRF)
+        public static let hmacWithSHA1: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 2, 7]
+
+        /// id-hmacWithSHA224 (1.2.840.113549.2.8) [RFC 8018]
+        public static let hmacWithSHA224: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 2, 8]
+
+        /// id-hmacWithSHA256 (1.2.840.113549.2.9) [RFC 8018]
+        public static let hmacWithSHA256: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 2, 9]
+
+        /// id-hmacWithSHA384 (1.2.840.113549.2.10) [RFC 8018]
+        public static let hmacWithSHA384: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 2, 10]
+
+        /// id-hmacWithSHA512 (1.2.840.113549.2.11) [RFC 8018]
+        public static let hmacWithSHA512: ASN1ObjectIdentifier = [1, 2, 840, 113_549, 2, 11]
+
         /// aes128-CBC-PAD (2.16.840.1.101.3.4.1.2)
         public static let aes128CBC: ASN1ObjectIdentifier = [2, 16, 840, 1, 101, 3, 4, 1, 2]
 
@@ -404,24 +419,36 @@ struct EncryptedPrivateKeyInfo: DERImplicitlyTaggable, Hashable {
 ///     algorithm   OBJECT IDENTIFIER,  -- id-PBKDF2
 ///     parameters  PBKDF2-params ::= SEQUENCE {
 ///         salt            OCTET STRING,
-///         iterationCount  INTEGER (1..MAX)
+///         iterationCount  INTEGER (1..MAX),
+///         keyLength       INTEGER (1..MAX) OPTIONAL,
+///         prf             AlgorithmIdentifier {{PBKDF2-PRFs}} DEFAULT algid-hmacWithSHA1
 ///     }
 /// }
 /// ```
 /// [RFC 8018 §A.2](https://datatracker.ietf.org/doc/html/rfc8018#appendix-A.2)
-///
-/// - Note: The optional `keyLength` and `prf` fields are not supported (the PRF is always HMAC-SHA1).
 struct PBKDF2AlgorithmIdentifier: DERImplicitlyTaggable, Hashable {
     static var defaultIdentifier: ASN1Identifier { .sequence }
 
     var algorithm: ASN1ObjectIdentifier
     var salt: ASN1OctetString
     var iterationCount: Int
+    /// The optional derived key length (in bytes)
+    var keyLength: Int?
+    /// The PRF's object identifier (defaults to hmacWithSHA1 when absent)
+    var prf: ASN1ObjectIdentifier
 
-    init(algorithm: ASN1ObjectIdentifier, salt: [UInt8], iterationCount: Int) {
+    init(
+        algorithm: ASN1ObjectIdentifier,
+        salt: [UInt8],
+        iterationCount: Int,
+        keyLength: Int? = nil,
+        prf: ASN1ObjectIdentifier = ASN1ObjectIdentifier.LibP2P.hmacWithSHA1
+    ) {
         self.algorithm = algorithm
         self.salt = ASN1OctetString(contentBytes: salt[...])
         self.iterationCount = iterationCount
+        self.keyLength = keyLength
+        self.prf = prf
     }
 
     init(derEncoded rootNode: ASN1Node, withIdentifier identifier: ASN1Identifier) throws {
@@ -430,14 +457,30 @@ struct PBKDF2AlgorithmIdentifier: DERImplicitlyTaggable, Hashable {
             guard let parametersNode = nodes.next() else {
                 throw ASN1Error.invalidASN1Object(reason: "PBKDF2 missing parameters")
             }
-            let (salt, iterationCount) = try DER.sequence(parametersNode, identifier: .sequence) { nodes in
-                (try ASN1OctetString(derEncoded: &nodes), try Int(derEncoded: &nodes))
+            return try DER.sequence(parametersNode, identifier: .sequence) { nodes in
+                let salt = try ASN1OctetString(derEncoded: &nodes)
+                let iterationCount = try Int(derEncoded: &nodes)
+
+                // Both trailing fields are optional, the keyLength (if present) always precedes the prf
+                var keyLength: Int? = nil
+                var prf = ASN1ObjectIdentifier.LibP2P.hmacWithSHA1
+                var next = nodes.next()
+                if let node = next, node.identifier == .integer {
+                    keyLength = try Int(derEncoded: node)
+                    next = nodes.next()
+                }
+                if let node = next {
+                    prf = try AlgorithmIdentifier(derEncoded: node).algorithm
+                }
+
+                return PBKDF2AlgorithmIdentifier(
+                    algorithm: algorithm,
+                    salt: Array(salt.bytes),
+                    iterationCount: iterationCount,
+                    keyLength: keyLength,
+                    prf: prf
+                )
             }
-            return PBKDF2AlgorithmIdentifier(
-                algorithm: algorithm,
-                salt: Array(salt.bytes),
-                iterationCount: iterationCount
-            )
         }
     }
 
@@ -447,6 +490,13 @@ struct PBKDF2AlgorithmIdentifier: DERImplicitlyTaggable, Hashable {
             try coder.appendConstructedNode(identifier: .sequence) { coder in
                 try coder.serialize(self.salt)
                 try coder.serialize(self.iterationCount)
+                if let keyLength = self.keyLength {
+                    try coder.serialize(keyLength)
+                }
+                // DER requires DEFAULT values to be omitted
+                if self.prf != ASN1ObjectIdentifier.LibP2P.hmacWithSHA1 {
+                    try coder.serialize(AlgorithmIdentifier(algorithm: self.prf, parameters: .null))
+                }
             }
         }
     }

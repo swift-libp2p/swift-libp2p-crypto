@@ -736,7 +736,7 @@ private func swiftCryptoPEMs(of keyPair: LibP2PCrypto.Keys.KeyPair) -> (public: 
 
 /// Wraps DER bytes in a PEM envelope
 private func pem(_ der: [UInt8], type: String) -> String {
-    let body = Data(der).base64EncodedString().chunks(ofCount: 64).joined(separator: "\n")
+    let body = Data(der).base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
     return "-----BEGIN \(type)-----\n\(body)\n-----END \(type)-----"
 }
 

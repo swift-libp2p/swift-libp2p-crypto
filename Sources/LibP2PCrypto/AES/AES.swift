@@ -16,9 +16,15 @@ import Foundation
 
 #if canImport(CommonCrypto)
 import CommonCrypto
+#else
+import CryptoSwift
+#endif
 
 extension LibP2PCrypto {
     public enum AES {
+        /// The AES block size, which is also the required IV length for AES-CBC
+        static let blockSize = 16
+
         static func createKey(key: String) throws -> AESKey {
             try AESKey(key: key)
         }
@@ -31,22 +37,35 @@ extension LibP2PCrypto {
             try AESKey(key: key, iv: iv)
         }
 
-        public func decrypt(_ data: Data, withPassword password: String) throws -> Data {
-            let key = try LibP2PCrypto.AES.createKey(key: password)
-
-            return try key.decrypt(data)
+        /// Decrypts data previously encrypted by an `AESKey` created with the same password
+        /// - Parameters:
+        ///   - data: The IV prefixed ciphertext produced by `AESKey.encrypt(_:)`
+        ///   - password: The 16 or 32 byte (UTF-8) password used as the AES key
+        public static func decrypt(_ data: Data, withPassword password: String) throws -> Data {
+            try LibP2PCrypto.AES.createKey(key: password).decrypt(data)
         }
 
+        /// An AES-CBC (PKCS#7 padded) key
+        ///
+        /// - Note: `encrypt(_:)` prepends the IV to the returned ciphertext and `decrypt(_:)` expects
+        ///   the IV to be prepended, so data can be decrypted by any `AESKey` sharing the same secret key.
         public struct AESKey: Encryptable, Decryptable, Sendable {
             private let key: Data
-            private let iv: Data
 
+            /// The initialization vector used when encrypting
+            public let iv: Data
+
+            /// Initializes an AES Key with the specified key and Initial Vector
+            /// - Parameters:
+            ///   - key: Either a 16 or 32 byte secret key
+            ///   - iv: A 16 byte initial vector
+            /// - Throws: `KeyError.invalidParameters` if the key or iv are the wrong length
             public init(key: Data, iv: Data) throws {
-                guard key.count == kCCKeySizeAES128 || key.count == kCCKeySizeAES256 else {
+                guard key.count == 16 || key.count == 32 else {
                     throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
                 }
 
-                guard iv.count == kCCBlockSizeAES128 else {
+                guard iv.count == AES.blockSize else {
                     throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid initial vector")
                 }
                 self.key = key
@@ -55,189 +74,77 @@ extension LibP2PCrypto {
 
             /// Initializes an AES Key with the specified key and Initial Vector
             /// - Parameters:
-            ///   - key: Either a 16 or 32 byte secret key
-            ///   - iv: A 16 byte initial vector
-            /// - Throws: An error if one is encountered along the way
+            ///   - key: Either a 16 or 32 byte (UTF-8) secret key
+            ///   - iv: A 16 byte (UTF-8) initial vector
+            /// - Throws: `KeyError.invalidParameters` if the key or iv are the wrong length
             public init(key: String, iv: String) throws {
-                guard let keyData = key.data(using: .utf8), let ivData = iv.data(using: .utf8) else {
-                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
-                }
-
-                self.key = keyData
-                self.iv = ivData
+                try self.init(key: Data(key.utf8), iv: Data(iv.utf8))
             }
 
             /// Initializes an AES Key with the specified key and a randomly generated Initial Vector
-            /// - Parameter key: Either a 16 or 32 byte secret key
-            /// - Throws: An error if one is encountered along the way
+            /// - Parameter key: Either a 16 or 32 byte (UTF-8) secret key
+            /// - Throws: `KeyError.invalidParameters` if the key is the wrong length
             public init(key: String) throws {
-                guard key.count == kCCKeySizeAES128 || key.count == kCCKeySizeAES256,
-                    let keyData = key.data(using: .utf8)
-                else {
-                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
-                }
-                try self.init(key: keyData, iv: Data(LibP2PCrypto.randomBytes(length: 16)))
+                try self.init(key: Data(key.utf8), iv: Data(LibP2PCrypto.randomBytes(length: AES.blockSize)))
             }
 
-            //            public func encrypt(data: Data) throws -> Data {
-            //                return try crypt(data: data, operation: CCOperation(kCCEncrypt))
-            //            }
-            //
-            //            public func encrypt(string: String, using encoding:String.Encoding = .utf8) throws -> Data {
-            //                guard let d = string.data(using: encoding) else {
-            //                    throw NSError(domain: "Error: Failed to encode string using \(encoding).", code: 0, userInfo: nil)
-            //                }
-            //                return try encrypt(data: d)
-            //            }
-
+            /// Encrypts the data and returns it prefixed with the IV: `[ iv ][ ciphertext ]`
             public func encrypt(_ data: Data) throws -> Data {
-                try crypt(data: data, operation: CCOperation(kCCEncrypt))
+                try iv + AES.cbc(data, key: key, iv: iv, encrypt: true)
             }
 
-            //            /// Converts a String to data using .utf8 encoding and then attempts to encrypt it
-            //            public func encrypt(_ message:String) throws -> Data {
-            //                guard let d = message.data(using: .utf8) else {
-            //                    throw NSError(domain: "Error: Failed to encode string using \(String.Encoding.utf8).", code: 0, userInfo: nil)
-            //                }
-            //                return try encrypt(d)
-            //            }
-
+            /// Decrypts IV prefixed ciphertext (`[ iv ][ ciphertext ]`) produced by `encrypt(_:)`
             public func decrypt(_ data: Data) throws -> Data {
-                try crypt(data: data, operation: CCOperation(kCCDecrypt))
-
+                guard data.count >= AES.blockSize * 2 else {
+                    throw LibP2PCrypto.Keys.KeyError.decryptionFailed("AES: ciphertext too short")
+                }
+                let iv = data.prefix(AES.blockSize)
+                let ciphertext = data.dropFirst(AES.blockSize)
+                return try AES.cbc(Data(ciphertext), key: key, iv: Data(iv), encrypt: false)
             }
+        }
 
-            //            public func decrypt(data: Data, using encoding:String.Encoding = .utf8) throws -> String {
-            //                let decryptedData = try decrypt(data: data)
-            //                guard let str = String(bytes: decryptedData, encoding: encoding) else {
-            //                    throw NSError(domain: "Error: Failed to convert data into string via encoding: \(encoding)", code: 0, userInfo: nil)
-            //                }
-            //                return str
-            //            }
+        #if canImport(CommonCrypto)
+        /// AES-CBC (PKCS#7 padded) Encrypt / Decrypt data via CommonCrypto
+        private static func cbc(_ data: Data, key: Data, iv: Data, encrypt: Bool) throws -> Data {
+            let cryptLength = data.count + kCCBlockSizeAES128
+            var cryptData = Data(count: cryptLength)
+            var bytesLength = 0
 
-            /// AES Encrypt / Decrypt data
-            /// - Parameters:
-            ///   - data: The data that should be worked on
-            ///   - operation: Either Encryption or Decryption
-            /// - Throws: An error if the data couldn't be processed
-            /// - Returns: The AES Encrypted / Decrypted data
-            private func crypt(data: Data, operation: CCOperation) throws -> Data {
-                if data.isEmpty { return data }
-
-                let cryptLength = data.count + kCCBlockSizeAES128
-                var cryptData = Data(count: cryptLength)
-
-                let keyLength = key.count
-                let options = CCOptions(kCCOptionPKCS7Padding)
-
-                var bytesLength = Int(0)
-
-                let status = cryptData.withUnsafeMutableBytes { cryptBytes in
-                    data.withUnsafeBytes { dataBytes in
-                        iv.withUnsafeBytes { ivBytes in
-                            key.withUnsafeBytes { keyBytes in
-                                CCCrypt(
-                                    operation,  //CCOperation
-                                    CCAlgorithm(kCCAlgorithmAES),  //CCAlgorithm
-                                    options,  //CCOptions (PKCS7 Padding, etc...)
-                                    keyBytes.baseAddress,  //Key Pointer
-                                    keyLength,  //Key Length
-                                    ivBytes.baseAddress,  //IV Pointer
-                                    dataBytes.baseAddress,  //Pointer to Data to encrypt
-                                    data.count,  //Length of Data to encrypt
-                                    cryptBytes.baseAddress,  //Pointer to encrypted data out
-                                    cryptLength,  //Length of encrypted data out
-                                    &bytesLength  //The number of bytes written
-                                )
-                            }
+            let status = cryptData.withUnsafeMutableBytes { cryptBytes in
+                data.withUnsafeBytes { dataBytes in
+                    iv.withUnsafeBytes { ivBytes in
+                        key.withUnsafeBytes { keyBytes in
+                            CCCrypt(
+                                CCOperation(encrypt ? kCCEncrypt : kCCDecrypt),
+                                CCAlgorithm(kCCAlgorithmAES),
+                                CCOptions(kCCOptionPKCS7Padding),
+                                keyBytes.baseAddress,
+                                key.count,
+                                ivBytes.baseAddress,
+                                dataBytes.baseAddress,
+                                data.count,
+                                cryptBytes.baseAddress,
+                                cryptLength,
+                                &bytesLength
+                            )
                         }
                     }
                 }
-
-                guard UInt32(status) == UInt32(kCCSuccess) else {
-                    throw LibP2PCrypto.Keys.KeyError.internalError("AES: CCCrypt failed with status \(status)")
-                }
-
-                cryptData.removeSubrange(bytesLength..<cryptData.count)
-                return cryptData
             }
+
+            guard Int(status) == kCCSuccess else {
+                throw LibP2PCrypto.Keys.KeyError.internalError("AES: CCCrypt failed with status \(status)")
+            }
+
+            return Data(cryptData.prefix(bytesLength))
         }
+        #else
+        /// AES-CBC (PKCS#7 padded) Encrypt / Decrypt data via CryptoSwift
+        private static func cbc(_ data: Data, key: Data, iv: Data, encrypt: Bool) throws -> Data {
+            let aes = try CryptoSwift.AES(key: key.byteArray, blockMode: CBC(iv: iv.byteArray), padding: .pkcs7)
+            return try Data(encrypt ? aes.encrypt(data.byteArray) : aes.decrypt(data.byteArray))
+        }
+        #endif
     }
 }
-
-#else
-
-import CryptoSwift
-
-extension LibP2PCrypto {
-    public enum AES {
-        static func createKey(key: String) throws -> AESKey {
-            try AESKey(key: key)
-        }
-
-        static func createKey(key: String, iv: String) throws -> AESKey {
-            try AESKey(key: key, iv: iv)
-        }
-
-        static func createKey(key: Data, iv: Data) throws -> AESKey {
-            try AESKey(key: key, iv: iv)
-        }
-
-        public func decrypt(_ data: Data, withPassword password: String) throws -> Data {
-            let key = try LibP2PCrypto.AES.createKey(key: password)
-
-            return try key.decrypt(data)
-        }
-
-        public struct AESKey: Encryptable, Decryptable {
-            private let aes: CryptoSwift.AES
-
-            public init(key: Data, iv: Data) throws {
-
-                guard key.count == 16 || key.count == 32 else {
-                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
-                }
-
-                guard iv.count == 16 else {
-                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid initial vector")
-                }
-
-                self.aes = try CryptoSwift.AES(key: key.byteArray, blockMode: CBC(iv: iv.byteArray), padding: .pkcs5)
-            }
-
-            /// Initializes an AES Key with the specified key and Initial Vector
-            /// - Parameters:
-            ///   - key: Either a 16 or 32 byte secret key
-            ///   - iv: A 16 byte initial vector
-            /// - Throws: An error if one is encountered along the way
-            public init(key: String, iv: String) throws {
-                guard let keyData = key.data(using: .utf8), let ivData = iv.data(using: .utf8) else {
-                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
-                }
-
-                try self.init(key: keyData, iv: ivData)
-            }
-
-            /// Initializes an AES Key with the specified key and a randomly generated Initial Vector
-            /// - Parameter key: Either a 16 or 32 byte secret key
-            /// - Throws: An error if one is encountered along the way
-            public init(key: String) throws {
-                guard key.count == 16 || key.count == 32, let keyData = key.data(using: .utf8) else {
-                    throw LibP2PCrypto.Keys.KeyError.invalidParameters("AES: invalid key")
-                }
-
-                try self.init(key: keyData, iv: Data(LibP2PCrypto.randomBytes(length: 16)))
-            }
-
-            public func encrypt(_ data: Data) throws -> Data {
-                try Data(aes.encrypt(data.byteArray))
-            }
-
-            public func decrypt(_ data: Data) throws -> Data {
-                try Data(aes.decrypt(data.byteArray))
-            }
-        }
-    }
-}
-
-#endif

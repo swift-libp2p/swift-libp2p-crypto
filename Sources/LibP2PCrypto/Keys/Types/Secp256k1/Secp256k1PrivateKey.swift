@@ -43,7 +43,7 @@ public final class Secp256k1PrivateKey: Sendable {
     }
 
     /// Convenience initializer for `init(privateKey:)`
-    public required convenience init(_ bytes: [UInt8]) throws {
+    public convenience init(_ bytes: [UInt8]) throws {
         try self.init(privateKey: bytes)
     }
 
@@ -163,15 +163,6 @@ extension Secp256k1PrivateKey: Equatable {
 
     public static func == (_ lhs: Secp256k1PrivateKey, _ rhs: Secp256k1PrivateKey) -> Bool {
         lhs.rawPrivateKey == rhs.rawPrivateKey
-    }
-}
-
-// MARK: - BytesConvertible
-
-extension Secp256k1PrivateKey {
-
-    public func makeBytes() -> [UInt8] {
-        rawPrivateKey
     }
 }
 

@@ -28,11 +28,10 @@ extension LibP2PCrypto.PEM {
     internal static let defaultPBKDF2Iterations = 310_000
     /// Default PBKDF2 salt length in bytes used when encrypting a new PEM (raised from 8).
     internal static let defaultPBKDF2SaltLength = 16
-    /// Default IV length in bytes for the default AES-128-CBC cipher.
+    /// Default IV length in bytes for the default AES-256-CBC cipher.
     internal static let defaultCipherIVLength = 16
 
     internal struct EncryptedPEM {
-        let objectIdentifer: ASN1ObjectIdentifier
         let ciphertext: [UInt8]
         let pbkdfAlgorithm: PBKDFAlgorithm
         let cipherAlgorithm: CipherAlgorithm
@@ -40,7 +39,7 @@ extension LibP2PCrypto.PEM {
 
     /// Attempts to decode an encrypted Private Key PEM, returning all of the information necessary to decrypt the encrypted PEM
     /// - Parameter encryptedPEM: The raw base64 decoded PEM data
-    /// - Returns: An `EncryptedPEM` Struct containing the ciphertext, the pbkdf alogrithm for key derivation, the cipher algorithm for decrypting and the objectIdentifier describing the contents of this PEM data
+    /// - Returns: An `EncryptedPEM` Struct containing the ciphertext, the pbkdf alogrithm for key derivation and the cipher algorithm for decrypting
     ///
     /// To decrypt an encrypted PEM Private Key...
     /// 1) Strip the headers of the PEM and base64 decode the data
@@ -73,12 +72,21 @@ extension LibP2PCrypto.PEM {
     /// ```
     internal static func decodeEncryptedPEM(_ encryptedPEM: Data) throws -> EncryptedPEM {
         let encryptedPrivateKeyInfo = try EncryptedPrivateKeyInfo(derEncoded: encryptedPEM.byteArray)
+        let cipherAlgorithm = try decodeCipher(encryptedPrivateKeyInfo.encryptionScheme)
+
+        // If the PBKDF2 parameters specify a key length, it must match the cipher's key length
+        if let keyLength = encryptedPrivateKeyInfo.keyDerivationFunction.keyLength,
+            keyLength != cipherAlgorithm.desiredKeyLength
+        {
+            throw Error.invalidPEMFormat(
+                "EncryptedPrivateKey::PBKDF::key length \(keyLength), expected \(cipherAlgorithm.desiredKeyLength)"
+            )
+        }
 
         return EncryptedPEM(
-            objectIdentifer: encryptedPrivateKeyInfo.encryptionAlgorithm,
             ciphertext: Array(encryptedPrivateKeyInfo.encryptedData.bytes),
             pbkdfAlgorithm: try decodePBKFD(encryptedPrivateKeyInfo.keyDerivationFunction),
-            cipherAlgorithm: try decodeCipher(encryptedPrivateKeyInfo.encryptionScheme)
+            cipherAlgorithm: cipherAlgorithm
         )
     }
 
@@ -89,12 +97,14 @@ extension LibP2PCrypto.PEM {
         andCipher cipher: CipherAlgorithm? = nil
     ) throws -> Data {
 
-        let cipher = try cipher ?? .aes_128_cbc(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
+        // Defaults match OpenSSL 3's `openssl pkcs8 -topk8` (PBES2, PBKDF2-HMAC-SHA256, AES-256-CBC)
+        let cipher = cipher ?? .aes_256_cbc(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
         let pbkdf =
-            try pbkdf
+            pbkdf
             ?? .pbkdf2(
                 salt: LibP2PCrypto.randomBytes(length: defaultPBKDF2SaltLength),
-                iterations: defaultPBKDF2Iterations
+                iterations: defaultPBKDF2Iterations,
+                prf: .hmacWithSHA256
             )
 
         // Generate Encryption Key from Password
@@ -110,24 +120,6 @@ extension LibP2PCrypto.PEM {
             encryptedData: ciphertext
         ).serializedDERBytes()
 
-        let base64 = "\n" + encoded.toBase64().split(intoChunksOfLength: 64).joined(separator: "\n") + "\n"
-
-        return Data(
-            LibP2PCrypto.PEM.PEMType.encryptedPrivateKey.headerBytes + base64.bytes
-                + LibP2PCrypto.PEM.PEMType.encryptedPrivateKey.footerBytes
-        )
-    }
-
-    internal static func encryptPEMString(
-        _ pem: Data,
-        withPassword password: String,
-        usingPBKDF pbkdf: PBKDFAlgorithm? = nil,
-        andCipher cipher: CipherAlgorithm? = nil
-    ) throws -> String {
-        let data = try LibP2PCrypto.PEM.encryptPEM(pem, withPassword: password, usingPBKDF: pbkdf, andCipher: cipher)
-        guard let string = String(data: data, encoding: .utf8) else {
-            throw Error.encodingError
-        }
-        return string
+        return Data(armor(encoded, as: .encryptedPrivateKey))
     }
 }
