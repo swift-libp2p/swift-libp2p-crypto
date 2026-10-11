@@ -2,7 +2,7 @@
 //
 // This source file is part of the swift-libp2p open source project
 //
-// Copyright (c) 2022-2025 swift-libp2p project authors
+// Copyright (c) 2022-2026 swift-libp2p project authors
 // Licensed under MIT
 //
 // See LICENSE for license information
@@ -21,14 +21,16 @@ extension RSAPublicKey: DERCodable {
 
     public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
 
+    /// The DER encoded PKCS#1 RSAPublicKey (the SubjectPublicKeyInfo's BIT STRING contents)
     public func publicKeyDER() throws -> [UInt8] {
-        Array(self.rawRepresentation)
+        Array(self.pkcs1DERRepresentation)
     }
 
     public func privateKeyDER() throws -> [UInt8] {
         throw LibP2PCrypto.Keys.KeyError.unsupportedOperation("A public key has no private DER representation")
     }
 
+    /// Expects a DER encoded PKCS#1 RSAPublicKey (a full SubjectPublicKeyInfo is also accepted)
     public init(publicDER: [UInt8]) throws {
         try self.init(rawRepresentation: Data(publicDER))
     }
@@ -38,11 +40,6 @@ extension RSAPublicKey: DERCodable {
             "Can't instantiate a public key from a private DER representation"
         )
     }
-
-    /// RSA's `publicKeyDER()` is already the complete SubjectPublicKeyInfo, so it's armored directly
-    public func exportPublicKeyPEM(withHeaderAndFooter: Bool) throws -> [UInt8] {
-        try LibP2PCrypto.PEM.armor(self.publicKeyDER(), as: .publicKey, withHeaderAndFooter: withHeaderAndFooter)
-    }
 }
 
 extension RSAPrivateKey: DERCodable {
@@ -51,8 +48,9 @@ extension RSAPrivateKey: DERCodable {
 
     public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { nil }
 
+    /// The DER encoded PKCS#1 RSAPublicKey of the derived public key
     public func publicKeyDER() throws -> [UInt8] {
-        try Array(self.derivePublicKey().rawRepresentation)
+        try self.derivePublicKey().publicKeyDER()
     }
 
     public func privateKeyDER() throws -> [UInt8] {
