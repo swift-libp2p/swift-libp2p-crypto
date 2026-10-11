@@ -13,11 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import CryptoSwift
 import Foundation
 import Multicodec
 import Multihash
-import SwiftASN1
 import SwiftProtobuf
 import Testing
 
@@ -109,10 +107,10 @@ struct ECDSATests {
         // The protobuf carries the ECDSA type and a DER encoded SubjectPublicKeyInfo
         let proto = try ProtoPublicKey(serializedBytes: marshaled)
         #expect(proto.type == .ecdsa)
-        let spki = try SubjectPublicKeyInfo(derEncoded: proto.data.byteArray)
+        let spki = try SubjectPublicKeyInfo(derEncoded: Array(proto.data))
         #expect(spki.algorithmIdentifier.algorithm == ASN1ObjectIdentifier.LibP2P.idEcPublicKey)
         #expect(spki.algorithmIdentifier.parameters == .objectIdentifier(curve.objectIdentifier))
-        #expect(Array(spki.key.bytes) == [0x04] + keyPair.publicKey.rawRepresentation.byteArray)
+        #expect(Array(spki.key.bytes) == [0x04] + Array(keyPair.publicKey.rawRepresentation))
 
         let recovered = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaled)
         #expect(recovered.keyType == .ecdsa)
@@ -131,11 +129,11 @@ struct ECDSATests {
         // The protobuf carries the ECDSA type and a DER encoded SEC1 ECPrivateKey (with the named curve and public key)
         let proto = try ProtoPrivateKey(serializedBytes: marshaled)
         #expect(proto.type == .ecdsa)
-        let ecPrivateKey = try ECPrivateKey(derEncoded: proto.data.byteArray)
+        let ecPrivateKey = try ECPrivateKey(derEncoded: Array(proto.data))
         #expect(Data(ecPrivateKey.privateKey.bytes) == keyPair.privateKey?.rawRepresentation)
         #expect(ecPrivateKey.namedCurve == curve.objectIdentifier)
         #expect(
-            ecPrivateKey.publicKey.map { Array($0.bytes) } == [0x04] + keyPair.publicKey.rawRepresentation.byteArray
+            ecPrivateKey.publicKey.map { Array($0.bytes) } == [0x04] + Array(keyPair.publicKey.rawRepresentation)
         )
 
         let recovered = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaled)
@@ -168,7 +166,7 @@ struct ECDSATests {
         let signature = try keyPair.sign(message: message)
 
         // DER encoded `SEQUENCE { r INTEGER, s INTEGER }`
-        let node = try DER.parse(signature.byteArray)
+        let node = try DER.parse(Array(signature))
         #expect(node.identifier == .sequence)
         guard case .constructed(let children) = node.content else {
             Issue.record("Signature isn't a constructed ASN1 sequence")
@@ -218,7 +216,7 @@ struct ECDSATests {
     @Test(arguments: ECCurve.allCases)
     func verifyOpenSSLSignature(curve: ECCurve) throws {
         let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: ECDSAFixtures.privatePEM(for: curve))
-        let signature = ECDSAFixtures.opensslSignature(for: curve)
+        let signature = try ECDSAFixtures.opensslSignature(for: curve)
 
         #expect(try keyPair.verify(signature: signature, for: ECDSAFixtures.opensslMessage))
         #expect(try keyPair.verify(signature: signature, for: ECDSAFixtures.goMessage) == false)
@@ -291,7 +289,7 @@ struct ECDSATests {
     func exportedDERStructures(curve: ECCurve) throws {
         let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
         let privateKey = try #require(keyPair.privateKey)
-        let point = [0x04] + keyPair.publicKey.rawRepresentation.byteArray
+        let point = [0x04] + Array(keyPair.publicKey.rawRepresentation)
 
         // Public: SubjectPublicKeyInfo { id-ecPublicKey, namedCurve } BIT STRING point
         let spki = try SubjectPublicKeyInfo(derEncoded: keyPair.publicKey.exportPublicKeyPEMRaw())
@@ -317,8 +315,8 @@ struct ECDSATests {
     @Test(arguments: ECCurve.allCases)
     func privateDERVariants(curve: ECCurve) throws {
         let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
-        let raw = try #require(keyPair.privateKey?.rawRepresentation).byteArray
-        let point = [0x04] + keyPair.publicKey.rawRepresentation.byteArray
+        let raw = try Array(#require(keyPair.privateKey?.rawRepresentation))
+        let point = [0x04] + Array(keyPair.publicKey.rawRepresentation)
 
         let variants: [String: [UInt8]] = [
             "raw scalar": raw,
@@ -339,16 +337,16 @@ struct ECDSATests {
 
         for (name, der) in variants {
             let key = try privateKey(privateDER: der, curve: curve)
-            #expect(key.rawRepresentation.byteArray == raw, "\(name)")
+            #expect(Array(key.rawRepresentation) == raw, "\(name)")
         }
 
         // A SEC1 PEM without curve parameters can still be imported when the key type is known
         let sec1PEM = pem(variants["SEC1 without parameters"]!, type: "EC PRIVATE KEY")
-        #expect(try privateKey(pem: sec1PEM, curve: curve).rawRepresentation.byteArray == raw)
+        #expect(try Array(privateKey(pem: sec1PEM, curve: curve).rawRepresentation) == raw)
 
         // A PKCS #8 PEM produced by swift-crypto
         let pkcs8PEM = try #require(swiftCryptoPEMs(of: keyPair)).private
-        #expect(try privateKey(pem: pkcs8PEM, curve: curve).rawRepresentation.byteArray == raw)
+        #expect(try Array(privateKey(pem: pkcs8PEM, curve: curve).rawRepresentation) == raw)
     }
 
     @Test(arguments: ECCurve.allCases)
@@ -357,7 +355,7 @@ struct ECDSATests {
 
         let encryptedPEM = try keyPair.exportEncryptedPrivatePEMString(
             withPassword: "mypassword",
-            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations)
+            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: 2048)
         )
         #expect(encryptedPEM.hasPrefix("-----BEGIN ENCRYPTED PRIVATE KEY-----\n"))
 
@@ -411,7 +409,7 @@ struct ECDSATests {
 
         // An ECDSA typed private key carrying a secp256k1 ECPrivateKey
         let secp256k1SEC1 = try ECPrivateKey(
-            privateKey: secp256k1.privateKey!.rawRepresentation.byteArray,
+            privateKey: Array(secp256k1.privateKey!.rawRepresentation),
             namedCurve: ASN1ObjectIdentifier.LibP2P.secp256k1,
             publicKey: nil
         ).serializedDERBytes()
@@ -438,7 +436,7 @@ struct ECDSATests {
     @Test func marshaledPrivateKeyRequiresNamedCurve() throws {
         let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: .p256))
         let sec1 = try ECPrivateKey(
-            privateKey: keyPair.privateKey!.rawRepresentation.byteArray,
+            privateKey: Array(keyPair.privateKey!.rawRepresentation),
             namedCurve: nil,
             publicKey: nil
         ).serializedDERBytes()
@@ -451,9 +449,9 @@ struct ECDSATests {
         let a = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: .p256))
         let b = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: .p256))
         let sec1 = try ECPrivateKey(
-            privateKey: a.privateKey!.rawRepresentation.byteArray,
+            privateKey: Array(a.privateKey!.rawRepresentation),
             namedCurve: ECCurve.p256.objectIdentifier,
-            publicKey: [0x04] + b.publicKey.rawRepresentation.byteArray
+            publicKey: [0x04] + Array(b.publicKey.rawRepresentation)
         ).serializedDERBytes()
 
         #expect(throws: Error.self) {
@@ -525,9 +523,9 @@ struct ECDSATests {
 struct GoLibP2PFixtureTests {
 
     @Test func ecdsaFixtures() throws {
-        let marshaledPrivateKey = Data(hex: ECDSAFixtures.goPrivateKey)
-        let marshaledPublicKey = Data(hex: ECDSAFixtures.goPublicKey)
-        let signature = Data(hex: ECDSAFixtures.goSignature)
+        let marshaledPrivateKey = try Data(hex: ECDSAFixtures.goPrivateKey)
+        let marshaledPublicKey = try Data(hex: ECDSAFixtures.goPublicKey)
+        let signature = try Data(hex: ECDSAFixtures.goSignature)
 
         let privateKeyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaledPrivateKey)
         let publicKeyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPublicKey)
@@ -556,9 +554,9 @@ struct GoLibP2PFixtureTests {
     }
 
     @Test func secp256k1Fixtures() throws {
-        let marshaledPrivateKey = Data(hex: ECDSAFixtures.goSecp256k1PrivateKey)
-        let marshaledPublicKey = Data(hex: ECDSAFixtures.goSecp256k1PublicKey)
-        let signature = Data(hex: ECDSAFixtures.goSecp256k1Signature)
+        let marshaledPrivateKey = try Data(hex: ECDSAFixtures.goSecp256k1PrivateKey)
+        let marshaledPublicKey = try Data(hex: ECDSAFixtures.goSecp256k1PublicKey)
+        let signature = try Data(hex: ECDSAFixtures.goSecp256k1Signature)
 
         let privateKeyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaledPrivateKey)
         let publicKeyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPublicKey)
@@ -610,20 +608,20 @@ enum ECDSAFixtures {
     static let opensslMessage = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
 
     /// `openssl dgst -sha256 -sign ec_priv_<curve>.pem` signatures of `opensslMessage` using the `TestPEMKeys.EC_<curve>_PRIVATE` fixtures
-    static func opensslSignature(for curve: ECCurve) -> Data {
+    static func opensslSignature(for curve: ECCurve) throws -> Data {
         switch curve {
         case .p256:
-            return Data(
+            return try Data(
                 hex:
                     "3045022100a430b4b2288d0d528d290e3c9ee480dc0a5c4fd11461a509ce8deb7ce22ff957022078e6efea71beb71afa8ecd1b3ae12a177551826b1590e3336d8c4ba2d955167e"
             )
         case .p384:
-            return Data(
+            return try Data(
                 hex:
                     "3065023100850ccf2b633ca9f231ad967d480534f9ba2a57755f186ead8feee83379c8db87a2a2df72933ff6653580f581ec79abb0023057746a61511367f7d6ef47c6e7f8ff21b765a54e008460bdedf90f2d7ab82a8eba85b6b578003b1f0023f84e8147a490"
             )
         case .p521:
-            return Data(
+            return try Data(
                 hex:
                     "30818802420085f8613754847ae3ab449fb8415629bfd85a931fc6e47cbecd139cb59dd5fe35ca6a6be133749026ea9d3d7c1a840b269cd1e4c2f309dcffce21c21a1bfed79d5d02420173eec3c20fe613dc0e7b70ca92bce14602bb1ba03beeaf27f1babf022ecfeec1a3583a04afa70ab32abea3bcb0dc745521d44a447789e58bab4334e8c658a41d81"
             )
