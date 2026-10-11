@@ -40,7 +40,6 @@ public enum LibP2PCrypto {
         }
         return difference == 0
     }
-    
 }
 
 extension String {

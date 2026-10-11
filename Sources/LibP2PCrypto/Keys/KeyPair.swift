@@ -26,13 +26,13 @@ extension LibP2PCrypto.Keys {
         public let privateKey: CommonPrivateKey?
 
         public struct Attributes: Sendable, Hashable, CustomStringConvertible {
-            
+
             /// The type of key (ex: RSA, ed25519, ecdsa or secp256k1)
             public let type: LibP2PCrypto.Keys.KeyPairType
-            
+
             /// The key size in bits (the RSA modulus size or the elliptic curve's size)
             public let size: Int
-            
+
             /// Wether this keypair contains a private key or not
             public let isPrivate: Bool
 

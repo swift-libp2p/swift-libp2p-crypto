@@ -35,7 +35,7 @@ public protocol CommonPrivateKey: DERCodable, Sendable {
 
     /// The protobuf-marshaled representation of the private key
     func marshal() throws -> Data
-    
+
     /// Init from the `data` field of a protobuf-marshaled private key
     init(marshaledData: Data) throws
 }

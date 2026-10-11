@@ -90,8 +90,10 @@ extension Secp256k1PrivateKey: CommonPrivateKey {
 }
 
 extension Secp256k1PublicKey: DERCodable {
+
     /// id-ecPublicKey (1.2.840.10045.2.1)
     public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.idEcPublicKey }
+
     /// secp256k1 named curve (1.3.132.0.10)
     public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { ASN1ObjectIdentifier.LibP2P.secp256k1 }
 
@@ -117,8 +119,10 @@ extension Secp256k1PublicKey: DERCodable {
 }
 
 extension Secp256k1PrivateKey: DERCodable {
+
     /// id-ecPublicKey (1.2.840.10045.2.1)
     public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.idEcPublicKey }
+
     /// secp256k1 named curve (1.3.132.0.10)
     public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { ASN1ObjectIdentifier.LibP2P.secp256k1 }
 

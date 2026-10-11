@@ -20,8 +20,10 @@ public final class Secp256k1PublicKey: Sendable {
 
     /// The length of an uncompressed public key without its 0x04 prefix (`X || Y`)
     private static let uncompressedLength = 64
+
     /// The length of an uncompressed public key with its 0x04 prefix (`0x04 || X || Y`)
     private static let uncompressedLengthWithPrefix = 65
+
     /// The length of a compressed public key with its 0x02 / 0x03 prefix (`0x02 / 0x03 || X`)
     private static let compressedLengthWithPrefix = 33
 
