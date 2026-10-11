@@ -37,7 +37,7 @@ public final class Secp256k1PrivateKey: Sendable {
         do {
             key = try P256K.Signing.PrivateKey(format: .compressed)
         } catch {
-            throw Error.internalError
+            throw LibP2PCrypto.Keys.KeyError.keyGenerationFailed("Secp256k1: \(error)")
         }
         try self.init(key: key)
     }
@@ -51,8 +51,9 @@ public final class Secp256k1PrivateKey: Sendable {
     ///
     /// - Parameters:
     ///   - privateKey: The private key bytes. Must be exactly a big endian 32 Byte array representing the private key.
-    /// - throws: Secp256k1PrivateKey.Error.keyMalformed if the restrictions described above are not met.
-    ///           Secp256k1PrivateKey.Error.pubKeyGenerationFailed if the public key extraction from the private key fails.
+    /// - throws:
+    ///   - `KeyError.invalidRawRepresentation` if the restrictions described above are not met.
+    ///   - `KeyError.publicKeyDerivationFailed` if the public key extraction from the private key fails.
     /// - Note: `privateKey` must be in the secp256k1 range as described in: https://en.bitcoin.it/wiki/Private_key
     /// ```
     /// So any number between
@@ -63,14 +64,16 @@ public final class Secp256k1PrivateKey: Sendable {
     ///  ```
     public convenience init(privateKey: [UInt8]) throws {
         guard privateKey.count == 32 else {
-            throw Error.keyMalformed
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation(
+                "Secp256k1::PrivateKey: expected 32 bytes, got \(privateKey.count)"
+            )
         }
 
         let key: P256K.Signing.PrivateKey
         do {
             key = try P256K.Signing.PrivateKey(dataRepresentation: privateKey, format: .compressed)
         } catch {
-            throw Error.keyMalformed
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("Secp256k1::PrivateKey: \(error)")
         }
         try self.init(key: key)
     }
@@ -82,7 +85,7 @@ public final class Secp256k1PrivateKey: Sendable {
         do {
             self.publicKey = try Secp256k1PublicKey(key: key.publicKey)
         } catch {
-            throw Error.pubKeyGenerationFailed
+            throw LibP2PCrypto.Keys.KeyError.publicKeyDerivationFailed("Secp256k1: \(error)")
         }
     }
 
@@ -90,8 +93,8 @@ public final class Secp256k1PrivateKey: Sendable {
     ///
     /// - Parameters:
     ///   - hexPrivateKey: must be either 64 characters long or 66 characters (with the hex prefix 0x).
-    /// - throws: Secp256k1PrivateKey.Error.keyMalformed if the restrictions described above are not met.
-    ///           Secp256k1PrivateKey.Error.pubKeyGenerationFailed if the public key extraction from the private key fails.
+    /// - throws: `KeyError.invalidRawRepresentation` if the restrictions described above are not met.
+    ///           `KeyError.publicKeyDerivationFailed` if the public key extraction from the private key fails.
     /// - Note: `privateKey` must be in the secp256k1 range as described in: https://en.bitcoin.it/wiki/Private_key
     /// ```
     /// So any number between
@@ -102,7 +105,7 @@ public final class Secp256k1PrivateKey: Sendable {
     ///  ```
     public convenience init(hexPrivateKey: String) throws {
         guard hexPrivateKey.count == 64 || hexPrivateKey.count == 66 else {
-            throw Error.keyMalformed
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("Secp256k1::PrivateKey: invalid hex length")
         }
 
         var hexPrivateKey = hexPrivateKey
@@ -113,7 +116,7 @@ public final class Secp256k1PrivateKey: Sendable {
             let prefix = String(hexPrivateKey[s..<e])
 
             guard prefix == "0x" else {
-                throw Error.keyMalformed
+                throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("Secp256k1::PrivateKey: invalid hex prefix")
             }
 
             // Remove prefix
@@ -126,7 +129,7 @@ public final class Secp256k1PrivateKey: Sendable {
             let e = hexPrivateKey.index(hexPrivateKey.startIndex, offsetBy: i + 2)
 
             guard let b = UInt8(String(hexPrivateKey[s..<e]), radix: 16) else {
-                throw Error.keyMalformed
+                throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("Secp256k1::PrivateKey: invalid hex")
             }
             raw.append(b)
         }
@@ -145,15 +148,6 @@ public final class Secp256k1PrivateKey: Sendable {
     /// Returns this private key serialized as a hex string.
     public func hex() -> String {
         rawPrivateKey.asString(base: .base16)
-    }
-
-    // MARK: - Errors
-
-    public enum Error: Swift.Error {
-
-        case internalError
-        case keyMalformed
-        case pubKeyGenerationFailed
     }
 }
 
