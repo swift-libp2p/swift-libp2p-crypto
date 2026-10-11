@@ -20,7 +20,7 @@ import Testing
 
 @Suite("Encrypted PEM PBKDF Tests")
 struct EncryptedPEMPBKDFTests {
-    
+
     let password = "mypassword"
     let salt: [UInt8] = Array(0..<16)
     let iv: [UInt8] = Array(16..<32)
