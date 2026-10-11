@@ -17,7 +17,7 @@ import SwiftASN1
 import SwiftProtobuf
 
 extension Secp256k1PublicKey: CommonPublicKey {
-    public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
+    public static var keyType: LibP2PCrypto.Keys.KeyType { .secp256k1 }
 
     public convenience init(rawRepresentation raw: Data) throws {
         try self.init(Array(raw))
@@ -51,7 +51,7 @@ extension Secp256k1PublicKey: CommonPublicKey {
 }
 
 extension Secp256k1PrivateKey: CommonPrivateKey {
-    public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
+    public static var keyType: LibP2PCrypto.Keys.KeyType { .secp256k1 }
 
     public convenience init(rawRepresentation raw: Data) throws {
         try self.init(Array(raw))
