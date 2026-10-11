@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import CryptoSwift
+import CryptoExtras
 import Foundation
 import Multibase
 import Multihash
@@ -21,15 +21,6 @@ import SwiftProtobuf
 import Testing
 
 @testable import LibP2PCrypto
-
-/// PBKDF2 key derivation at the production default (310k iterations) is slow in unoptimized
-/// builds, so the tests that actually derive a key use this smaller count in debug. The value has
-/// no effect on the encode/decode logic under test — only on how long derivation takes.
-#if DEBUG
-let testPBKDF2Iterations = 2_048
-#else
-let testPBKDF2Iterations = 310_000
-#endif
 
 /// Secp - https://techdocs.akamai.com/iot-token-access-control/docs/generate-ecdsa-keys
 /// JWT - https://techdocs.akamai.com/iot-token-access-control/docs/generate-jwt-ecdsa-keys
@@ -39,10 +30,55 @@ let testPBKDF2Iterations = 310_000
 @Suite("LibP2P Crypto Tests")
 struct Libp2pCryptoTests {
 
+    @Test func keyPairTypeExposesItsKeyType() {
+        #expect(LibP2PCrypto.Keys.KeyPairType.rsa(bits: .b4096).keyType == .rsa)
+        #expect(LibP2PCrypto.Keys.KeyPairType.ed25519.keyType == .ed25519)
+        #expect(LibP2PCrypto.Keys.KeyPairType.secp256k1.keyType == .secp256k1)
+        #expect(LibP2PCrypto.Keys.KeyPairType.ecdsa(curve: .p521).keyType == .ecdsa)
+        #expect(LibP2PCrypto.Keys.RSABitLength.b3072.bits == 3072)
+    }
+
+    @Test func keyPairTypeDescriptions() throws {
+        #expect(LibP2PCrypto.Keys.KeyType.secp256k1.description == "Secp256k1")
+        #expect(LibP2PCrypto.Keys.EllipticCurve.p384.description == "P-384")
+        #expect(LibP2PCrypto.Keys.KeyPairType.rsa(bits: .b2048).description == "RSA (2048 bit)")
+        #expect(LibP2PCrypto.Keys.KeyPairType.ecdsa(curve: .p256).description == "ECDSA (P-256)")
+
+        let attributes = try #require(LibP2PCrypto.Keys.KeyPair(.ed25519).attributes())
+        #expect(attributes.description == "Ed25519 private key (256 bits)")
+
+        #expect(LibP2PCrypto.PEM.CipherAlgorithm.aes256CBC(iv: []).description == "AES-256-CBC")
+        #expect(
+            LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(salt: [], iterations: 2048, prf: .hmacWithSHA256).description
+                == "PBKDF2 (HMAC-SHA256, 2048 iterations)"
+        )
+        #expect(LibP2PCrypto.PEM.Error.invalidPEMFormat("bad").description == "Invalid PEM format: bad")
+    }
+
+    @Test func keyPairEquality() throws {
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ed25519)
+        let publicOnly = try LibP2PCrypto.Keys.KeyPair(publicKey: keyPair.publicKey)
+        let restored = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: keyPair.marshalPrivateKey())
+
+        #expect(keyPair == restored)
+        #expect(keyPair != publicOnly)
+        #expect(try publicOnly == LibP2PCrypto.Keys.KeyPair(publicKey: restored.publicKey))
+        #expect(try keyPair != LibP2PCrypto.Keys.KeyPair(.ed25519))
+    }
+
+    @Test func privateKeyEqualityForOurOwnTypes() throws {
+        let secp = try Secp256k1PrivateKey()
+        #expect(try secp == Secp256k1PrivateKey(rawRepresentation: secp.rawRepresentation))
+        #expect(try secp != Secp256k1PrivateKey())
+
+        let rsa = try RSAPrivateKey(keySize: .b2048)
+        #expect(try rsa == RSAPrivateKey(rawRepresentation: rsa.rawRepresentation))
+    }
+
     /// RSA keys smaller than 2048 bits can be neither generated nor imported
     @Test func testRSAUnder2048BitsIsRejected() throws {
         #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
-            try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .custom(bits: 1024)))
+            try LibP2PCrypto.Keys.generateKeyPair(.rsa(bits: .custom(bits: 1024)))
         }
         #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
             try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: MarshaledData.PUBLIC_RSA_KEY_1024, base: .base64Pad)
@@ -62,7 +98,7 @@ struct Libp2pCryptoTests {
         let clock = ContinuousClock()
         let elapsed = clock.measure {
             #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
-                try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .custom(bits: 9216)))
+                try LibP2PCrypto.Keys.generateKeyPair(.rsa(bits: .custom(bits: 9216)))
             }
         }
         #expect(elapsed < .seconds(1))
@@ -80,22 +116,8 @@ struct Libp2pCryptoTests {
         }
     }
 
-    @Test func testRSA2048() throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
-        print(keyPair)
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.privateKey != nil)
-        //#expect(keyPair.publicKey.data.count == 270)
-        //#expect(keyPair.privateKey!.data.count >= 1193)
-        //#expect(keyPair.privateKey!.data.count <= 1194)
-
-        let attributes = keyPair.attributes()
-        #expect(attributes?.size == 2048)
-        #expect(attributes?.isPrivate == true)
-    }
-
     @Test func testRSA3072() throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B3072))
+        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.rsa(bits: .b3072))
         print(keyPair)
         #expect(keyPair.keyType == .rsa)
         #expect(keyPair.privateKey != nil)
@@ -109,7 +131,7 @@ struct Libp2pCryptoTests {
     }
 
     @Test func testRSA4096() throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B4096))
+        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.rsa(bits: .b4096))
         print(keyPair)
         #expect(keyPair.keyType == .rsa)
         #expect(keyPair.privateKey != nil)
@@ -122,131 +144,15 @@ struct Libp2pCryptoTests {
         #expect(attributes?.isPrivate == true)
     }
 
-    @Test func testED25519() throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
-        print(keyPair)
-        #expect(keyPair.keyType == .ed25519)
-        #expect(keyPair.privateKey != nil)
-        //#expect(keyPair.publicKey.data.count == 32)
-    }
-
-    @Test func testSecp256k1() throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
-        print(keyPair)
-        #expect(keyPair.keyType == .secp256k1)
-        #expect(keyPair.privateKey != nil)
-        //XCTAssertEqual(keyPair.publicKey.data.count, 64)
-    }
-
-    /// Ensures that we can move between the Raw Representation of a Public/Private Key and back into the actaul Class/Struct
-    @Test func testRSARawRepresentationRoundTrip() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.RSA(bits: .B2048))
-
-        let rawPublicKey = keyPair.publicKey.rawRepresentation
-        let rawPrivateKey = keyPair.privateKey!.rawRepresentation
-
-        /// Instantiate the pubkey
-        let recoveredPubKey = try RSAPublicKey(rawRepresentation: rawPublicKey)
-        let recoveredPrivKey = try RSAPrivateKey(rawRepresentation: rawPrivateKey)
-
-        let recoveredPublicKeyPair = try LibP2PCrypto.Keys.KeyPair(publicKey: recoveredPubKey)
-        let recoveredPrivateKeyPair = try LibP2PCrypto.Keys.KeyPair(privateKey: recoveredPrivKey)
-
-        #expect(try keyPair.rawID() == recoveredPublicKeyPair.rawID())
-        #expect(try keyPair.rawID() == recoveredPrivateKeyPair.rawID())
-    }
-
-    @Test func testEd25519RawRepresentationRoundTrip() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.Ed25519)
-
-        let rawPublicKey = keyPair.publicKey.rawRepresentation
-        let rawPrivateKey = keyPair.privateKey!.rawRepresentation
-
-        /// Instantiate the pubkey
-        let recoveredPubKey = try Curve25519.Signing.PublicKey(rawRepresentation: rawPublicKey)
-        let recoveredPrivKey = try Curve25519.Signing.PrivateKey(rawRepresentation: rawPrivateKey)
-
-        let recoveredPublicKeyPair = try LibP2PCrypto.Keys.KeyPair(publicKey: recoveredPubKey)
-        let recoveredPrivateKeyPair = try LibP2PCrypto.Keys.KeyPair(privateKey: recoveredPrivKey)
-
-        #expect(try keyPair.rawID() == recoveredPublicKeyPair.rawID())
-        #expect(try keyPair.rawID() == recoveredPrivateKeyPair.rawID())
-    }
-
-    @Test func testSecP256k1RawRepresentationRoundTrip() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.Secp256k1)
-
-        let rawPublicKey = keyPair.publicKey.rawRepresentation
-        let rawPrivateKey = keyPair.privateKey!.rawRepresentation
-
-        /// Instantiate the pubkey
-        let recoveredPubKey = try Secp256k1PublicKey(rawRepresentation: rawPublicKey)
-        let recoveredPrivKey = try Secp256k1PrivateKey(rawRepresentation: rawPrivateKey)
-
-        let recoveredPublicKeyPair = try LibP2PCrypto.Keys.KeyPair(publicKey: recoveredPubKey)
-        let recoveredPrivateKeyPair = try LibP2PCrypto.Keys.KeyPair(privateKey: recoveredPrivKey)
-
-        #expect(try keyPair.rawID() == recoveredPublicKeyPair.rawID())
-        #expect(try keyPair.rawID() == recoveredPrivateKeyPair.rawID())
-    }
-
-    @Test func testRSAMarshaledRoundTrip() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.RSA(bits: .B2048))
-
-        let marshaledPublicKey = try keyPair.marshalPublicKey()
-        print(marshaledPublicKey.asString(base: .base16))
-        print(keyPair.publicKey.rawRepresentation.asString(base: .base16))
-
-        let recoveredKeyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPublicKey)
-
-        #expect(keyPair.publicKey.rawRepresentation == recoveredKeyPair.publicKey.rawRepresentation)
-    }
-
-    @Test func testRSAMashallingRoundTrip() throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
-
-        print("Public Key: \(keyPair.publicKey.asString(base: .base16))")
-
-        let marshaledPubKey = try keyPair.publicKey.marshal()
-        print("Marshaled PubKey Bytes: \(marshaledPubKey)")
-
-        let unmarshaledPubKey = try LibP2PCrypto.Keys.unmarshalPublicKey(buf: marshaledPubKey.byteArray, into: .base16)
-
-        print("Public Key: \(unmarshaledPubKey)")
-        #expect(unmarshaledPubKey == keyPair.publicKey.asString(base: .base16))
-
-        let pubKey = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPubKey).publicKey
-
-        #expect(pubKey.data == keyPair.publicKey.data)
-    }
-
-    @Test func testED25519MarshallingRoundTrip() throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
-
-        print("Public Key: \(keyPair.publicKey.asString(base: .base16))")
-
-        let marshaledPubKey = try keyPair.publicKey.marshal()
-        print("Marshaled PubKey Bytes: \(marshaledPubKey.asString(base: .base16))")
-
-        let unmarshaledPubKey = try LibP2PCrypto.Keys.unmarshalPublicKey(buf: marshaledPubKey.byteArray, into: .base16)
-
-        print("Public Key: \(unmarshaledPubKey)")
-        #expect(unmarshaledPubKey == keyPair.publicKey.asString(base: .base16))
-
-        let pubKey = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPubKey).publicKey
-
-        #expect(pubKey.data == keyPair.publicKey.data)
-    }
-
     @Test func testSecp256k1MarshallingRoundTrip() throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
+        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.secp256k1)
 
         print("Public Key: \(keyPair.publicKey.asString(base: .base16))")
 
         let marshaledPubKey = try keyPair.publicKey.marshal()
         print("Marshaled PubKey Bytes: \(marshaledPubKey.asString(base: .base16))")
 
-        let unmarshaledPubKey = try LibP2PCrypto.Keys.unmarshalPublicKey(buf: marshaledPubKey.byteArray, into: .base16)
+        let unmarshaledPubKey = try LibP2PCrypto.Keys.unmarshalPublicKey(buf: Array(marshaledPubKey), into: .base16)
 
         print("Compressed Public Key: \(unmarshaledPubKey)")
         let recoveredPubKey = try Secp256k1PublicKey(hexPublicKey: unmarshaledPubKey)
@@ -260,9 +166,9 @@ struct Libp2pCryptoTests {
     @Test func testSecp256k1ParseCompressedPublicKey() throws {
         let marshalledCompressedPublicKey = "08021221037777e994e452c21604f91de093ce415f5432f701dd8cd1a7a6fea0e630bfca99"
 
-        let pb = try PublicKey(serializedBytes: Data(hex: marshalledCompressedPublicKey))
+        let pb = try ProtoPublicKey(serializedBytes: Data(hex: marshalledCompressedPublicKey))
 
-        let pubKey = try Secp256k1PublicKey(publicKey: pb.data.byteArray)
+        let pubKey = try Secp256k1PublicKey(publicKey: Array(pb.data))
 
         let secp256k1PrivateKey = "0802122053DADF1D5A164D6B4ACDB15E24AA4C5B1D3461BDBD42ABEDB0A4404D56CED8FB"
         let kp = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(hex: secp256k1PrivateKey))
@@ -272,7 +178,7 @@ struct Libp2pCryptoTests {
         #expect(pubKey.hex() == derivedPubKey)
 
         let cpk = try pubKey.compressPublicKey()
-        #expect(cpk == pb.data.byteArray)
+        #expect(cpk == Array(pb.data))
     }
 
     /// The public key is embedded in certain PeerID's
@@ -316,1579 +222,30 @@ struct Libp2pCryptoTests {
     }
 
     @Test func attributeSizesAreInBits() throws {
-        #expect(try LibP2PCrypto.Keys.generateKeyPair(.Ed25519).attributes()?.size == 256)
-        #expect(try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1).attributes()?.size == 256)
-        #expect(try LibP2PCrypto.Keys.generateKeyPair(.ECDSA(curve: .P384)).attributes()?.size == 384)
+        #expect(try LibP2PCrypto.Keys.generateKeyPair(.ed25519).attributes()?.size == 256)
+        #expect(try LibP2PCrypto.Keys.generateKeyPair(.secp256k1).attributes()?.size == 256)
+        #expect(try LibP2PCrypto.Keys.generateKeyPair(.ecdsa(curve: .p384)).attributes()?.size == 384)
     }
 
     @Test func secp256k1HexPublicKeyAcceptsPrefix() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.secp256k1)
         let hex = (kp.publicKey as! Secp256k1PublicKey).hex()
         let plain = try Secp256k1PublicKey(hexPublicKey: hex)
         let prefixed = try Secp256k1PublicKey(hexPublicKey: "0x" + hex)
         #expect(plain == prefixed)
-        #expect(throws: Secp256k1PublicKey.Error.self) {
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
             _ = try Secp256k1PublicKey(hexPublicKey: "0x" + String(repeating: "z", count: 128))
         }
     }
 
     @Test func marshalPrivateKeyStillReportsBadBaseEncoding() {
         #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
-            _ = try LibP2PCrypto.Keys.marshalPrivateKey(raw: "not a valid base", asKeyType: .Ed25519, fromBase: .base16)
+            _ = try LibP2PCrypto.Keys.marshalPrivateKey(raw: "not a valid base", keyType: .ed25519, fromBase: .base16)
         }
     }
-}
-
-@Suite("Marshalling Tests")
-struct MarshallingTests {
-
-    // https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md#test-vectors
-    @Test func testLibp2pPeerIDSpecTestVectors_RSA() throws {
-        // These are hex string encoding of public and private protobuf keys
-        let rsaPrivateKey =
-            "080012ae123082092a0201000282020100e1beab071d08200bde24eef00d049449b07770ff9910257b2d7d5dda242ce8f0e2f12e1af4b32d9efd2c090f66b0f29986dbb645dae9880089704a94e5066d594162ae6ee8892e6ec70701db0a6c445c04778eb3de1293aa1a23c3825b85c6620a2bc3f82f9b0c309bc0ab3aeb1873282bebd3da03c33e76c21e9beb172fd44c9e43be32e2c99827033cf8d0f0c606f4579326c930eb4e854395ad941256542c793902185153c474bed109d6ff5141ebf9cd256cf58893a37f83729f97e7cb435ec679d2e33901d27bb35aa0d7e20561da08885ef0abbf8e2fb48d6a5487047a9ecb1ad41fa7ed84f6e3e8ecd5d98b3982d2a901b4454991766da295ab78822add5612a2df83bcee814cf50973e80d7ef38111b1bd87da2ae92438a2c8cbcc70b31ee319939a3b9c761dbc13b5c086d6b64bf7ae7dacc14622375d92a8ff9af7eb962162bbddebf90acb32adb5e4e4029f1c96019949ecfbfeffd7ac1e3fbcc6b6168c34be3d5a2e5999fcbb39bba7adbca78eab09b9bc39f7fa4b93411f4cc175e70c0a083e96bfaefb04a9580b4753c1738a6a760ae1afd851a1a4bdad231cf56e9284d832483df215a46c1c21bdf0c6cfe951c18f1ee4078c79c13d63edb6e14feaeffabc90ad317e4875fe648101b0864097e998f0ca3025ef9638cd2b0caecd3770ab54a1d9c6ca959b0f5dcbc90caeefc4135baca6fd475224269bbe1b02030100010282020100a472ffa858efd8588ce59ee264b957452f3673acdf5631d7bfd5ba0ef59779c231b0bc838a8b14cae367b6d9ef572c03c7883b0a3c652f5c24c316b1ccfd979f13d0cd7da20c7d34d9ec32dfdc81ee7292167e706d705efde5b8f3edfcba41409e642f8897357df5d320d21c43b33600a7ae4e505db957c1afbc189d73f0b5d972d9aaaeeb232ca20eebd5de6fe7f29d01470354413cc9a0af1154b7af7c1029adcd67c74b4798afeb69e09f2cb387305e73a1b5f450202d54f0ef096fe1bde340219a1194d1ac9026e90b366cce0c59b239d10e4888f52ca1780824d39ae01a6b9f4dd6059191a7f12b2a3d8db3c2868cd4e5a5862b8b625a4197d52c6ac77710116ebd3ced81c4d91ad5fdfbed68312ebce7eea45c1833ca3acf7da2052820eacf5c6b07d086dabeb893391c71417fd8a4b1829ae2cf60d1749d0e25da19530d889461c21da3492a8dc6ccac7de83ac1c2185262c7473c8cc42f547cc9864b02a8073b6aa54a037d8c0de3914784e6205e83d97918b944f11b877b12084c0dd1d36592f8a4f8b8da5bb404c3d2c079b22b6ceabfbcb637c0dbe0201f0909d533f8bf308ada47aee641a012a494d31b54c974e58b87f140258258bb82f31692659db7aa07e17a5b2a0832c24e122d3a8babcc9ee74cbb07d3058bb85b15f6f6b2674aba9fd34367be9782d444335fbed31e3c4086c652597c27104938b47fa10282010100e9fdf843c1550070ca711cb8ff28411466198f0e212511c3186623890c0071bf6561219682fe7dbdfd81176eba7c4faba21614a20721e0fcd63768e6d925688ecc90992059ac89256e0524de90bf3d8a052ce6a9f6adafa712f3107a016e20c80255c9e37d8206d1bc327e06e66eb24288da866b55904fd8b59e6b2ab31bc5eab47e597093c63fab7872102d57b4c589c66077f534a61f5f65127459a33c91f6db61fc431b1ae90be92b4149a3255291baf94304e3efb77b1107b5a3bda911359c40a53c347ff9100baf8f36dc5cd991066b5bdc28b39ed644f404afe9213f4d31c9d4e40f3a5f5e3c39bebeb244e84137544e1a1839c1c8aaebf0c78a7fad590282010100f6fa1f1e6b803742d5490b7441152f500970f46feb0b73a6e4baba2aaf3c0e245ed852fc31d86a8e46eb48e90fac409989dfee45238f97e8f1f8e83a136488c1b04b8a7fb695f37b8616307ff8a8d63e8cfa0b4fb9b9167ffaebabf111aa5a4344afbabd002ae8961c38c02da76a9149abdde93eb389eb32595c29ba30d8283a7885218a5a9d33f7f01dbdf85f3aad016c071395491338ec318d39220e1c7bd69d3d6b520a13a30d745c102b827ad9984b0dd6aed73916ffa82a06c1c111e7047dcd2668f988a0570a71474992eecf416e068f029ec323d5d635fd24694fc9bf96973c255d26c772a95bf8b7f876547a5beabf86f06cd21b67994f944e7a5493028201010095b02fd30069e547426a8bea58e8a2816f33688dac6c6f6974415af8402244a22133baedf34ce499d7036f3f19b38eb00897c18949b0c5a25953c71aeeccfc8f6594173157cc854bd98f16dffe8f28ca13b77eb43a2730585c49fc3f608cd811bb54b03b84bddaa8ef910988567f783012266199667a546a18fd88271fbf63a45ae4fd4884706da8befb9117c0a4d73de5172f8640b1091ed8a4aea3ed4641463f5ff6a5e3401ad7d0c92811f87956d1fd5f9a1d15c7f3839a08698d9f35f9d966e5000f7cb2655d7b6c4adcd8a9d950ea5f61bb7c9a33c17508f9baa313eecfee4ae493249ebe05a5d7770bbd3551b2eeb752e3649e0636de08e3d672e66cb90282010100ad93e4c31072b063fc5ab5fe22afacece775c795d0efdf7c704cfc027bde0d626a7646fc905bb5a80117e3ca49059af14e0160089f9190065be9bfecf12c3b2145b211c8e89e42dd91c38e9aa23ca73697063564f6f6aa6590088a738722df056004d18d7bccac62b3bafef6172fc2a4b071ea37f31eff7a076bcab7dd144e51a9da8754219352aef2c73478971539fa41de4759285ea626fa3c72e7085be47d554d915bbb5149cb6ef835351f231043049cd941506a034bf2f8767f3e1e42ead92f91cb3d75549b57ef7d56ac39c2d80d67f6a2b4ca192974bfc5060e2dd171217971002193dba12e7e4133ab201f07500a90495a38610279b13a48d54f0c99028201003e3a1ac0c2b67d54ed5c4bbe04a7db99103659d33a4f9d35809e1f60c282e5988dddc964527f3b05e6cc890eab3dcb571d66debf3a5527704c87264b3954d7265f4e8d2c637dd89b491b9cf23f264801f804b90454d65af0c4c830d1aef76f597ef61b26ca857ecce9cb78d4f6c2218c00d2975d46c2b013fbf59b750c3b92d8d3ed9e6d1fd0ef1ec091a5c286a3fe2dead292f40f380065731e2079ebb9f2a7ef2c415ecbb488da98f3a12609ca1b6ec8c734032c8bd513292ff842c375d4acd1b02dfb206b24cd815f8e2f9d4af8e7dea0370b19c1b23cc531d78b40e06e1119ee2e08f6f31c6e2e8444c568d13c5d451a291ae0c9f1d4f27d23b3a00d60ad"
-        let expectedRSAPublicKey =
-            "080012a60430820222300d06092a864886f70d01010105000382020f003082020a0282020100e1beab071d08200bde24eef00d049449b07770ff9910257b2d7d5dda242ce8f0e2f12e1af4b32d9efd2c090f66b0f29986dbb645dae9880089704a94e5066d594162ae6ee8892e6ec70701db0a6c445c04778eb3de1293aa1a23c3825b85c6620a2bc3f82f9b0c309bc0ab3aeb1873282bebd3da03c33e76c21e9beb172fd44c9e43be32e2c99827033cf8d0f0c606f4579326c930eb4e854395ad941256542c793902185153c474bed109d6ff5141ebf9cd256cf58893a37f83729f97e7cb435ec679d2e33901d27bb35aa0d7e20561da08885ef0abbf8e2fb48d6a5487047a9ecb1ad41fa7ed84f6e3e8ecd5d98b3982d2a901b4454991766da295ab78822add5612a2df83bcee814cf50973e80d7ef38111b1bd87da2ae92438a2c8cbcc70b31ee319939a3b9c761dbc13b5c086d6b64bf7ae7dacc14622375d92a8ff9af7eb962162bbddebf90acb32adb5e4e4029f1c96019949ecfbfeffd7ac1e3fbcc6b6168c34be3d5a2e5999fcbb39bba7adbca78eab09b9bc39f7fa4b93411f4cc175e70c0a083e96bfaefb04a9580b4753c1738a6a760ae1afd851a1a4bdad231cf56e9284d832483df215a46c1c21bdf0c6cfe951c18f1ee4078c79c13d63edb6e14feaeffabc90ad317e4875fe648101b0864097e998f0ca3025ef9638cd2b0caecd3770ab54a1d9c6ca959b0f5dcbc90caeefc4135baca6fd475224269bbe1b0203010001"
-
-        let pbPrivateKey = try PrivateKey(serializedBytes: Data(hex: rsaPrivateKey))
-        #expect(pbPrivateKey.type == .rsa)
-
-        let kp = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(hex: rsaPrivateKey))
-        #expect(kp.keyType == .rsa)
-        #expect(try kp.marshalPublicKey().toHexString() == expectedRSAPublicKey)
-    }
-
-    // https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md#test-vectors
-    @Test func testLibp2pPeerIDSpecTestVectors_ED25519() throws {
-        // These are hex string encoding of public and private protobuf keys
-        let ed25519PrivateKey =
-            "080112407e0830617c4a7de83925dfb2694556b12936c477a0e1feb2e148ec9da60fee7d1ed1e8fae2c4a144b8be8fd4b47bf3d3b34b871c3cacf6010f0e42d474fce27e"
-        let expectedED25519PublicKey = "080112201ed1e8fae2c4a144b8be8fd4b47bf3d3b34b871c3cacf6010f0e42d474fce27e"
-
-        let pbPrivateKey = try PrivateKey(serializedBytes: Data(hex: ed25519PrivateKey))
-        #expect(pbPrivateKey.type == .ed25519)
-
-        let kp = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(hex: ed25519PrivateKey))
-        #expect(kp.keyType == .ed25519)
-        #expect(try kp.marshalPublicKey().toHexString() == expectedED25519PublicKey)
-    }
-
-    // https://github.com/libp2p/specs/blob/master/peer-ids/peer-ids.md#test-vectors
-    @Test func testLibp2pPeerIDSpecTestVectors_Secp256k1() throws {
-        // These are hex string encoding of public and private protobuf keys
-        let secp256k1PrivateKey = "0802122053DADF1D5A164D6B4ACDB15E24AA4C5B1D3461BDBD42ABEDB0A4404D56CED8FB"
-        let expectedSecp256k1PublicKey = "08021221037777e994e452c21604f91de093ce415f5432f701dd8cd1a7a6fea0e630bfca99"
-
-        let pbPrivateKey = try PrivateKey(serializedBytes: Data(hex: secp256k1PrivateKey))
-        #expect(pbPrivateKey.type == .secp256K1)
-
-        let kp = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(hex: secp256k1PrivateKey))
-        #expect(kp.keyType == .secp256k1)
-        let marshaledPubKey = try kp.marshalPublicKey()
-        print("Marshalled PubKey: \(marshaledPubKey.toHexString())")
-        print("Marshalled PubKey Size: \(marshaledPubKey.count)")
-        print("Expected PubKey Size: \(Data(hex: expectedSecp256k1PublicKey).count)")
-        #expect(try kp.marshalPublicKey().toHexString() == expectedSecp256k1PublicKey)
-    }
-
-    // Manual
-    @Test func testImportFromMarshalledPublicKey_Manual() throws {
-        let marshaledData: [UInt8] = try BaseEncoding.decode(MarshaledData.PUBLIC_RSA_KEY_2048, as: .base64Pad)
-        let pubKey = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: Data(marshaledData))
-
-        /// We've imported a Public Key!  🥳
-        print(pubKey)
-
-        /// Now lets try and re-marshal the imported key and make sure it matches the original data...
-        let marshaledKey = try pubKey.marshalPublicKey()
-
-        let base64MarshaledPublicKey = marshaledKey.asString(base: .base64Pad)
-
-        print(base64MarshaledPublicKey)
-        #expect(base64MarshaledPublicKey == MarshaledData.PUBLIC_RSA_KEY_2048)
-    }
-
-    @Test func testCreateKeyPairFromMarshalledPublicKey_2048() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(
-            marshaledPublicKey: MarshaledData.PUBLIC_RSA_KEY_2048,
-            base: .base64Pad
-        )
-
-        print(keyPair)
-
-        #expect(keyPair.privateKey == nil)
-        /// Ensures that the public key was instantiated properly and then we can marshal it back into the original marshaled data
-        #expect(try keyPair.publicKey.marshal().asString(base: .base64Pad) == MarshaledData.PUBLIC_RSA_KEY_2048)
-    }
-
-    @Test func testCreateKeyPairFromMarshalledPublicKey_3072() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(
-            marshaledPublicKey: MarshaledData.PUBLIC_RSA_KEY_3072,
-            base: .base64Pad
-        )
-
-        print(keyPair)
-
-        #expect(keyPair.privateKey == nil)
-        /// Ensures that the public key was instantiated properly and then we can marshal it back into the original marshaled data
-        #expect(try keyPair.publicKey.marshal().asString(base: .base64Pad) == MarshaledData.PUBLIC_RSA_KEY_3072)
-    }
-
-    @Test func testCreateKeyPairFromMarshalledPublicKey_4096() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(
-            marshaledPublicKey: MarshaledData.PUBLIC_RSA_KEY_4096,
-            base: .base64Pad
-        )
-
-        print(keyPair)
-
-        #expect(keyPair.privateKey == nil)
-        /// Ensures that the public key was instantiated properly and then we can marshal it back into the original marshaled data
-        #expect(try keyPair.publicKey.marshal().asString(base: .base64Pad) == MarshaledData.PUBLIC_RSA_KEY_4096)
-    }
-
-    @Test func testImportFromMarshalledPrivateKey_Manual() throws {
-        let marshaledData: [UInt8] = try BaseEncoding.decode(MarshaledData.PRIVATE_RSA_KEY_2048, as: .base64Pad)
-        let privKey = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(marshaledData))
-
-        print(privKey)
-    }
-
-    @Test func testImportFromMarshalledPrivateKey_2048() throws {
-        //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(
-            marshaledPrivateKey: MarshaledData.PRIVATE_RSA_KEY_2048,
-            base: .base64Pad
-        )
-
-        print(keyPair)
-
-        #expect(keyPair.privateKey != nil)
-        //#expect(keyPair.publicKey != nil)
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.hasPrivateKey)
-
-        /// Ensure that when we marshal the private key, we end up with that same data we imported.
-        #expect(try keyPair.privateKey?.marshal().asString(base: .base64Pad) == MarshaledData.PRIVATE_RSA_KEY_2048)
-
-        /// Ensures that the public key derived from the private key is correct and the marshaled version matches that of the fixture.
-        #expect(try keyPair.publicKey.marshal().asString(base: .base64Pad) == MarshaledData.PUBLIC_RSA_KEY_2048)
-    }
-
-    @Test func testImportFromMarshalledPrivateKey_3072() throws {
-        //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(
-            marshaledPrivateKey: MarshaledData.PRIVATE_RSA_KEY_3072,
-            base: .base64Pad
-        )
-
-        print(keyPair)
-
-        #expect(keyPair.privateKey != nil)
-        //#expect(keyPair.publicKey != nil)
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.hasPrivateKey)
-
-        /// Ensure that when we marshal the private key, we end up with that same data we imported.
-        #expect(try keyPair.privateKey?.marshal().asString(base: .base64Pad) == MarshaledData.PRIVATE_RSA_KEY_3072)
-
-        /// Ensures that the public key derived from the private key is correct and the marshaled version matches that of the fixture.
-        #expect(try keyPair.publicKey.marshal().asString(base: .base64Pad) == MarshaledData.PUBLIC_RSA_KEY_3072)
-    }
-
-    @Test func testImportFromMarshalledPrivateKey_4096() throws {
-        //RawPrivateKey(marshaledKey: MarshaledData.PRIVATE_KEY, base: .base64Pad)
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(
-            marshaledPrivateKey: MarshaledData.PRIVATE_RSA_KEY_4096,
-            base: .base64Pad
-        )
-
-        print(keyPair)
-
-        #expect(keyPair.privateKey != nil)
-        //#expect(keyPair.publicKey != nil)
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.hasPrivateKey)
-
-        /// Ensure that when we marshal the private key, we end up with that same data we imported.
-        #expect(try keyPair.privateKey?.marshal().asString(base: .base64Pad) == MarshaledData.PRIVATE_RSA_KEY_4096)
-
-        /// Ensures that the public key derived from the private key is correct and the marshaled version matches that of the fixture.
-        #expect(try keyPair.publicKey.marshal().asString(base: .base64Pad) == MarshaledData.PUBLIC_RSA_KEY_4096)
-    }
-}
-
-@Suite("Signature & Verification Tests")
-struct SignAndVerifyTests {
-
-    @Test func testRSAMessageSignVerify_StaticKey() throws {
-        let message = TestFixtures.RSA_2048.rawMessage.data(using: .utf8)!
-
-        let rsa = try LibP2PCrypto.Keys.KeyPair(
-            marshaledPrivateKey: TestFixtures.RSA_2048.privateMarshaled,
-            base: .base64Pad
-        )
-
-        let signedData = try rsa.privateKey!.sign(message: message)
-
-        print(signedData.asString(base: .base64Pad))
-
-        #expect(
-            signedData.asString(base: .base64Pad)
-                == TestFixtures.RSA_2048.signedMessages["algid:sign:RSA:message-PKCS1v15:SHA256"]
-        )
-        #expect(message != signedData)
-
-        // This just ensures that a newly instantiated Pub SecKey matches the derived pubkey from the keypair...
-        let recoveredPubKey: RSAPublicKey = try RSAPublicKey(rawRepresentation: rsa.publicKey.data)
-        #expect(rsa.publicKey.data == recoveredPubKey.rawRepresentation)
-        #expect(try rsa.marshalPublicKey().asString(base: .base64Pad) == TestFixtures.RSA_2048.publicMarshaled)
-
-        // Ensure the rsaSignatureMessagePKCS1v15SHA256 algorithm works with our RSA KeyPair
-        //#expect(SecKeyIsAlgorithmSupported(recoveredPubKey, .verify, .rsaSignatureMessagePKCS1v15SHA256))
-
-        // Ensure the Signed Data is Valid for the given message
-        #expect(try rsa.publicKey.verify(signature: signedData, for: message))
-
-        // Ensure that the signature is no longer valid if it is tweaked in any way
-        // (a mismatched signature returns false, a malformed / truncated one may throw instead)
-        #expect(try rsa.publicKey.verify(signature: Data(signedData.reversed()), for: message) == false)
-        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message)) != true)
-        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropLast()), for: message)) != true)
-
-        // Ensure that the signature is no longer valid if the message is tweaked in any way
-        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.reversed())) == false)
-        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) == false)
-        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropLast())) == false)
-    }
-
-    @Test func testRSAMessageSignVerify_DynamicKey() throws {
-        let message = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
-
-        let rsa = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
-
-        let signedData = try rsa.privateKey!.sign(message: message)
-
-        print(signedData.asString(base: .base16))
-
-        #expect(message != signedData)
-
-        // This just ensures that a newly instantiated Pub SecKey matches the derived pubkey from the keypair...
-        let recoveredPubKey: RSAPublicKey = try RSAPublicKey(rawRepresentation: rsa.publicKey.data)
-        #expect(rsa.publicKey.data == recoveredPubKey.rawRepresentation)
-
-        // Ensure the rsaSignatureMessagePKCS1v15SHA256 algorithm works with our RSA KeyPair
-        //#expect(SecKeyIsAlgorithmSupported(recoveredPubKey, .verify, .rsaSignatureMessagePKCS1v15SHA256))
-
-        // Ensure the Signed Data is Valid for the given message
-        #expect(try rsa.publicKey.verify(signature: signedData, for: message))
-
-        // Ensure that the signature is no longer valid if it is tweaked in any way
-        // (a mismatched signature returns false, a malformed / truncated one may throw instead)
-        #expect(try rsa.publicKey.verify(signature: Data(signedData.reversed()), for: message) == false)
-        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropFirst()), for: message)) != true)
-        #expect((try? rsa.publicKey.verify(signature: Data(signedData.dropLast()), for: message)) != true)
-
-        // Ensure that the signature is no longer valid if the message is tweaked in any way
-        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.reversed())) == false)
-        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) == false)
-        #expect(try rsa.publicKey.verify(signature: signedData, for: Data(message.dropLast())) == false)
-    }
-
-    @Test func testED25519MessageSignVerify() throws {
-        let message = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
-
-        let ed = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
-
-        let signedData = try ed.privateKey!.sign(message: message)
-
-        #expect(message != signedData)
-
-        #expect(try ed.publicKey.verify(signature: signedData, for: message))
-
-        #expect(try ed.publicKey.verify(signature: Data(signedData.shuffled()), for: message) == false)
-        #expect(try ed.publicKey.verify(signature: Data(signedData.dropFirst()), for: message) == false)
-        #expect(try ed.publicKey.verify(signature: Data(signedData.dropLast()), for: message) == false)
-
-        #expect(try ed.publicKey.verify(signature: signedData, for: Data(message.shuffled())) == false)
-        #expect(try ed.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) == false)
-        #expect(try ed.publicKey.verify(signature: signedData, for: Data(message.dropLast())) == false)
-    }
-
-    // TODO EC Keys
-
-    // Secp256k1 Keys
-    @Test func testSecp256k1MessageSignVerify() throws {
-        let message = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
-
-        let secp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
-
-        let signedData = try secp.privateKey!.sign(message: message)
-
-        #expect(message != signedData)
-        // Signatures are DER encoded (SEQUENCE { INTEGER r, INTEGER s })
-        #expect(signedData.first == 0x30)
-        #expect(signedData.count <= 72)
-
-        #expect(try secp.publicKey.verify(signature: signedData, for: message))
-
-        var alertedSignedData = signedData
-        // Flip the lowest bit of the final byte of `s`
-        alertedSignedData[alertedSignedData.count - 1] ^= 0x01
-        #expect(try secp.publicKey.verify(signature: alertedSignedData, for: message) == false)
-        // Invalid DER will throw error...
-        #expect(throws: Error.self) { try secp.publicKey.verify(signature: Data(signedData.dropFirst()), for: message) }
-        #expect(throws: Error.self) { try secp.publicKey.verify(signature: Data(signedData.dropLast()), for: message) }
-
-        #expect(try secp.publicKey.verify(signature: signedData, for: Data(message.shuffled())) == false)
-        #expect(try secp.publicKey.verify(signature: signedData, for: Data(message.dropFirst())) == false)
-        #expect(try secp.publicKey.verify(signature: signedData, for: Data(message.dropLast())) == false)
-    }
-
-    /// The libp2p spec test vector private key (marshaled)
-    static let secp256k1SpecPrivateKey = "0802122053DADF1D5A164D6B4ACDB15E24AA4C5B1D3461BDBD42ABEDB0A4404D56CED8FB"
-
-    /// Signatures are deterministic (RFC6979), so the spec key always produces the same signature for the same message.
-    /// - Note: Verified externally via `openssl dgst -sha256 -verify pub.pem -signature sig.der msg`
-    @Test func testSecp256k1DeterministicSignature() throws {
-        let message = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
-        let kp = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(hex: Self.secp256k1SpecPrivateKey))
-
-        let signature = try kp.privateKey!.sign(message: message)
-        #expect(
-            signature.toHexString()
-                == "30440220325b7222967b742414a4a3b51fac64658ba642d2e7cc74b69d5c9555be5d08c6022066526d58da763da195cc25b032a30caed1ac5ce04d418713ec3912b1a5829938"
-        )
-        #expect(try kp.sign(message: message) == signature)
-        #expect(try kp.publicKey.verify(signature: signature, for: message))
-    }
-
-    /// Ensures we can verify a SHA-256 / DER signature produced by an external implementation (OpenSSL)
-    /// and that non-canonical (high-S) signatures are rejected.
-    @Test func testSecp256k1VerifyExternalSignature() throws {
-        let message = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
-        let kp = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(hex: Self.secp256k1SpecPrivateKey))
-
-        // Produced by `openssl dgst -sha256 -sign` (OpenSSL doesn't normalize S, this one happens to be high-S)
-        let highS = Data(
-            hex:
-                "3046022100b1aac74717f91bd5472feba67bbf360deda755da5de620a45223ddc1d040e9f5022100d14180dd96bb0700f3c1cdee04e71b11693701b30ef5d9d0ed24f7647be9200d"
-        )
-        // The same signature normalized to low-S (s' = n - s)
-        let lowS = Data(
-            hex:
-                "3045022100b1aac74717f91bd5472feba67bbf360deda755da5de620a45223ddc1d040e9f502202ebe7f226944f8ff0c3e3211fb18e4ed5177db33a052c66ad2ad6728544d2134"
-        )
-
-        #expect(try kp.publicKey.verify(signature: lowS, for: message))
-        #expect(try kp.publicKey.verify(signature: highS, for: message) == false)
-    }
-
-    /// Secp256k1 signatures used to be keccak256 hashed, 65 byte `v || r || s` recoverable signatures.
-    /// Per the libp2p spec they are now SHA-256 hashed, DER encoded signatures, ensure the legacy format isn't accepted.
-    @Test func testSecp256k1RejectsLegacyRecoverableSignature() throws {
-        let message = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
-        let kp = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: Data(hex: Self.secp256k1SpecPrivateKey))
-
-        let der = try kp.privateKey!.sign(message: message)
-        #expect(der.count != 65)
-
-        // Repackage the DER signature's r and s values as a legacy `v || r || s` signature
-        let rLength = Int(der[3])
-        let r = der[4..<(4 + rLength)].suffix(32)
-        let s = der[(6 + rLength)...].suffix(32)
-        let legacy =
-            Data([0x00]) + Data(repeating: 0, count: 32 - r.count) + r + Data(repeating: 0, count: 32 - s.count) + s
-        #expect(legacy.count == 65)
-
-        #expect(throws: Error.self) { try kp.publicKey.verify(signature: legacy, for: message) }
-    }
-}
-
-@Suite("AES Cipher Tests")
-struct AESCipherTests {
-
-    @Test func testAESEncryption128() throws {
-        let message = "Hello World!"
-        let key128 = "1234567890123456"  // 16 bytes for AES128
-        let iv = "abcdefghijklmnop"  // 16 bytes for AES128
-
-        let aes128Key = try LibP2PCrypto.AES.createKey(key: key128, iv: iv)
-
-        let encrypted = try aes128Key.encrypt(message)
-        print(encrypted.asString(base: .base16))
-        let decrypted: String = try aes128Key.decrypt(encrypted)
-
-        #expect(decrypted == message)
-    }
-
-    @Test func testAESEncryption256() throws {
-        let message = "Hello World!"
-        let key256 = "12345678901234561234567890123456"  // 32 bytes for AES256
-        let iv = "abcdefghijklmnop"  // 16 bytes for AES128
-
-        let aes256Key = try LibP2PCrypto.AES.createKey(key: key256, iv: iv)
-        let aes256KeyDup = try LibP2PCrypto.AES.createKey(key: key256, iv: iv)
-
-        let encrypted = try aes256Key.encrypt(message)
-        let encrypted2 = try aes256KeyDup.encrypt(message)
-        print(encrypted.asString(base: .base16))
-        print(encrypted2.asString(base: .base16))
-        let decrypted: String = try aes256Key.decrypt(encrypted)
-
-        #expect(decrypted == message)
-        #expect(encrypted == encrypted2)  //Same Key & IV => Same Encrypted data
-    }
-
-    @Test func testAESEncryption256AutoIV() throws {
-        let message = "Hello World!"
-        let key256 = "12345678901234561234567890123456"  // 32 bytes for AES256
-
-        let aes256Key = try LibP2PCrypto.AES.createKey(key: key256)
-
-        let encrypted = try aes256Key.encrypt(message)
-        print(encrypted.asString(base: .base16))
-        let decrypted: String = try aes256Key.decrypt(encrypted)
-
-        #expect(decrypted == message)
-    }
-
-    @Test func testAESEncryption256AutoIVDifferent() throws {
-        let message = "Hello World!"
-        let key256 = "12345678901234561234567890123456"  // 32 bytes for AES256
-
-        let aes256Key = try LibP2PCrypto.AES.createKey(key: key256)
-        let aes256Key2 = try LibP2PCrypto.AES.createKey(key: key256)
-
-        let encrypted = try aes256Key.encrypt(message)
-        let encrypted2 = try aes256Key2.encrypt(message)
-        print(encrypted.asString(base: .base16))
-        print(encrypted2.asString(base: .base16))
-        let decrypted: String = try aes256Key.decrypt(encrypted)
-        let decrypted2: String = try aes256Key2.decrypt(encrypted2)
-
-        //Ensure that the encrypted data is different using different keys
-        #expect(encrypted != encrypted2)
-        //Ensure we can decrypt the data with the proper key
-        #expect(decrypted == message)
-        //Ensure we can decrypt the data with the proper key
-        #expect(decrypted2 == message)
-
-        //The IV is prepended to the ciphertext, so any key instance sharing the same secret can decrypt it
-        let decryptedSameSecret: String = try aes256Key.decrypt(encrypted2)
-        #expect(decryptedSameSecret == message)
-
-        //Ensure that decryption fails when we use the wrong key
-        //Usually results in a padding or String.Encoding Error (cause gibberish)
-        let wrongKey = try LibP2PCrypto.AES.createKey(key: "65432109876543216543210987654321")
-        let decryptedWrongKey: String? = try? wrongKey.decrypt(encrypted2)
-        #expect(decryptedWrongKey != message)
-    }
-
-    @Test func testAESGCMEncryptionRoundTrip() throws {
-
-        let message = "Hello World!"
-
-        let encrypted = try message.encryptGCM(password: "mypassword")
-
-        print(encrypted.asString(base: .base32))
-
-        let decrypted = try encrypted.decryptGCM(password: "mypassword")
-
-        let msg = String(data: decrypted, encoding: .utf8)
-        print(msg ?? "NIL")
-
-        #expect(msg == message)
-    }
-
-    /// Regression: `decryptGCM(password:)` used to crash (`removeFirst(16)`) on payloads shorter than the salt
-    @Test(arguments: [0, 1, 15, 16, 27, 43])
-    func decryptingTruncatedPayloadThrows(length: Int) throws {
-        let payload = [UInt8](repeating: 0x2a, count: length)
-        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
-            _ = try payload.decryptGCM(password: "mypassword")
-        }
-    }
-
-    @Test func decryptingTamperedPayloadThrows() throws {
-        var encrypted = try Array("Hello World!".utf8).encryptGCM(password: "mypassword")
-        encrypted[encrypted.count - 1] ^= 0x01
-        #expect(throws: (any Error).self) {
-            _ = try encrypted.decryptGCM(password: "mypassword")
-        }
-    }
-
-    let key256 = "12345678901234561234567890123456"
-
-    /// Regression: keys created with a random IV couldn't be decrypted by any other `AESKey` instance
-    @Test func ciphertextDecryptsWithADifferentKeyInstance() throws {
-        let encryptor = try LibP2PCrypto.AES.AESKey(key: key256)
-        let decryptor = try LibP2PCrypto.AES.AESKey(key: key256)
-        #expect(encryptor.iv != decryptor.iv)
-
-        let encrypted = try encryptor.encrypt("Hello World!")
-        #expect(encrypted.prefix(16) == encryptor.iv)
-
-        let decrypted: String = try decryptor.decrypt(encrypted)
-        #expect(decrypted == "Hello World!")
-    }
-
-    @Test func staticPasswordDecryption() throws {
-        let encrypted = try LibP2PCrypto.AES.AESKey(key: key256).encrypt("Hello World!")
-        let decrypted = try LibP2PCrypto.AES.decrypt(encrypted, withPassword: key256)
-        #expect(String(data: decrypted, encoding: .utf8) == "Hello World!")
-    }
-
-    /// Regression: the String based initializer skipped key / IV length validation on Apple platforms
-    @Test func stringInitializerValidatesLengths() throws {
-        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
-            _ = try LibP2PCrypto.AES.AESKey(key: "short", iv: "abcdefghijklmnop")
-        }
-        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
-            _ = try LibP2PCrypto.AES.AESKey(key: "1234567890123456", iv: "short")
-        }
-        // 16 characters but 17 UTF-8 bytes
-        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
-            _ = try LibP2PCrypto.AES.AESKey(key: "é234567890123456")
-        }
-    }
-
-    @Test func decryptingTruncatedCiphertextThrows() throws {
-        let key = try LibP2PCrypto.AES.AESKey(key: key256)
-        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
-            _ = try key.decrypt(Data(repeating: 0, count: 16))
-        }
-    }
-
-    @Test func emptyMessageRoundTrips() throws {
-        let key = try LibP2PCrypto.AES.AESKey(key: key256)
-        let encrypted = try key.encrypt(Data())
-        #expect(encrypted.count == 32)
-        #expect(try key.decrypt(encrypted).isEmpty)
-    }
-}
-
-@Suite("HMAC Tests")
-struct HMACTests {
-
-    @Test func testHMAC() throws {
-        let message = "Hello World"
-        let key = "secret"
-        let hmac = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
-        let hmac2 = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
-        let hmac3 = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: "Secret")
-
-        #expect(hmac == hmac2)  //Same message, same key -> Same hash
-        #expect(hmac != hmac3)  //Same message, different key -> Different hash
-    }
-
-    @Test func testHMACKey() throws {
-        let message = "Hello World"
-        let key = "secret"
-        let hmacKey = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
-
-        let encrypted = hmacKey.encrypt(message)
-        let encrypted2 = hmacKey.encrypt(message)
-
-        #expect(encrypted == encrypted2)
-    }
-
-    @Test func testHMACBaseEncoded() throws {
-        let message = "Hello World"
-        let key = "secret"
-        let hmac = LibP2PCrypto.HMAC.encrypt(message: message, algorithm: .SHA256, key: key)
-
-        print(hmac.asString(base: .base16))
-        print(hmac.asString(base: .base32Hex))
-        print(hmac.asString(base: .base64Pad))
-    }
-
-    @Test func testHMACVerify() throws {
-        let message = "Hello World"
-        let key = "secret"
-        let hmacKeyLocal = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
-        let hmacKeyRemote = LibP2PCrypto.HMAC.create(algorithm: .SHA256, secret: key)
-
-        let encrypted = hmacKeyLocal.encrypt(message)
-
-        // Correct data, hash matches...
-        #expect(hmacKeyRemote.verify(message, hash: encrypted))
-        // Corrupted data, hash doesn't match...
-        #expect(hmacKeyRemote.verify("HellØ world", hash: encrypted) == false)
-    }
-
-    @Test(arguments: [
-        LibP2PCrypto.HMAC.CryptoAlgorithm.MD5, .SHA1, .SHA256, .SHA384, .SHA512,
-    ])
-    func verifyAcceptsValidAndRejectsInvalidCodes(algorithm: LibP2PCrypto.HMAC.CryptoAlgorithm) throws {
-        let key = LibP2PCrypto.HMAC.HMACKey(algorithm: algorithm, secret: "secret")
-        let code = key.encrypt("Hello World")
-
-        #expect(key.verify("Hello World", hash: code))
-        #expect(key.verify(Data("Hello World".utf8), hash: code))
-
-        var tampered = code
-        tampered[tampered.startIndex] ^= 0x01
-        #expect(key.verify("Hello World", hash: tampered) == false)
-        #expect(key.verify("Hello World", hash: code.dropLast()) == false)
-        #expect(key.verify("Hello World", hash: Data()) == false)
-        #expect(key.verify("Hello World!", hash: code) == false)
-        #expect(
-            LibP2PCrypto.HMAC.HMACKey(algorithm: algorithm, secret: "Secret").verify("Hello World", hash: code) == false
-        )
-    }
-}
-
-@Suite("DER and PEM Tests")
-struct DERAndPEMTests {
-
-    @Test func testPemParsing_RSA_2048_Public_Export() throws {
-        let pem = TestPEMKeys.RSA_2048_PUBLIC
-
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
-
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.attributes()?.size == 2048)
-        #expect(keyPair.privateKey == nil)
-
-        #expect(try keyPair.exportPublicPEMString() == pem)
-    }
-
-    @Test func testPemParsing_RSA_2048_Private_Export() throws {
-        let pem = TestPEMKeys.RSA_2048_PRIVATE_ENCRYPTED_PAIR.UNENCRYPTED
-
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
-
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.attributes()?.size == 2048)
-        #expect(keyPair.privateKey != nil)
-
-        #expect(try keyPair.exportPrivatePEMString() == pem)
-    }
-
-    /// PKCS#1 `RSA PUBLIC KEY` PEMs are supported alongside SubjectPublicKeyInfo `PUBLIC KEY` PEMs
-    @Test func testPemParsing_RSA_2048_Public_PKCS1() throws {
-        // The BIT STRING contents of the SubjectPublicKeyInfo are the PKCS#1 RSAPublicKey
-        let (_, spkiDER, _) = try LibP2PCrypto.PEM.pemToData(Array(TestPEMKeys.RSA_2048_PUBLIC.utf8))
-        let pkcs1 = try SubjectPublicKeyInfo(derEncoded: spkiDER).key.bytes
-        let pem =
-            "-----BEGIN RSA PUBLIC KEY-----\n"
-            + Data(pkcs1).base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
-            + "\n-----END RSA PUBLIC KEY-----"
-
-        /// Import DER directly
-        //let key = try LibP2PCrypto.Keys.importPublicDER(pem)
-        let key = try RSAPublicKey(pem: pem, asType: RSAPublicKey.self)
-
-        /// Let the parsePem method determine that it's a DER file and handle it accordingly
-        //let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
-
-        print(key)
-        print(keyPair)
-
-        #expect(key.data == keyPair.publicKey.data)
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.attributes()?.size == 2048)
-        #expect(keyPair.privateKey == nil)
-    }
-
-    @Test func testPemParsing_RSA_2048_Public() throws {
-
-        /// Import PEM directly
-        //let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_2048_PUBLIC)
-        let key = try RSAPublicKey(pem: TestPEMKeys.RSA_2048_PUBLIC, asType: RSAPublicKey.self)
-
-        /// Let the parsePem method determine the format and handle it accordingly
-        //let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_2048_PUBLIC)
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: TestPEMKeys.RSA_2048_PUBLIC)
-
-        print(key)
-        print(keyPair)
-
-        #expect(key.rawRepresentation == keyPair.publicKey.data)
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.attributes()?.size == 2048)
-        #expect(keyPair.privateKey == nil)
-    }
-
-    @Test func testPemParsing_RSA_3072_Public() throws {
-
-        /// Import PEM directly
-        //let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_3072_PUBLIC)
-        let key = try RSAPublicKey(pem: TestPEMKeys.RSA_3072_PUBLIC, asType: RSAPublicKey.self)
-
-        /// Let the parsePem method determine the format and handle it accordingly
-        //let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_3072_PUBLIC)
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: TestPEMKeys.RSA_3072_PUBLIC)
-
-        print(key)
-        print(keyPair)
-
-        #expect(key.rawRepresentation == keyPair.publicKey.data)
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.attributes()?.size == 3072)
-        #expect(keyPair.privateKey == nil)
-    }
-
-    @Test func testPemParsing_RSA_4096_Public() throws {
-
-        /// Import PEM directly
-        //let key = try LibP2PCrypto.Keys.importPublicPem(TestPEMKeys.RSA_4096_PUBLIC)
-        let key = try RSAPublicKey(pem: TestPEMKeys.RSA_4096_PUBLIC, asType: RSAPublicKey.self)
-
-        /// Let the parsePem method determine the format and handle it accordingly
-        //let keyPair = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.RSA_4096_PUBLIC)
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: TestPEMKeys.RSA_4096_PUBLIC)
-
-        print(key)
-        print(keyPair)
-
-        #expect(key.rawRepresentation == keyPair.publicKey.data)
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.attributes()?.size == 4096)
-        #expect(keyPair.privateKey == nil)
-    }
-
-    @Test func testPemParsing_RSA_8192_Public() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: TestPEMKeys.RSA_8192_PUBLIC)
-
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.privateKey == nil)
-
-        let attributes = try #require(keyPair.attributes())
-        #expect(attributes.size == 8192)
-        guard case .RSA(bits: .B8192) = attributes.type else {
-            Issue.record("Expected an RSA 8192 attribute type, got \(attributes.type)")
-            return
-        }
-
-        #expect(try keyPair.exportPublicPEMString() == TestPEMKeys.RSA_8192_PUBLIC)
-
-        // Marshaling round trips and yields the same peer id
-        let restored = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: keyPair.marshalPublicKey())
-        #expect(restored.publicKey.data == keyPair.publicKey.data)
-        #expect(try restored.id() == keyPair.id())
-    }
-
-    ///[42,134,72,134,247,13,1,1,1]
-    @Test func testRSAOpenSSLPemImport() throws {
-
-        /// Generated with
-        /// openssl genpkey -algorithm RSA
-        ///   -pkeyopt rsa_keygen_bits:3072
-        ///   -pkeyopt rsa_keygen_pubexp:65537
-        let pem = """
-            -----BEGIN PRIVATE KEY-----
-            MIIG/wIBADANBgkqhkiG9w0BAQEFAASCBukwggblAgEAAoIBgQDp0Whyqa8KmdvK
-            0MsQGJEBzDAEHAZc0C6cr0rkb6Xwo+yB5kjZBRDORk0UXtYGE1pYt4JhUTmMzcWO
-            v2xTIsdbVMQlNtput2U8kIqS1cSTkX5HxOJtCiIzntMzuR/bGPSOexkyFQ8nCUqb
-            ROS7cln/ixprra2KMAKldCApN3ue2jo/JI1gyoS8sekhOASAa0ufMPpC+f70sc75
-            Y53VLnGBNM43iM/2lsK+GI2a13d6rRy86CEM/ygnh/EDlyNDxo+SQmy6GmSv/lmR
-            xgWQE2dIfK504KIxFTOphPAQAr9AsmcNnCQLhbz7YTsBz8WcytHGQ0Z5pnBQJ9AV
-            CX9E6DFHetvs0CNLVw1iEO06QStzHulmNEI/3P8I1TIxViuESJxSu3pSNwG1bSJZ
-            +Qee24vvlz/slBzK5gZWHvdm46v7vl5z7SA+whncEtjrswd8vkJk9fI/YTUbgOC0
-            HWMdc2t/LTZDZ+LUSZ/b2n5trvdJSsOKTjEfuf0wICC08pUUk8MCAwEAAQKCAYEA
-            ywve+DQCneIezHGk5cVvp2/6ApeTruXalJZlIxsRr3eq2uNwP4X2oirKpPX2RjBo
-            NMKnpnsyzuOiu+Pf3hJFrTpfWzHXXm5Eq+OZcwnQO5YNY6XGO4qhSNKT9ka9Mzbo
-            qRKdPrCrB+s5rryVJXKYVSInP3sDSQ2IPsYpZ6GW6Mv56PuFCpjTzElzejV7M0n5
-            0bRmn+MZVMVUR54KYiaCywFgUzmr3yfs1cfcsKqMRywt2J58lRy/chTLZ6LILQMv
-            4V01neVJiRkTmUfIWvc1ENIFM9QJlky9AvA5ASvwTTRz8yOnxoOXE/y4OVyOePjT
-            cz9eumu9N5dPuUIMmsYlXmRNaeGZPD9bIgKY5zOlfhlfZSuOLNH6EHBNr6JAgfwL
-            pdP43sbg2SSNKpBZ0iSMvpyTpbigbe3OyhnFH/TyhcC2Wdf62S9/FRsvjlRPbakW
-            YhKAA2kmJoydcUDO5ccEga8b7NxCdhRiczbiU2cj70pMIuOhDlGAznyxsYbtyxaB
-            AoHBAPy6Cbt6y1AmuId/HYfvms6i8B+/frD1CKyn+sUDkPf81xSHV7RcNrJi1S1c
-            V55I0y96HulsR+GmcAW1DF3qivWkdsd/b4mVkizd/zJm3/Dm8p8QOnNTtdWvYoEB
-            VzfAhBGaR/xflSLxZh2WE8ZHQ3IcRCXV9ZFgJ7PMeTprBJXzl0lTptvrHyo9QK1v
-            obLrL/KuXWS0ql1uSnJr1vtDI5uW8WU4GDENeU5b/CJHpKpjVxlGg+7pmLknxlBl
-            oBnZnQKBwQDs2Ky29qZ69qnPWowKceMJ53Z6uoUeSffRZ7xuBjowpkylasEROjuL
-            nyAihIYB7fd7R74CnRVYLI+O2qXfNKJ8HN+TgcWv8LudkRcnZDSvoyPEJAPyZGfr
-            olRCXD3caqtarlZO7vXSAl09C6HcL2KZ8FuPIEsuO0Aw25nESMg9eVMaIC6s2eSU
-            NUt6xfZw1JC0c+f0LrGuFSjxT2Dr5WKND9ageI6afuauMuosjrrOMl2g0dMcSnVz
-            KrtYa7Wi1N8CgcBFnuJreUplDCWtfgEen40f+5b2yAQYr4fyOFxGxdK73jVJ/HbW
-            wsh2n+9mDZg9jIZQ/+1gFGpA6V7W06dSf/hD70ihcKPDXSbloUpaEikC7jxMQWY4
-            uwjOkwAp1bq3Kxu21a+bAKHO/H1LDTrpVlxoJQ1I9wYtRDXrvBpxU2XyASbeFmNT
-            FhSByFn27Ve4OD3/NrWXtoVwM5/ioX6ZvUcj55McdTWE3ddbFNACiYX9QlyOI/TY
-            bhWafDCPmU9fj6kCgcEAjyQEfi9jPj2FM0RODqH1zS6OdG31tfCOTYicYQJyeKSI
-            /hAezwKaqi9phHMDancfcupQ89Nr6vZDbNrIFLYC3W+1z7hGeabMPNZLYAs3rE60
-            dv4tRHlaNRbORazp1iTBmvRyRRI2js3O++3jzOb2eILDUyT5St+UU/LkY7R5EG4a
-            w1df3idx9gCftXufDWHqcqT6MqFl0QgIzo5izS68+PPxitpRlR3M3Mr4rCU20Rev
-            blphdF+rzAavYyj1hYuRAoHBANmxwbq+QqsJ19SmeGMvfhXj+T7fNZQFh2F0xwb2
-            rMlf4Ejsnx97KpCLUkoydqAs2q0Ws9Nkx2VEVx5KfUD7fWhgbpdnEPnQkfeXv9sD
-            vZTuAoqInN1+vj1TME6EKR/6D4OtQygSNpecv23EuqEvyXWqRVsRt9Qd2B0H4k7h
-            gnjREs10u7zyqBIZH7KYVgyh27WxLr859ap8cKAH6Fb+UOPtZo3sUeeume60aebn
-            4pMwXeXP+LO8NIfRXV8mgrm86g==
-            -----END PRIVATE KEY-----
-            """
-
-        /// Import PEM directly
-        //let key = try LibP2PCrypto.Keys.importPrivatePem(pem)
-        let key = try RSAPrivateKey(pem: pem, asType: RSAPrivateKey.self)
-
-        /// Let the parsePem method determine the format and handle it accordingly
-        //let keyPair = try LibP2PCrypto.Keys.parsePem(pem)
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
-
-        print(key)
-        print(keyPair)
-
-        #expect(key.rawRepresentation == keyPair.privateKey?.rawRepresentation)
-        #expect(try key.derivePublicKey().rawRepresentation == keyPair.publicKey.data)
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.attributes()?.size == 3072)
-        #expect(keyPair.privateKey != nil)
-    }
-
-    // Manual PEM import process
-    @Test func testED25519PemImport_Public_Manual() throws {
-        let pem = """
-            -----BEGIN PUBLIC KEY-----
-            MCowBQYDK2VwAyEACM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=
-            -----END PUBLIC KEY-----
-            """
-
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
-
-        let spki = try SubjectPublicKeyInfo(derEncoded: bytes)
-
-        print(spki)
-
-        #expect(spki.algorithmIdentifier == AlgorithmIdentifier(algorithm: ASN1ObjectIdentifier.LibP2P.ed25519))
-
-        let pubKey = try Curve25519.Signing.PublicKey(rawRepresentation: spki.key.bytes)
-
-        print(pubKey)
-
-        print(pubKey.rawRepresentation.asString(base: .base64Pad))
-
-        /// Ensure that we reached the same results using both methods
-        #expect(try pubKey.rawRepresentation == LibP2PCrypto.Keys.KeyPair(pem: pem).publicKey.data)
-    }
-
-    @Test func testED25519PemImport_Public() throws {
-        let pem = """
-            -----BEGIN PUBLIC KEY-----
-            MCowBQYDK2VwAyEACM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=
-            -----END PUBLIC KEY-----
-            """
-
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
-
-        print(keyPair)
-        #expect(keyPair.keyType == .ed25519)
-        #expect(keyPair.privateKey == nil)
-
-        #expect(try keyPair.exportPublicPEMString() == pem)
-    }
-
-    /// This document defines what that is for Ed25519 private keys:
-    /// https://tools.ietf.org/html/draft-ietf-curdle-pkix-10
-    ///
-    /// What it says is that inside the OCTET STRING is another OCTET STRING for the private key data. The ASN.1 tag for OCTET STRING is 0x04, and the length of that string is 32 bytes (0x20 in hex).
-    /// So in the above string the leading 0420 is the OCTET STRING tag and length. The remaining 32 bytes are the key itself.
-    @Test func testED25519PemImport_Private_Manual() throws {
-        let pem = """
-            -----BEGIN PRIVATE KEY-----
-            MC4CAQAwBQYDK2VwBCIEIOkK9EOHRqD5QueUrMZbia55UWpokoFpWco4r2GnRVZ+
-            -----END PRIVATE KEY-----
-            """
-
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
-
-        let privateKeyInfo = try PrivateKeyInfo(derEncoded: bytes)
-
-        print(privateKeyInfo)
-
-        //        SEQUENCE {
-        //            INTEGER (0)
-        //            SEQUENCE {
-        //                OBJECT IDENTIFIER (1.3.101.112)
-        //            }
-        //            OCTET STRING (34 bytes) <- This is actually another octetString
-        //        }
-
-        #expect(privateKeyInfo.algorithmIdentifier.algorithm == ASN1ObjectIdentifier.LibP2P.ed25519)
-
-        let privKeyData = try ASN1OctetString(derEncoded: privateKeyInfo.privateKey.bytes).bytes
-
-        #expect(privKeyData.count == 32)
-
-        let privKey = try Curve25519.Signing.PrivateKey(rawRepresentation: privKeyData)
-
-        print(privKey)
-
-        #expect(
-            "CM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA="
-                == privKey.publicKey.rawRepresentation.asString(base: .base64Pad)
-        )
-
-    }
-
-    @Test func testED25519PemImport_Private() throws {
-        let pem = """
-            -----BEGIN PRIVATE KEY-----
-            MC4CAQAwBQYDK2VwBCIEIOkK9EOHRqD5QueUrMZbia55UWpokoFpWco4r2GnRVZ+
-            -----END PRIVATE KEY-----
-            """
-
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
-
-        print(keyPair)
-        #expect(keyPair.keyType == .ed25519)
-        #expect(keyPair.privateKey != nil)
-        #expect(keyPair.publicKey.asString(base: .base64Pad) == "CM3Nzttt7KmXG9qDEYys++oQ9G749jqrbRRs92BUzpA=")
-
-        #expect(try keyPair.exportPrivatePEMString() == pem)
-    }
-
-    @Test func testSecp256k1PemImport_Public_Manual() throws {
-        let pem = """
-            -----BEGIN PUBLIC KEY-----
-            MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzw
-            xDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
-            -----END PUBLIC KEY-----
-            """
-
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
-
-        let spki = try SubjectPublicKeyInfo(derEncoded: bytes)
-
-        print(spki)
-
-        //        SEQUENCE {
-        //            SEQUENCE {
-        //                OBJECT IDENTIFIER   :id-ecPublicKey
-        //                OBJECT IDENTIFIER   :secp256k1
-        //            }
-        //            BIT STRING (65 bytes)
-        //        }
-
-        #expect(spki.algorithmIdentifier.algorithm == ASN1ObjectIdentifier.LibP2P.idEcPublicKey)
-        #expect(spki.algorithmIdentifier.parameters == .objectIdentifier(ASN1ObjectIdentifier.LibP2P.secp256k1))
-
-        let pubKey = try Secp256k1PublicKey(Array(spki.key.bytes))
-
-        print(pubKey)
-
-        #expect(
-            pubKey.rawPublicKey.asString(base: .base64Pad)
-                == "IgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w=="
-        )
-        #expect(try pubKey.rawRepresentation == LibP2PCrypto.Keys.KeyPair(pem: pem).publicKey.rawRepresentation)
-    }
-
-    @Test func testSecp256k1PemImport_Public() throws {
-        let pem = """
-            -----BEGIN PUBLIC KEY-----
-            MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzw
-            xDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
-            -----END PUBLIC KEY-----
-            """
-
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
-
-        print(keyPair)
-        #expect(keyPair.keyType == .secp256k1)
-        #expect(keyPair.privateKey == nil)
-        print(keyPair.attributes() ?? "NIL")
-
-        #expect(try keyPair.exportPublicPEMString() == pem)
-    }
-
-    @Test func testSecp256k1PemImport_Private_Manual() throws {
-        let pem = """
-            -----BEGIN EC PRIVATE KEY-----
-            MHQCAQEEIJmbpwD3mZhlEtiGzmgropJ/nSewc8UPyBE9wib742saoAcGBSuBBAAK
-            oUQDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwf
-            X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
-            -----END EC PRIVATE KEY-----
-            """
-
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem.bytes)
-
-        let ecPrivateKey = try ECPrivateKey(derEncoded: bytes)
-
-        print(ecPrivateKey)
-
-        //        SEQUENCE {
-        //            INTEGER (1)
-        //            OCTET STRING (32 bytes)             // private key data
-        //            [0] OBJECT IDENTIFIER   :secp256k1
-        //            [1] BIT STRING (65 bytes)           // public key data
-        //        }
-
-        #expect(ecPrivateKey.namedCurve == ASN1ObjectIdentifier.LibP2P.secp256k1)
-        #expect(ecPrivateKey.publicKey?.bytes.count == 65)
-
-        let privKey = try Secp256k1PrivateKey(Array(ecPrivateKey.privateKey.bytes))
-
-        #expect(
-            privKey.rawRepresentation.asString(base: .base64Pad) == "mZunAPeZmGUS2IbOaCuikn+dJ7BzxQ/IET3CJvvjaxo="
-        )
-
-        /// Assert that we can derive the public from the private key
-        #expect(
-            "IgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w=="
-                == privKey.publicKey.rawPublicKey.asString(base: .base64Pad)
-        )
-        #expect(try privKey.rawRepresentation == LibP2PCrypto.Keys.KeyPair(pem: pem).privateKey?.rawRepresentation)
-        #expect(
-            try privKey.publicKey.rawRepresentation == LibP2PCrypto.Keys.KeyPair(pem: pem).publicKey.rawRepresentation
-        )
-    }
-
-    @Test func testSecp256k1PemImport_Private() throws {
-        let pem = """
-            -----BEGIN EC PRIVATE KEY-----
-            MHQCAQEEIJmbpwD3mZhlEtiGzmgropJ/nSewc8UPyBE9wib742saoAcGBSuBBAAK
-            oUQDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwf
-            X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
-            -----END EC PRIVATE KEY-----
-            """
-
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pem)
-
-        print(keyPair)
-        #expect(keyPair.keyType == .secp256k1)
-        #expect(keyPair.privateKey != nil)
-        #expect(
-            keyPair.privateKey?.rawRepresentation.asString(base: .base64Pad)
-                == "mZunAPeZmGUS2IbOaCuikn+dJ7BzxQ/IET3CJvvjaxo="
-        )
-        /// Assert that we can derive the public from the private key
-        #expect(
-            keyPair.publicKey.asString(base: .base64Pad)
-                == "IgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwfX7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w=="
-        )
-
-        print(try keyPair.exportPrivatePEM().asString(base: .base16))
-
-        #expect(try keyPair.exportPrivatePEMString() == pem)
-    }
-
-    @Test func testTempSecp() throws {
-        let pemOG = """
-            -----BEGIN EC PRIVATE KEY-----
-            MHQCAQEEIJmbpwD3mZhlEtiGzmgropJ/nSewc8UPyBE9wib742saoAcGBSuBBAAK
-            oUQDQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwf
-            X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
-            -----END EC PRIVATE KEY-----
-            """
-        /// Sequence:
-        ///     Integer: 01
-        ///     OctetString: 999ba700f799986512d886ce682ba2927f9d27b073c50fc8113dc226fbe36b1a
-        ///     ObjectID: 06052b8104000a
-        ///     BitString: 4200042200beb1c3052d405d7773a5328769e926c46811ab1f2cf0c437af8ec6d4d603a1763bbe15065a00bc1f5fb5e6b0784a145358a554b419784c333cc57f52ddef
-
-        //let pemRECON = """
-        //    -----BEGIN EC PRIVATE KEY-----
-        //    MHQCAQEEIJmbpwD3mZhlEtiGzmgropJ/nSewc8UPyBE9wib742saoAcGBSuBBAAK
-        //    oUQAQgAEIgC+scMFLUBdd3OlModp6SbEaBGrHyzwxDevjsbU1gOhdju+FQZaALwf
-        //    X7XmsHhKFFNYpVS0GXhMMzzFf1Ld7w==
-        //    -----END EC PRIVATE KEY-----
-        //    """
-        /// Sequence:
-        ///     Integer: 01
-        ///     OctetString: 999ba700f799986512d886ce682ba2927f9d27b073c50fc8113dc226fbe36b1a
-        ///     ObjectID: 06052b8104000a
-        ///     BitString: 4200042200beb1c3052d405d7773a5328769e926c46811ab1f2cf0c437af8ec6d4d603a1763bbe15065a00bc1f5fb5e6b0784a145358a554b419784c333cc57f52ddef
-
-        let chunks = pemOG.bytes.split(separator: 0x0a)
-        let base64 = String(data: Data(chunks[1..<chunks.count - 1].joined()), encoding: .utf8)!
-        let pemData = Data(base64Encoded: base64)!
-
-        let ecPrivateKey = try ECPrivateKey(derEncoded: pemData.byteArray)
-
-        print(ecPrivateKey)
-
-        #expect(ecPrivateKey.privateKey.bytes.count == 32)
-        #expect(ecPrivateKey.namedCurve == ASN1ObjectIdentifier.LibP2P.secp256k1)
-        #expect(ecPrivateKey.publicKey?.bytes.first == 0x04)
-
-        /// Re-encoding the decoded structure reproduces the original DER exactly
-        #expect(try ecPrivateKey.serializedDERBytes() == pemData.byteArray)
-    }
-
-    @Test func testRSAEncryptedPrivateKeyPem() throws {
-        let pair = TestPEMKeys.RSA_2048_PRIVATE_ENCRYPTED_PAIR.self
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pair.ENCRYPTED, password: pair.PASSWORD)
-
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.hasPrivateKey)
-    }
-
-    @Test func testImportEncryptedPemKey() throws {
-        let pair = TestPEMKeys.RSA_2048_PRIVATE_ENCRYPTED_PAIR.self
-
-        /// We don't support the DES3 Cipher yet
-        #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            try LibP2PCrypto.Keys.KeyPair(pem: pair.ENCRYPTED_DES3, password: pair.PASSWORD)
-        }
-    }
-
-    /// Decrypts the OpenSSL fixture step by step, then re-encrypts and re-encodes it, ensuring we
-    /// reproduce OpenSSL's output byte for byte
-    @Test func testRSAEncryptedPrivateKeyPemExportManual() throws {
-        let pair = TestPEMKeys.RSA_2048_PRIVATE_ENCRYPTED_PAIR.self
-        let (type, der, _) = try LibP2PCrypto.PEM.pemToData(Array(pair.ENCRYPTED.utf8))
-        #expect(type == .encryptedPrivateKey)
-
-        let encrypted = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(der))
-        let pbkdf = encrypted.pbkdfAlgorithm
-        let cipher = encrypted.cipherAlgorithm
-        #expect(pbkdf.iterations == 2048)
-        #expect(pbkdf.prf == .hmacWithSHA1)
-        #expect(cipher.desiredKeyLength == 16)
-
-        // Derive the encryption key from the password and decrypt the PKCS#8 PrivateKeyInfo
-        let key = try pbkdf.deriveKey(password: pair.PASSWORD, ofLength: cipher.desiredKeyLength)
-        let plaintext = try cipher.decrypt(bytes: encrypted.ciphertext, withKey: key)
-
-        let (_, unencryptedDER, _) = try LibP2PCrypto.PEM.pemToData(Array(pair.UNENCRYPTED.utf8))
-        #expect(plaintext == unencryptedDER)
-
-        // Re-encrypting with the same key and IV reproduces the ciphertext
-        let ciphertext = try cipher.encrypt(bytes: plaintext, withKey: key)
-        #expect(ciphertext == encrypted.ciphertext)
-
-        // Re-encoding the EncryptedPrivateKeyInfo (including the pbkdf and cipher algos used) reproduces the original DER
-        let encoded = try EncryptedPrivateKeyInfo(
-            encryptionAlgorithm: ASN1ObjectIdentifier.LibP2P.pbes2,
-            keyDerivationFunction: pbkdf.encodePBKDF(),
-            encryptionScheme: cipher.encodeCipher(),
-            encryptedData: ciphertext
-        ).serializedDERBytes()
-        #expect(encoded == der)
-
-        let exportedPEM =
-            "-----BEGIN ENCRYPTED PRIVATE KEY-----\n"
-            + Data(encoded).base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
-            + "\n-----END ENCRYPTED PRIVATE KEY-----"
-
-        #expect(exportedPEM == pair.ENCRYPTED)
-    }
-
-    @Test func testRSAEncryptedPrivateKeyPemExport() throws {
-        let pair = TestPEMKeys.RSA_2048_PRIVATE_ENCRYPTED_PAIR.self
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: pair.ENCRYPTED, password: pair.PASSWORD)
-
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.hasPrivateKey)
-
-        #expect(throws: Error.self) { try LibP2PCrypto.Keys.KeyPair(pem: pair.ENCRYPTED, password: "wrongpassword") }
-
-        /// Now lets try and reverse the process and export the encrypted private key using the fixture's salt and IV...
-        let (_, der, _) = try LibP2PCrypto.PEM.pemToData(Array(pair.ENCRYPTED.utf8))
-        let encrypted = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(der))
-
-        let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(
-            withPassword: pair.PASSWORD,
-            usingPBKDF: encrypted.pbkdfAlgorithm,
-            andCipher: encrypted.cipherAlgorithm
-        )
-
-        #expect(exportedPEM == pair.ENCRYPTED)
-
-        let differentPassword = try keyPair.exportEncryptedPrivatePEMString(
-            withPassword: "wrongpassword",
-            usingPBKDF: encrypted.pbkdfAlgorithm,
-            andCipher: encrypted.cipherAlgorithm
-        )
-
-        #expect(differentPassword != pair.ENCRYPTED)
-        #expect(differentPassword.count == pair.ENCRYPTED.count)
-    }
-
-    @Test func testRSAEncryptedPrivateKeyPemRoundTrip() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.RSA(bits: .B2048))
-
-        #expect(keyPair.keyType == .rsa)
-        #expect(keyPair.hasPrivateKey)
-
-        let exportedPEM = try keyPair.exportEncryptedPrivatePEMString(
-            withPassword: "mypassword",
-            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations)
-        )
-
-        let recoveredKey = try LibP2PCrypto.Keys.KeyPair(pem: exportedPEM, password: "mypassword")
-
-        #expect(recoveredKey.keyType == .rsa)
-        #expect(recoveredKey.hasPrivateKey)
-
-        #expect(keyPair.privateKey?.rawRepresentation == recoveredKey.privateKey?.rawRepresentation)
-        #expect(keyPair.publicKey.rawRepresentation == recoveredKey.publicKey.rawRepresentation)
-        #expect(try keyPair.id() == recoveredKey.id())
-    }
-
-    @Test func testRSAEncryptedPrivateKeyPem2() throws {
-        let pair = TestPEMKeys.RSA_2048_PRIVATE_ENCRYPTED_PAIR.self
-
-        let fromDecrypted = try LibP2PCrypto.Keys.KeyPair(pem: pair.UNENCRYPTED)
-        let fromEncrypted = try LibP2PCrypto.Keys.KeyPair(pem: pair.ENCRYPTED, password: pair.PASSWORD)
-
-        #expect(fromDecrypted.privateKey != nil)
-        #expect(fromEncrypted.privateKey != nil)
-
-        #expect(fromDecrypted.keyType == .rsa)
-        #expect(fromEncrypted.keyType == .rsa)
-
-        #expect(fromDecrypted.privateKey?.rawRepresentation == fromEncrypted.privateKey?.rawRepresentation)
-        #expect(fromDecrypted.publicKey.data == fromEncrypted.publicKey.data)
-
-        let attributes = try #require(fromEncrypted.attributes())
-        #expect(attributes.size == 2048)
-        #expect(attributes.isPrivate)
-    }
-
-    @Test func testRSA_Pem_Parsing_Public() throws {
-        let rsaPublic = try RSAPublicKey(pem: TestPEMKeys.RSA_2048_PUBLIC, asType: RSAPublicKey.self)
-
-        print(rsaPublic)
-    }
-
-    @Test func testRSA_Pem_Parsing_Private() throws {
-        let rsaPrivate = try RSAPrivateKey(pem: TestPEMKeys.RSA_2048_PRIVATE, asType: RSAPrivateKey.self)
-
-        print(rsaPrivate)
-    }
-
-    //    func testEC_Pem_Parsing_Public() throws {
-    //        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.EC_256_PUBLIC)
-    //
-    //        print(parsed)
-    //    }
-    //
-    //    func testEC_Pem_Parsing_Private() throws {
-    //        let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.EC_256_PRIVATE)
-    //
-    //        print(parsed)
-    //    }
-
-    @Test func testEd25519_Pem_Parsing_Public() throws {
-        //let parsed = try LibP2PCrypto.Keys.parsePem(TestPEMKeys.Ed25519_KeyPair.PUBLIC)
-
-        //print(parsed)
-
-        let ed25519Public = try Curve25519.Signing.PublicKey(
-            pem: TestPEMKeys.Ed25519_KeyPair.PUBLIC,
-            asType: Curve25519.Signing.PublicKey.self
-        )
-
-        print(ed25519Public)
-
-        let ed25519Private = try Curve25519.Signing.PrivateKey(
-            pem: TestPEMKeys.Ed25519_KeyPair.PRIVATE,
-            asType: Curve25519.Signing.PrivateKey.self
-        )
-
-        print(ed25519Private)
-
-        #expect(ed25519Private.publicKey == ed25519Public)
-    }
-
-    @Test func testEd25519_Pem_Parsing_Private() throws {
-        let parsed = try LibP2PCrypto.Keys.KeyPair(pem: TestPEMKeys.Ed25519_KeyPair.PRIVATE)
-
-        print(parsed)
-    }
-
-    @Test func testSecp256k1_Pem_Parsing_Private() throws {
-        let parsed = try LibP2PCrypto.Keys.KeyPair(pem: TestPEMKeys.SECP256k1_KeyPair.PRIVATE)
-
-        print(parsed)
-    }
-
-    @Test func testImportSecp256k1PEM() throws {
-        let secp256k1Public = try Secp256k1PublicKey(
-            pem: TestPEMKeys.SECP256k1_KeyPair.PUBLIC,
-            asType: Secp256k1PublicKey.self
-        )
-
-        print(secp256k1Public)
-
-        let secp256k1Private = try Secp256k1PrivateKey(
-            pem: TestPEMKeys.SECP256k1_KeyPair.PRIVATE,
-            asType: Secp256k1PrivateKey.self
-        )
-
-        print(secp256k1Private)
-
-        #expect(secp256k1Private.publicKey == secp256k1Public)
-    }
-
-    /// PEMs with CRLF line endings, indentation or surrounding text should still parse
-    @Test func importsPEMWithCRLFAndSurroundingText() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
-        let pem = try kp.exportPrivatePEMString()
-
-        let crlf = pem.replacingOccurrences(of: "\n", with: "\r\n") + "\r\n"
-        #expect(
-            try LibP2PCrypto.Keys.KeyPair(pem: crlf).privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation
-        )
-
-        let decorated = """
-            Bag Attributes
-                localKeyID: 01 02 03 04
-            Key Attributes: <No Attributes>
-            \(pem)
-
-            trailing notes
-            """
-        #expect(
-            try LibP2PCrypto.Keys.KeyPair(pem: decorated).privateKey?.rawRepresentation
-                == kp.privateKey?.rawRepresentation
-        )
-    }
-
-    @Test func rejectsPEMWithoutFooterOrBody() {
-        #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            _ = try LibP2PCrypto.PEM.pemToData(Array("-----BEGIN PUBLIC KEY-----\nAAAA\n".utf8))
-        }
-        #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            _ = try LibP2PCrypto.PEM.pemToData(Array("-----BEGIN PUBLIC KEY-----\n-----END PUBLIC KEY-----".utf8))
-        }
-        #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            _ = try LibP2PCrypto.PEM.pemToData(Array("no pem here".utf8))
-        }
-    }
-
-    /// Encrypted Secp256k1 exports wrapped a SEC1 ECPrivateKey instead of a PKCS #8 PrivateKeyInfo
-    @Test func encryptedExportContainsPKCS8() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
-        let password = "pw"
-        let pem = try kp.exportEncryptedPrivatePEM(
-            withPassword: password,
-            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: 2048)
-        )
-
-        // Manually decrypt the container
-        let (_, bytes, _) = try LibP2PCrypto.PEM.pemToData(pem)
-        let encrypted = try LibP2PCrypto.PEM.decodeEncryptedPEM(Data(bytes))
-        let key = try encrypted.pbkdfAlgorithm.deriveKey(
-            password: password,
-            ofLength: encrypted.cipherAlgorithm.desiredKeyLength
-        )
-        let decrypted = try encrypted.cipherAlgorithm.decrypt(bytes: encrypted.ciphertext, withKey: key)
-
-        let privateKeyInfo = try PrivateKeyInfo(derEncoded: decrypted)
-        #expect(privateKeyInfo.algorithmIdentifier.algorithm == ASN1ObjectIdentifier.LibP2P.idEcPublicKey)
-        #expect(
-            privateKeyInfo.algorithmIdentifier.parameters == .objectIdentifier(ASN1ObjectIdentifier.LibP2P.secp256k1)
-        )
-        let sec1 = try ECPrivateKey(derEncoded: Array(privateKeyInfo.privateKey.bytes))
-        #expect(Data(sec1.privateKey.bytes) == kp.privateKey?.rawRepresentation)
-
-        let restored = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
-        #expect(restored.keyType == .secp256k1)
-        #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
-    }
-
-    @Test func importsUnencryptedPKCS8() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
-        let pkcs8 = try kp.privateKey!.exportPrivateKeyPEMRaw()
-        let body = Data(pkcs8).base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
-        let pem = "-----BEGIN PRIVATE KEY-----\n\(body)\n-----END PRIVATE KEY-----"
-
-        let restored = try LibP2PCrypto.Keys.KeyPair(pem: pem)
-        #expect(restored.keyType == .secp256k1)
-        #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
-    }
-
-    @Test func rejectsMismatchedAttachedPublicKey() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
-        let other = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
-        let sec1 = try ECPrivateKey(
-            privateKey: kp.privateKey!.rawRepresentation.byteArray,
-            namedCurve: nil,
-            publicKey: other.privateKey!.publicKeyDER()
-        ).serializedDERBytes()
-        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
-            _ = try Secp256k1PrivateKey(privateDER: sec1)
-        }
-    }
-
-    /// P-256 keys share id-ecPublicKey with Secp256k1 and must still be classified by their named curve
-    @Test func p256PKCS8IsNotMistakenForSecp256k1() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.ECDSA(curve: .P256))
-        let restored = try LibP2PCrypto.Keys.KeyPair(pem: kp.exportPrivatePEMString())
-        #expect(restored.keyType == .ecdsa)
-        #expect(restored.attributes()?.size == 256)
-        #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
-    }
-}
-
-@Suite("Encrypted PEM PRF Tests")
-struct EncryptedPEMPRFTests {
-    let password = "mypassword"
-    let salt: [UInt8] = Array(0..<16)
-    let iv: [UInt8] = Array(16..<32)
-    let iterations = 2048
-
-    /// Minimal DER TLV encoder, kept independent of the library's own ASN.1 serializers
-    static func tlv(_ tag: UInt8, _ content: [UInt8]) -> [UInt8] {
-        var length: [UInt8]
-        if content.count < 0x80 {
-            length = [UInt8(content.count)]
-        } else {
-            var count = content.count
-            var bytes: [UInt8] = []
-            while count > 0 {
-                bytes.insert(UInt8(count & 0xff), at: 0)
-                count >>= 8
-            }
-            length = [0x80 | UInt8(bytes.count)] + bytes
-        }
-        return [tag] + length + content
-    }
-
-    static func sequence(_ children: [UInt8]...) -> [UInt8] { tlv(0x30, children.flatMap { $0 }) }
-
-    static let pbes2OID: [UInt8] = [0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x05, 0x0D]
-    static let pbkdf2OID: [UInt8] = [0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x05, 0x0C]
-    static let hmacWithSHA256OID: [UInt8] = [0x06, 0x08, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x02, 0x09]
-    static let hmacWithSHA1OID: [UInt8] = [0x06, 0x08, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x02, 0x07]
-    static let aes256CBCOID: [UInt8] = [0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x01, 0x2A]
-    static let null: [UInt8] = [0x05, 0x00]
-
-    /// Builds an `ENCRYPTED PRIVATE KEY` PEM the way OpenSSL 3's `openssl pkcs8 -topk8` does
-    /// (PBES2, PBKDF2 with the specified PRF, AES-256-CBC)
-    func encryptedPEM(
-        wrapping pkcs8: [UInt8],
-        prfOID: [UInt8]?,
-        variant: CryptoSwift.HMAC.Variant,
-        keyLength: Int? = nil
-    ) throws -> String {
-        let key = try PKCS5.PBKDF2(
-            password: Array(password.utf8),
-            salt: salt,
-            iterations: iterations,
-            keyLength: 32,
-            variant: variant
-        ).calculate()
-        let ciphertext = try CryptoSwift.AES(key: key, blockMode: CBC(iv: iv), padding: .pkcs7).encrypt(pkcs8)
-
-        var pbkdf2Params = Self.tlv(0x04, salt) + Self.tlv(0x02, [0x08, 0x00])
-        if let keyLength { pbkdf2Params += Self.tlv(0x02, [UInt8(keyLength)]) }
-        if let prfOID { pbkdf2Params += Self.sequence(prfOID, Self.null) }
-
-        let der = Self.sequence(
-            Self.sequence(
-                Self.pbes2OID,
-                Self.sequence(
-                    Self.sequence(Self.pbkdf2OID, Self.tlv(0x30, pbkdf2Params)),
-                    Self.sequence(Self.aes256CBCOID, Self.tlv(0x04, iv))
-                )
-            ),
-            Self.tlv(0x04, ciphertext)
-        )
-
-        let body = Data(der).base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
-        return "-----BEGIN ENCRYPTED PRIVATE KEY-----\n\(body)\n-----END ENCRYPTED PRIVATE KEY-----"
-    }
-
-    /// The optional `prf` (and `keyLength`) PBKDF2 parameters weren't parsed, so PEMs
-    /// encrypted by OpenSSL 1.1+ / 3.x (hmacWithSHA256) failed to import
-    @Test(arguments: [nil, 32] as [Int?])
-    func importsSHA256PRFEncryptedPEM(keyLength: Int?) throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
-        let pem = try encryptedPEM(
-            wrapping: kp.privateKey!.exportPrivateKeyPEMRaw(),
-            prfOID: Self.hmacWithSHA256OID,
-            variant: .sha2(.sha256),
-            keyLength: keyLength
-        )
-
-        let restored = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
-        #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
-    }
-
-    @Test func importsExplicitSHA1PRFEncryptedPEM() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
-        let pem = try encryptedPEM(
-            wrapping: kp.privateKey!.exportPrivateKeyPEMRaw(),
-            prfOID: Self.hmacWithSHA1OID,
-            variant: .sha1
-        )
-
-        let restored = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
-        #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
-    }
-
-    @Test func rejectsMismatchedKeyLength() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
-        let pem = try encryptedPEM(
-            wrapping: kp.privateKey!.exportPrivateKeyPEMRaw(),
-            prfOID: Self.hmacWithSHA256OID,
-            variant: .sha2(.sha256),
-            keyLength: 16
-        )
-        #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            _ = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
-        }
-    }
-
-    @Test func rejectsUnsupportedPRF() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
-        // id-hmacWithMD5 isn't an RFC 8018 PBKDF2 PRF
-        let unknownOID: [UInt8] = [0x06, 0x08, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x02, 0x06]
-        let pem = try encryptedPEM(
-            wrapping: kp.privateKey!.exportPrivateKeyPEMRaw(),
-            prfOID: unknownOID,
-            variant: .md5
-        )
-        #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            _ = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
-        }
-    }
-
-    /// DER requires the DEFAULT (hmacWithSHA1) PRF to be omitted, while any other PRF must be encoded
-    @Test func prfEncoding() throws {
-        let sha1 = try LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(salt: salt, iterations: iterations).encodePBKDF()
-        let sha1Bytes = try sha1.serializedDERBytes()
-        #expect(
-            sha1Bytes.count
-                == Self.sequence(Self.pbkdf2OID, Self.tlv(0x30, Self.tlv(0x04, salt) + Self.tlv(0x02, [0x08, 0x00])))
-                .count
-        )
-
-        let sha256 = try LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(
-            salt: salt,
-            iterations: iterations,
-            prf: .hmacWithSHA256
-        )
-        .encodePBKDF()
-        let decoded = try LibP2PCrypto.PEM.decodePBKFD(
-            PBKDF2AlgorithmIdentifier(derEncoded: sha256.serializedDERBytes())
-        )
-        #expect(decoded.prf == .hmacWithSHA256)
-        #expect(decoded.salt == salt)
-        #expect(decoded.iterations == iterations)
-    }
-
-    @Test func roundTripsEveryPRF() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
-        for prf in LibP2PCrypto.PEM.PBKDFAlgorithm.PRF.allCases {
-            let pem = try kp.exportEncryptedPrivatePEM(
-                withPassword: password,
-                usingPBKDF: .pbkdf2(salt: salt, iterations: iterations, prf: prf)
-            )
-            let restored = try LibP2PCrypto.Keys.KeyPair(pem: pem, password: password)
-            #expect(restored.privateKey?.rawRepresentation == kp.privateKey?.rawRepresentation)
-        }
-    }
-}
-
-/// Regression and enhancement coverage added alongside the bug-fix / modernization pass.
-///
-/// These tests focus on the gaps identified during review: public-only `KeyPair` guards
-/// (previously a force-unwrap crash), the newly-public sign/verify/marshal API, the
-/// modulus-derived `attributes()`, the raised encrypted-PEM defaults (and the PBKDF2
-/// iteration-encoding fix that made them safe), and malformed-input handling.
-@Suite("Regression Tests")
-struct RegressionTests {
 
     /// Builds a public-only `KeyPair` by round-tripping the marshaled public key.
-    private func publicOnly(_ type: LibP2PCrypto.Keys.KeyPairType = .Ed25519) throws -> LibP2PCrypto.Keys.KeyPair {
+    private func publicOnly(_ type: LibP2PCrypto.Keys.KeyPairType = .ed25519) throws -> LibP2PCrypto.Keys.KeyPair {
         let kp = try LibP2PCrypto.Keys.generateKeyPair(type)
         return try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: kp.marshalPublicKey())
     }
@@ -1918,51 +275,13 @@ struct RegressionTests {
         #expect(throws: LibP2PCrypto.Keys.KeyError.noPrivateKey) { _ = try pub.exportPrivatePEMString() }
     }
 
-    // MARK: - Newly-public KeyPair API (fast key types; RSA is covered separately below)
-
-    @Test func keyPairSignAndVerifyRoundTrip() throws {
-        let message = Data("sign me".utf8)
-        for type: LibP2PCrypto.Keys.KeyPairType in [.Ed25519, .Secp256k1] {
-            let kp = try LibP2PCrypto.Keys.generateKeyPair(type)
-            let signature = try kp.sign(message: message)
-            #expect(try kp.verify(signature: signature, for: message))
-        }
-    }
-
-    @Test func marshalPrivateKeyRoundTrips() throws {
-        for type: LibP2PCrypto.Keys.KeyPairType in [.Ed25519, .Secp256k1] {
-            let kp = try LibP2PCrypto.Keys.generateKeyPair(type)
-            let marshaled = try kp.marshalPrivateKey()
-            #expect(marshaled.isEmpty == false)
-            let restored = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaled)
-            #expect(restored.keyType == kp.keyType)
-            #expect(restored.privateKey != nil)
-            #expect(restored.publicKey.data == kp.publicKey.data)
-        }
-    }
-
     // MARK: - RSA-specific coverage
-
-    @Test func rsaSignVerifyAndMarshalPrivateKeyRoundTrip() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
-
-        let message = Data("sign me".utf8)
-        let signature = try kp.sign(message: message)
-        #expect(try kp.verify(signature: signature, for: message))
-
-        let marshaled = try kp.marshalPrivateKey()
-        #expect(marshaled.isEmpty == false)
-        let restored = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaled)
-        #expect(restored.keyType == kp.keyType)
-        #expect(restored.privateKey != nil)
-        #expect(restored.publicKey.data == kp.publicKey.data)
-    }
 
     /// `attributes()` derives the RSA size from the modulus bit-length rather than a byte-count table.
     @Test func rsaAttributesReportModulusBitLength() throws {
         for (type, expected) in [
-            (LibP2PCrypto.Keys.KeyPairType.RSA(bits: .B2048), 2048),
-            (LibP2PCrypto.Keys.KeyPairType.RSA(bits: .custom(bits: 2560)), 2560),
+            (LibP2PCrypto.Keys.KeyPairType.rsa(bits: .b2048), 2048),
+            (LibP2PCrypto.Keys.KeyPairType.rsa(bits: .custom(bits: 2560)), 2560),
         ] {
             let kp = try LibP2PCrypto.Keys.generateKeyPair(type)
             #expect(kp.attributes()?.size == expected)
@@ -1970,21 +289,11 @@ struct RegressionTests {
         }
     }
 
-    /// Regression: the old SecKey/CryptoSwift RSA `rawRepresentation` used to either crash (`try!`)
-    /// or silently return empty `Data`. It must now be non-empty and round-trip.
-    @Test func rsaRawRepresentationIsNonEmptyAndRoundTrips() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
-        #expect(kp.publicKey.rawRepresentation.isEmpty == false)
-        let marshaled = try kp.marshalPrivateKey()
-        let restored = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaled)
-        #expect(restored.publicKey.data == kp.publicKey.data)
-    }
-
     /// Regression: on Apple platforms `RSAPublicKey.rawRepresentation` returned SPKI while
     /// `init(rawRepresentation:)` only accepted PKCS#1. Both encodings must now be accepted and
     /// `T(rawRepresentation: k.rawRepresentation) == k` must hold for public and private keys.
     @Test func rsaRawRepresentationAcceptsSPKIAndPKCS1() throws {
-        let privateKey = try RSAPrivateKey(keySize: .B2048)
+        let privateKey = try RSAPrivateKey(keySize: .b2048)
         let publicKey = try #require(privateKey.derivePublicKey() as? RSAPublicKey)
 
         #expect(try RSAPublicKey(rawRepresentation: publicKey.rawRepresentation) == publicKey)
@@ -2002,7 +311,7 @@ struct RegressionTests {
 
     /// RSA signature verification returns `false` (rather than throwing) for a signature that doesn't match
     @Test func rsaVerifyReturnsFalseForInvalidSignature() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.rsa(bits: .b2048))
         let message = Data("hello".utf8)
         var signature = try kp.sign(message: message)
         signature[signature.startIndex] ^= 0xFF
@@ -2031,7 +340,7 @@ struct RegressionTests {
         #expect(LibP2PCrypto.PEM.defaultPBKDF2SaltLength >= 16)
 
         #if !DEBUG
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.ed25519)
         let pemString = try kp.exportEncryptedPrivatePEMString(withPassword: "pw")
         let (type, bytes, _) = try LibP2PCrypto.PEM.pemToData(Array(pemString.utf8))
         #expect(type == .encryptedPrivateKey)
@@ -2043,37 +352,23 @@ struct RegressionTests {
         #endif
     }
 
-    @Test func encryptedPEMRoundTripsForFastKeyTypes() throws {
-        let password = "correct horse battery staple"
-        for type: LibP2PCrypto.Keys.KeyPairType in [.Ed25519, .Secp256k1] {
-            let kp = try LibP2PCrypto.Keys.generateKeyPair(type)
-            let pemBytes = try kp.exportEncryptedPrivatePEM(
-                withPassword: password,
-                usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations)
-            )
-            let restored = try LibP2PCrypto.Keys.KeyPair(pem: pemBytes, password: password)
-            #expect(restored.keyType == kp.keyType)
-            #expect(restored.publicKey.data == kp.publicKey.data)
-        }
-    }
-
     @Test func encryptedPEMWithAES256CBCRoundTrips() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.ed25519)
         let password = "pw"
         let pemBytes = try kp.exportEncryptedPrivatePEM(
             withPassword: password,
-            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations),
-            andCipher: .aes_256_cbc(iv: LibP2PCrypto.randomBytes(length: 16))
+            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: 2048),
+            andCipher: .aes256CBC(iv: LibP2PCrypto.randomBytes(length: 16))
         )
         let restored = try LibP2PCrypto.Keys.KeyPair(pem: pemBytes, password: password)
         #expect(restored.publicKey.data == kp.publicKey.data)
     }
 
     @Test func decryptingEncryptedPEMWithWrongPasswordFails() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.ed25519)
         let pemBytes = try kp.exportEncryptedPrivatePEM(
             withPassword: "right",
-            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations)
+            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: 2048)
         )
         #expect(throws: (any Error).self) {
             _ = try LibP2PCrypto.Keys.KeyPair(pem: pemBytes, password: "wrong")
@@ -2106,7 +401,7 @@ struct RegressionTests {
     }
 
     @Test func shortSecp256k1SignatureThrowsInvalidLength() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.Secp256k1)
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.secp256k1)
         #expect(throws: (any Error).self) {
             _ = try kp.verify(signature: Data([0x00, 0x01, 0x02]), for: Data("msg".utf8))
         }
@@ -2115,97 +410,18 @@ struct RegressionTests {
     // MARK: - Async key generation
 
     @Test func asyncKeyGenerationProducesUsableKeyPair() async throws {
-        let kp = try await LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
+        let kp = try await LibP2PCrypto.Keys.generateKeyPair(.ed25519)
         let message = Data("async".utf8)
         let signature = try kp.sign(message: message)
         #expect(try kp.verify(signature: signature, for: message))
     }
 }
 
-@Suite("ASN1 Tests")
-struct ASN1Tests {
+// MARK: - Helpers
 
-    /// The swift-asn1 object identifiers must serialize to the exact bytes our hand-rolled encoder used to emit
-    @Test(arguments: [
-        (ASN1ObjectIdentifier.LibP2P.rsaEncryption, "06092a864886f70d010101"),
-        (ASN1ObjectIdentifier.LibP2P.ed25519, "06032b6570"),
-        (ASN1ObjectIdentifier.LibP2P.idEcPublicKey, "06072a8648ce3d0201"),
-        (ASN1ObjectIdentifier.LibP2P.secp256k1, "06052b8104000a"),
-        (ASN1ObjectIdentifier.LibP2P.pbes2, "06092a864886f70d01050d"),
-        (ASN1ObjectIdentifier.LibP2P.pbkdf2, "06092a864886f70d01050c"),
-        (ASN1ObjectIdentifier.LibP2P.aes128CBC, "0609608648016503040102"),
-        (ASN1ObjectIdentifier.LibP2P.aes256CBC, "060960864801650304012a"),
-    ])
-    func objectIdentifiersSerializeToLegacyBytes(oid: ASN1ObjectIdentifier, expectedHex: String) throws {
-        #expect(try oid.serializedDERBytes() == Data(hex: expectedHex).byteArray)
-    }
-
-    @Test func keyTypeObjectIdentifiers() {
-        #expect(RSAPublicKey.primaryObjectIdentifier == ASN1ObjectIdentifier.LibP2P.rsaEncryption)
-        #expect(Curve25519.Signing.PublicKey.primaryObjectIdentifier == "1.3.101.112")
-        #expect(Secp256k1PublicKey.primaryObjectIdentifier == "1.2.840.10045.2.1")
-        #expect(Secp256k1PublicKey.secondaryObjectIdentifier == "1.3.132.0.10")
-        // Private keys use the same id-ecPublicKey + named curve pair as public keys (PKCS #8)
-        #expect(Secp256k1PrivateKey.primaryObjectIdentifier == "1.2.840.10045.2.1")
-        #expect(Secp256k1PrivateKey.secondaryObjectIdentifier == "1.3.132.0.10")
-    }
-
-    @Test func rsaAlgorithmIdentifierIncludesNullParameter() throws {
-        #expect(
-            try AlgorithmIdentifier.rsaEncryption.serializedDERBytes()
-                == Data(hex: "300d06092a864886f70d0101010500").byteArray
-        )
-    }
-
-    @Test func secp256k1ECPrivateKeyRoundTrips() throws {
-        let key = try Secp256k1PrivateKey()
-        let der = try key.sec1DER()
-
-        let decoded = try ECPrivateKey(derEncoded: der)
-        #expect(Array(decoded.privateKey.bytes) == key.rawRepresentation.byteArray)
-        #expect(decoded.namedCurve == ASN1ObjectIdentifier.LibP2P.secp256k1)
-        #expect(try decoded.publicKey.map { Array($0.bytes) } == key.publicKeyDER())
-        #expect(try decoded.serializedDERBytes() == der)
-    }
-
-    // MARK: Strict DER
-
-    @Test func nonMinimalIntegerIsRejected() {
-        // INTEGER 1 encoded with a redundant leading zero byte
-        #expect(throws: ASN1Error.self) {
-            _ = try Int(derEncoded: [0x02, 0x02, 0x00, 0x01])
-        }
-    }
-
-    @Test func invalidBitStringPaddingIsRejected() throws {
-        var der = try SubjectPublicKeyInfo(
-            algorithmIdentifier: AlgorithmIdentifier(algorithm: ASN1ObjectIdentifier.LibP2P.ed25519),
-            key: [UInt8](repeating: 0x01, count: 32)
-        ).serializedDERBytes()
-        // Layout: 30 2a | 30 05 06 03 2b 65 70 | 03 21 <padding> <32 key bytes>
-        #expect(der[11] == 0x00)
-        der[11] = 0x08
-        #expect(throws: ASN1Error.self) {
-            _ = try SubjectPublicKeyInfo(derEncoded: der)
-        }
-    }
-
-    @Test func trailingBytesAreRejected() throws {
-        let der = try AlgorithmIdentifier.rsaEncryption.serializedDERBytes()
-        #expect(throws: ASN1Error.self) {
-            _ = try AlgorithmIdentifier(derEncoded: der + [0x00])
-        }
-    }
-
-    @Test func zeroPBKDF2IterationCountIsRejected() throws {
-        let encoded = try PBKDF2AlgorithmIdentifier(
-            algorithm: ASN1ObjectIdentifier.LibP2P.pbkdf2,
-            salt: [UInt8](repeating: 0x01, count: 16),
-            iterationCount: 0
-        ).serializedDERBytes()
-        let decoded = try PBKDF2AlgorithmIdentifier(derEncoded: encoded)
-        #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            _ = try LibP2PCrypto.PEM.decodePBKFD(decoded)
-        }
+extension Data {
+    /// Decodes a base16 (hex) encoded string, such as a test fixture
+    init(hex: String) throws {
+        self.init(try BaseEncoding.decode(hex, as: .base16))
     }
 }

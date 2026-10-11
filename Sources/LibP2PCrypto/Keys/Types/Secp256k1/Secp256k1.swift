@@ -17,7 +17,7 @@ import SwiftASN1
 import SwiftProtobuf
 
 extension Secp256k1PublicKey: CommonPublicKey {
-    public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
+    public static var keyType: LibP2PCrypto.Keys.KeyType { .secp256k1 }
 
     public convenience init(rawRepresentation raw: Data) throws {
         try self.init(Array(raw))
@@ -43,7 +43,7 @@ extension Secp256k1PublicKey: CommonPublicKey {
     }
 
     public func marshal() throws -> Data {
-        var publicKey = PublicKey()
+        var publicKey = ProtoPublicKey()
         publicKey.type = .secp256K1
         publicKey.data = try Data(self.compressPublicKey())
         return try publicKey.serializedData()
@@ -51,7 +51,7 @@ extension Secp256k1PublicKey: CommonPublicKey {
 }
 
 extension Secp256k1PrivateKey: CommonPrivateKey {
-    public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
+    public static var keyType: LibP2PCrypto.Keys.KeyType { .secp256k1 }
 
     public convenience init(rawRepresentation raw: Data) throws {
         try self.init(Array(raw))
@@ -81,7 +81,7 @@ extension Secp256k1PrivateKey: CommonPrivateKey {
     }
 
     public func marshal() throws -> Data {
-        var privateKey = PrivateKey()
+        var privateKey = ProtoPrivateKey()
         privateKey.type = .secp256K1
         privateKey.data = self.rawRepresentation
         return try privateKey.serializedData()
@@ -90,8 +90,10 @@ extension Secp256k1PrivateKey: CommonPrivateKey {
 }
 
 extension Secp256k1PublicKey: DERCodable {
+
     /// id-ecPublicKey (1.2.840.10045.2.1)
     public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.idEcPublicKey }
+
     /// secp256k1 named curve (1.3.132.0.10)
     public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { ASN1ObjectIdentifier.LibP2P.secp256k1 }
 
@@ -117,8 +119,10 @@ extension Secp256k1PublicKey: DERCodable {
 }
 
 extension Secp256k1PrivateKey: DERCodable {
+
     /// id-ecPublicKey (1.2.840.10045.2.1)
     public static var primaryObjectIdentifier: ASN1ObjectIdentifier { ASN1ObjectIdentifier.LibP2P.idEcPublicKey }
+
     /// secp256k1 named curve (1.3.132.0.10)
     public static var secondaryObjectIdentifier: ASN1ObjectIdentifier? { ASN1ObjectIdentifier.LibP2P.secp256k1 }
 

@@ -28,7 +28,7 @@ private let supportedBitRangeDescription = "\(supportedBitRange.lowerBound)-\(su
 /// - Note: Signatures use RSASSA-PKCS1-v1_5 with SHA-256 and encryption uses RSAES-PKCS1-v1_5, per the libp2p spec.
 /// - Note: Keys must be between 2048 and 8192 bits, matching swift-crypto and go-libp2p's limits.
 public struct RSAPublicKey: CommonPublicKey {
-    public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
+    public static var keyType: LibP2PCrypto.Keys.KeyType { .rsa }
 
     /// The underlying swift-crypto RSA key
     private let key: _RSA.Signing.PublicKey
@@ -59,13 +59,18 @@ public struct RSAPublicKey: CommonPublicKey {
         self.key = key
     }
 
-    init(marshaledData data: Data) throws {
+    public init(marshaledData data: Data) throws {
         try self.init(rawRepresentation: data)
     }
 
     /// The DER encoded SubjectPublicKeyInfo representation of the public key
     public var rawRepresentation: Data {
         key.derRepresentation
+    }
+
+    /// The DER encoded PKCS#1 RSAPublicKey (the SubjectPublicKeyInfo's BIT STRING contents)
+    var pkcs1DERRepresentation: Data {
+        key.pkcs1DERRepresentation
     }
 
     /// The size of the RSA modulus in bits
@@ -95,7 +100,7 @@ public struct RSAPublicKey: CommonPublicKey {
     }
 
     public func marshal() throws -> Data {
-        var publicKey = PublicKey()
+        var publicKey = ProtoPublicKey()
         publicKey.type = .rsa
         publicKey.data = self.rawRepresentation
         return try publicKey.serializedData()
@@ -107,7 +112,7 @@ public struct RSAPublicKey: CommonPublicKey {
 /// - Note: Signatures use RSASSA-PKCS1-v1_5 with SHA-256 and decryption uses RSAES-PKCS1-v1_5, per the libp2p spec.
 /// - Note: Keys must be between 2048 and 8192 bits, matching swift-crypto and go-libp2p's limits.
 public struct RSAPrivateKey: CommonPrivateKey {
-    public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .rsa }
+    public static var keyType: LibP2PCrypto.Keys.KeyType { .rsa }
 
     /// The underlying swift-crypto RSA key
     private let key: _RSA.Signing.PrivateKey
@@ -150,7 +155,7 @@ public struct RSAPrivateKey: CommonPrivateKey {
         self.key = key
     }
 
-    init(marshaledData data: Data) throws {
+    public init(marshaledData data: Data) throws {
         try self.init(rawRepresentation: data)
     }
 
@@ -188,7 +193,7 @@ public struct RSAPrivateKey: CommonPrivateKey {
     }
 
     public func marshal() throws -> Data {
-        var privateKey = PrivateKey()
+        var privateKey = ProtoPrivateKey()
         privateKey.type = .rsa
         privateKey.data = self.rawRepresentation
         return try privateKey.serializedData()
@@ -202,7 +207,8 @@ extension RSAPublicKey: Equatable {
 }
 
 extension RSAPrivateKey: Equatable {
+    /// Compares the private keys in constant time
     public static func == (lhs: RSAPrivateKey, rhs: RSAPrivateKey) -> Bool {
-        lhs.rawRepresentation == rhs.rawRepresentation
+        LibP2PCrypto.constantTimeEquals(lhs.rawRepresentation, rhs.rawRepresentation)
     }
 }

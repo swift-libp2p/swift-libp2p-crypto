@@ -16,35 +16,71 @@ import Foundation
 import SwiftASN1
 
 extension LibP2PCrypto {
-    public struct PEM {
+    public enum PEM {
 
-        public enum Error: Swift.Error {
+        public enum Error: Swift.Error, Sendable, Hashable, CustomStringConvertible {
+
             /// An error occured while encoding the PEM file
             case encodingError
+
             /// An error occured while decoding the PEM file
             case decodingError
+
             /// Encountered an unsupported PEM type
             case unsupportedPEMType
+
             /// Encountered an invalid/unexpected PEM format
             case invalidPEMFormat(String? = nil)
+
             /// Encountered an invalid/unexpected PEM header string/delimiter
             case invalidPEMHeader
+
             /// Encountered an invalid/unexpected PEM footer string/delimiter
             case invalidPEMFooter
+
             /// Encountered a invalid/unexpected parameters while attempting to decode a PEM file
             case invalidParameters
+
             /// Encountered an unsupported Cipher algorithm while attempting to decrypt an encrypted PEM file
             case unsupportedCipherAlgorithm(ASN1ObjectIdentifier)
+
             /// Encountered an unsupported Password Derivation algorithm while attempting to decrypt an encrypted PEM file
             case unsupportedPBKDFAlgorithm(ASN1ObjectIdentifier)
+
             /// The instiating types objectIdentifier does not match that of the PEM file
             case objectIdentifierMismatch(got: ASN1ObjectIdentifier, expected: ASN1ObjectIdentifier)
+
+            public var description: String {
+                switch self {
+                case .encodingError:
+                    return "PEM encoding error"
+                case .decodingError:
+                    return "PEM decoding error"
+                case .unsupportedPEMType:
+                    return "Unsupported PEM type"
+                case .invalidPEMFormat(let detail):
+                    return "Invalid PEM format" + (detail.map { ": \($0)" } ?? "")
+                case .invalidPEMHeader:
+                    return "Invalid PEM header"
+                case .invalidPEMFooter:
+                    return "Invalid PEM footer"
+                case .invalidParameters:
+                    return "Invalid PEM parameters"
+                case .unsupportedCipherAlgorithm(let oid):
+                    return "Unsupported encrypted PEM cipher algorithm \(oid)"
+                case .unsupportedPBKDFAlgorithm(let oid):
+                    return "Unsupported encrypted PEM key derivation algorithm \(oid)"
+                case .objectIdentifierMismatch(let got, let expected):
+                    return "PEM object identifier mismatch, got \(got), expected \(expected)"
+                }
+            }
         }
 
         // MARK: Add support for additional PEM types here
 
         /// General PEM Classification
         internal enum PEMType {
+
             // Direct DER Exports for RSA Keys (special case)
             case publicRSAKeyDER
             case privateRSAKeyDER

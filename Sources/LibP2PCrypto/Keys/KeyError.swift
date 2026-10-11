@@ -15,38 +15,53 @@
 import Foundation
 
 extension LibP2PCrypto.Keys {
+
     /// The errors that can be thrown by the key subsystem.
     ///
     /// This replaces the ad-hoc `NSError(domain:code:)` values that were previously thrown
     /// throughout the library. Prefer matching on a specific case over inspecting the
     /// human-readable `description`.
     public enum KeyError: Swift.Error, CustomStringConvertible, Sendable, Equatable {
+
         /// An operation that requires a private key was attempted on a public-only `KeyPair`.
         case noPrivateKey
+
         /// The requested key type isn't supported (by this platform or at all).
         case unsupportedKeyType(String)
+
         /// The key type doesn't support the requested operation (e.g. Secp256k1 encryption).
         case unsupportedOperation(String)
+
         /// The provided raw key bytes couldn't be interpreted as a valid key.
         case invalidRawRepresentation(String)
+
         /// The protobuf-marshaled key data was malformed or of the wrong type.
         case invalidMarshaledData(String)
+
         /// A private key's on-the-wire encoding failed validation (e.g. mismatched public key).
         case invalidPrivateKeyEncoding(String)
+
         /// Key generation failed in the underlying crypto provider.
         case keyGenerationFailed(String)
+
         /// Deriving a public key from a private key failed.
         case publicKeyDerivationFailed(String)
+
         /// Encryption failed in the underlying crypto provider.
         case encryptionFailed(String)
+
         /// Decryption failed in the underlying crypto provider.
         case decryptionFailed(String)
+
         /// Producing a signature failed.
         case signatureFailed(String)
+
         /// A signature was the wrong length for the key type.
         case invalidSignatureLength(expected: Int, got: Int)
+
         /// The caller passed invalid or inconsistent parameters.
         case invalidParameters(String)
+
         /// An unexpected internal failure. The associated value describes the context.
         case internalError(String)
 

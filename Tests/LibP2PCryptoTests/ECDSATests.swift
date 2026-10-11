@@ -13,17 +13,15 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import CryptoSwift
 import Foundation
 import Multicodec
 import Multihash
-import SwiftASN1
 import SwiftProtobuf
 import Testing
 
 @testable import LibP2PCrypto
 
-typealias ECCurve = LibP2PCrypto.Keys.ElipticCurveType
+typealias ECCurve = LibP2PCrypto.Keys.EllipticCurve
 
 // MARK: - ECDSA Tests
 
@@ -34,17 +32,16 @@ struct ECDSATests {
 
     @Test(arguments: ECCurve.allCases)
     func generateKeyPair(curve: ECCurve) throws {
-        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.ECDSA(curve: curve))
+        let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.ecdsa(curve: curve))
 
         #expect(keyPair.keyType == .ecdsa)
-        #expect(keyPair.keyType == .ECDSA(curve: curve))
         #expect(keyPair.hasPrivateKey)
         #expect(ECDSATests.curveOf(keyPair) == curve)
 
         let attributes = try #require(keyPair.attributes())
         #expect(attributes.size == curve.bits)
         #expect(attributes.isPrivate)
-        guard case .ECDSA(let attributeCurve) = attributes.type else {
+        guard case .ecdsa(let attributeCurve) = attributes.type else {
             Issue.record("Expected an ECDSA KeyPairType, got \(attributes.type)")
             return
         }
@@ -57,21 +54,21 @@ struct ECDSATests {
     }
 
     @Test func defaultCurveIsP256() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA())
-        #expect(ECDSATests.curveOf(keyPair) == .P256)
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa())
+        #expect(ECDSATests.curveOf(keyPair) == .p256)
     }
 
     @Test func asyncKeyGeneration() async throws {
-        let keyPair = try await LibP2PCrypto.Keys.generateKeyPair(.ECDSA(curve: .P384))
-        #expect(ECDSATests.curveOf(keyPair) == .P384)
+        let keyPair = try await LibP2PCrypto.Keys.generateKeyPair(.ecdsa(curve: .p384))
+        #expect(ECDSATests.curveOf(keyPair) == .p384)
         let signature = try keyPair.sign(message: ECDSAFixtures.opensslMessage)
         #expect(try keyPair.verify(signature: signature, for: ECDSAFixtures.opensslMessage))
     }
 
     @Test(arguments: ECCurve.allCases)
     func generatedKeysAreUnique(curve: ECCurve) throws {
-        let a = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
-        let b = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let a = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
+        let b = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
         #expect(a.privateKey?.rawRepresentation != b.privateKey?.rawRepresentation)
         #expect(try a.id() != b.id())
     }
@@ -80,7 +77,7 @@ struct ECDSATests {
 
     @Test(arguments: ECCurve.allCases)
     func rawRepresentationRoundTrip(curve: ECCurve) throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
         let rawPublicKey = keyPair.publicKey.rawRepresentation
         let rawPrivateKey = try #require(keyPair.privateKey?.rawRepresentation)
 
@@ -104,16 +101,16 @@ struct ECDSATests {
 
     @Test(arguments: ECCurve.allCases)
     func marshaledPublicKeyRoundTrip(curve: ECCurve) throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
         let marshaled = try keyPair.marshalPublicKey()
 
         // The protobuf carries the ECDSA type and a DER encoded SubjectPublicKeyInfo
-        let proto = try PublicKey(serializedBytes: marshaled)
+        let proto = try ProtoPublicKey(serializedBytes: marshaled)
         #expect(proto.type == .ecdsa)
-        let spki = try SubjectPublicKeyInfo(derEncoded: proto.data.byteArray)
+        let spki = try SubjectPublicKeyInfo(derEncoded: Array(proto.data))
         #expect(spki.algorithmIdentifier.algorithm == ASN1ObjectIdentifier.LibP2P.idEcPublicKey)
         #expect(spki.algorithmIdentifier.parameters == .objectIdentifier(curve.objectIdentifier))
-        #expect(Array(spki.key.bytes) == [0x04] + keyPair.publicKey.rawRepresentation.byteArray)
+        #expect(Array(spki.key.bytes) == [0x04] + Array(keyPair.publicKey.rawRepresentation))
 
         let recovered = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaled)
         #expect(recovered.keyType == .ecdsa)
@@ -126,17 +123,17 @@ struct ECDSATests {
 
     @Test(arguments: ECCurve.allCases)
     func marshaledPrivateKeyRoundTrip(curve: ECCurve) throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
         let marshaled = try keyPair.marshalPrivateKey()
 
         // The protobuf carries the ECDSA type and a DER encoded SEC1 ECPrivateKey (with the named curve and public key)
-        let proto = try PrivateKey(serializedBytes: marshaled)
+        let proto = try ProtoPrivateKey(serializedBytes: marshaled)
         #expect(proto.type == .ecdsa)
-        let ecPrivateKey = try ECPrivateKey(derEncoded: proto.data.byteArray)
+        let ecPrivateKey = try ECPrivateKey(derEncoded: Array(proto.data))
         #expect(Data(ecPrivateKey.privateKey.bytes) == keyPair.privateKey?.rawRepresentation)
         #expect(ecPrivateKey.namedCurve == curve.objectIdentifier)
         #expect(
-            ecPrivateKey.publicKey.map { Array($0.bytes) } == [0x04] + keyPair.publicKey.rawRepresentation.byteArray
+            ecPrivateKey.publicKey.map { Array($0.bytes) } == [0x04] + Array(keyPair.publicKey.rawRepresentation)
         )
 
         let recovered = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaled)
@@ -151,7 +148,7 @@ struct ECDSATests {
     /// Marshaled ECDSA public keys exceed the 42 byte inline limit, so their peer IDs are sha2-256 multihashes
     @Test(arguments: ECCurve.allCases)
     func peerIDUsesSHA256Multihash(curve: ECCurve) throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
         let marshaled = try keyPair.marshalPublicKey()
         #expect(marshaled.count > 42)
         #expect(try keyPair.multihash().value == Multihash(hashing: marshaled, codec: .sha2_256).value)
@@ -164,12 +161,12 @@ struct ECDSATests {
     @Test(arguments: ECCurve.allCases)
     func signAndVerify(curve: ECCurve) throws {
         let message = ECDSAFixtures.opensslMessage
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
 
         let signature = try keyPair.sign(message: message)
 
         // DER encoded `SEQUENCE { r INTEGER, s INTEGER }`
-        let node = try DER.parse(signature.byteArray)
+        let node = try DER.parse(Array(signature))
         #expect(node.identifier == .sequence)
         guard case .constructed(let children) = node.content else {
             Issue.record("Signature isn't a constructed ASN1 sequence")
@@ -197,17 +194,17 @@ struct ECDSATests {
         #expect(throws: Error.self) { try keyPair.verify(signature: Data(), for: message) }
 
         // Signatures from a different key on the same curve
-        let otherKeyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let otherKeyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
         #expect(try otherKeyPair.verify(signature: signature, for: message) == false)
     }
 
     @Test func signaturesDontVerifyAcrossCurves() throws {
         let message = ECDSAFixtures.opensslMessage
         for signingCurve in ECCurve.allCases {
-            let signer = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: signingCurve))
+            let signer = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: signingCurve))
             let signature = try signer.sign(message: message)
             for verifyingCurve in ECCurve.allCases where verifyingCurve != signingCurve {
-                let verifier = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: verifyingCurve))
+                let verifier = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: verifyingCurve))
                 // Depending on the curves the signature might not even parse, either way it can't verify
                 #expect((try? verifier.verify(signature: signature, for: message)) != true)
             }
@@ -219,7 +216,7 @@ struct ECDSATests {
     @Test(arguments: ECCurve.allCases)
     func verifyOpenSSLSignature(curve: ECCurve) throws {
         let keyPair = try LibP2PCrypto.Keys.KeyPair(pem: ECDSAFixtures.privatePEM(for: curve))
-        let signature = ECDSAFixtures.opensslSignature(for: curve)
+        let signature = try ECDSAFixtures.opensslSignature(for: curve)
 
         #expect(try keyPair.verify(signature: signature, for: ECDSAFixtures.opensslMessage))
         #expect(try keyPair.verify(signature: signature, for: ECDSAFixtures.goMessage) == false)
@@ -266,7 +263,7 @@ struct ECDSATests {
 
     @Test(arguments: ECCurve.allCases)
     func pemExportRoundTrip(curve: ECCurve) throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
 
         let publicPEM = try keyPair.exportPublicPEMString()
         let privatePEM = try keyPair.exportPrivatePEMString()
@@ -290,9 +287,9 @@ struct ECDSATests {
 
     @Test(arguments: ECCurve.allCases)
     func exportedDERStructures(curve: ECCurve) throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
         let privateKey = try #require(keyPair.privateKey)
-        let point = [0x04] + keyPair.publicKey.rawRepresentation.byteArray
+        let point = [0x04] + Array(keyPair.publicKey.rawRepresentation)
 
         // Public: SubjectPublicKeyInfo { id-ecPublicKey, namedCurve } BIT STRING point
         let spki = try SubjectPublicKeyInfo(derEncoded: keyPair.publicKey.exportPublicKeyPEMRaw())
@@ -317,9 +314,9 @@ struct ECDSATests {
 
     @Test(arguments: ECCurve.allCases)
     func privateDERVariants(curve: ECCurve) throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
-        let raw = try #require(keyPair.privateKey?.rawRepresentation).byteArray
-        let point = [0x04] + keyPair.publicKey.rawRepresentation.byteArray
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
+        let raw = try Array(#require(keyPair.privateKey?.rawRepresentation))
+        let point = [0x04] + Array(keyPair.publicKey.rawRepresentation)
 
         let variants: [String: [UInt8]] = [
             "raw scalar": raw,
@@ -340,25 +337,25 @@ struct ECDSATests {
 
         for (name, der) in variants {
             let key = try privateKey(privateDER: der, curve: curve)
-            #expect(key.rawRepresentation.byteArray == raw, "\(name)")
+            #expect(Array(key.rawRepresentation) == raw, "\(name)")
         }
 
         // A SEC1 PEM without curve parameters can still be imported when the key type is known
         let sec1PEM = pem(variants["SEC1 without parameters"]!, type: "EC PRIVATE KEY")
-        #expect(try privateKey(pem: sec1PEM, curve: curve).rawRepresentation.byteArray == raw)
+        #expect(try Array(privateKey(pem: sec1PEM, curve: curve).rawRepresentation) == raw)
 
         // A PKCS #8 PEM produced by swift-crypto
         let pkcs8PEM = try #require(swiftCryptoPEMs(of: keyPair)).private
-        #expect(try privateKey(pem: pkcs8PEM, curve: curve).rawRepresentation.byteArray == raw)
+        #expect(try Array(privateKey(pem: pkcs8PEM, curve: curve).rawRepresentation) == raw)
     }
 
     @Test(arguments: ECCurve.allCases)
     func encryptedPEMRoundTrip(curve: ECCurve) throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
 
         let encryptedPEM = try keyPair.exportEncryptedPrivatePEMString(
             withPassword: "mypassword",
-            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: testPBKDF2Iterations)
+            usingPBKDF: .pbkdf2(salt: LibP2PCrypto.randomBytes(length: 16), iterations: 2048)
         )
         #expect(encryptedPEM.hasPrefix("-----BEGIN ENCRYPTED PRIVATE KEY-----\n"))
 
@@ -375,20 +372,20 @@ struct ECDSATests {
 
     @Test func pemCurveMismatchesThrow() throws {
         #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            try P256.Signing.PublicKey(pem: TestPEMKeys.EC_384_PUBLIC, asType: P256.Signing.PublicKey.self)
+            try P256.Signing.PublicKey(pem: TestPEMKeys.EC_384_PUBLIC)
         }
         #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            try P521.Signing.PublicKey(pem: TestPEMKeys.EC_256_PUBLIC, asType: P521.Signing.PublicKey.self)
+            try P521.Signing.PublicKey(pem: TestPEMKeys.EC_256_PUBLIC)
         }
         #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            try P256.Signing.PrivateKey(pem: TestPEMKeys.EC_384_PRIVATE, asType: P256.Signing.PrivateKey.self)
+            try P256.Signing.PrivateKey(pem: TestPEMKeys.EC_384_PRIVATE)
         }
         #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            try P384.Signing.PrivateKey(pem: TestPEMKeys.EC_521_PRIVATE, asType: P384.Signing.PrivateKey.self)
+            try P384.Signing.PrivateKey(pem: TestPEMKeys.EC_521_PRIVATE)
         }
         // Secp256k1 keys share the id-ecPublicKey algorithm but aren't ECDSA (NIST) keys
         #expect(throws: LibP2PCrypto.PEM.Error.self) {
-            try P256.Signing.PublicKey(pem: TestPEMKeys.SECP256k1_KeyPair.PUBLIC, asType: P256.Signing.PublicKey.self)
+            try P256.Signing.PublicKey(pem: TestPEMKeys.SECP256k1_KeyPair.PUBLIC)
         }
     }
 
@@ -404,7 +401,7 @@ struct ECDSATests {
 
     @Test func marshaledKeysWithUnsupportedCurvesThrow() throws {
         // An ECDSA typed public key carrying a secp256k1 SubjectPublicKeyInfo
-        let secp256k1 = try LibP2PCrypto.Keys.KeyPair(.Secp256k1)
+        let secp256k1 = try LibP2PCrypto.Keys.KeyPair(.secp256k1)
         let secp256k1SPKI = try secp256k1.publicKey.exportPublicKeyPEMRaw()
         #expect(throws: Error.self) {
             try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPublicKey(type: .ecdsa, data: secp256k1SPKI))
@@ -412,7 +409,7 @@ struct ECDSATests {
 
         // An ECDSA typed private key carrying a secp256k1 ECPrivateKey
         let secp256k1SEC1 = try ECPrivateKey(
-            privateKey: secp256k1.privateKey!.rawRepresentation.byteArray,
+            privateKey: Array(secp256k1.privateKey!.rawRepresentation),
             namedCurve: ASN1ObjectIdentifier.LibP2P.secp256k1,
             publicKey: nil
         ).serializedDERBytes()
@@ -421,7 +418,7 @@ struct ECDSATests {
         }
 
         // An Ed25519 SubjectPublicKeyInfo
-        let ed25519SPKI = try LibP2PCrypto.Keys.KeyPair(.Ed25519).publicKey.exportPublicKeyPEMRaw()
+        let ed25519SPKI = try LibP2PCrypto.Keys.KeyPair(.ed25519).publicKey.exportPublicKeyPEMRaw()
         #expect(throws: Error.self) {
             try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPublicKey(type: .ecdsa, data: ed25519SPKI))
         }
@@ -437,9 +434,9 @@ struct ECDSATests {
 
     /// Like go's `x509.ParseECPrivateKey`, marshaled private keys must specify their named curve
     @Test func marshaledPrivateKeyRequiresNamedCurve() throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: .P256))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: .p256))
         let sec1 = try ECPrivateKey(
-            privateKey: keyPair.privateKey!.rawRepresentation.byteArray,
+            privateKey: Array(keyPair.privateKey!.rawRepresentation),
             namedCurve: nil,
             publicKey: nil
         ).serializedDERBytes()
@@ -449,12 +446,12 @@ struct ECDSATests {
     }
 
     @Test func mismatchedAttachedPublicKeyThrows() throws {
-        let a = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: .P256))
-        let b = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: .P256))
+        let a = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: .p256))
+        let b = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: .p256))
         let sec1 = try ECPrivateKey(
-            privateKey: a.privateKey!.rawRepresentation.byteArray,
-            namedCurve: ECCurve.P256.objectIdentifier,
-            publicKey: [0x04] + b.publicKey.rawRepresentation.byteArray
+            privateKey: Array(a.privateKey!.rawRepresentation),
+            namedCurve: ECCurve.p256.objectIdentifier,
+            publicKey: [0x04] + Array(b.publicKey.rawRepresentation)
         ).serializedDERBytes()
 
         #expect(throws: Error.self) {
@@ -464,9 +461,9 @@ struct ECDSATests {
     }
 
     @Test func typedUnmarshalingRejectsOtherCurves() throws {
-        let p384 = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: .P384))
-        let spki = try PublicKey(serializedBytes: p384.marshalPublicKey()).data
-        let sec1 = try PrivateKey(serializedBytes: p384.marshalPrivateKey()).data
+        let p384 = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: .p384))
+        let spki = try ProtoPublicKey(serializedBytes: p384.marshalPublicKey()).data
+        let sec1 = try ProtoPrivateKey(serializedBytes: p384.marshalPrivateKey()).data
 
         #expect(throws: Error.self) { try P256.Signing.PublicKey(marshaledData: spki) }
         #expect(throws: Error.self) { try P521.Signing.PublicKey(marshaledData: spki) }
@@ -497,7 +494,7 @@ struct ECDSATests {
 
     @Test(arguments: ECCurve.allCases)
     func encryptionIsUnsupported(curve: ECCurve) throws {
-        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: curve))
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: curve))
         #expect(throws: LibP2PCrypto.Keys.KeyError.self) { try keyPair.encrypt(data: Data("hello".utf8)) }
         #expect(throws: LibP2PCrypto.Keys.KeyError.self) { try keyPair.decrypt(data: Data("hello".utf8)) }
     }
@@ -507,8 +504,9 @@ struct ECDSATests {
         let sameKey = try P256.Signing.PrivateKey(rawRepresentation: key.rawRepresentation)
         let otherKey = P256.Signing.PrivateKey()
 
-        #expect(key == sameKey)
-        #expect(key != otherKey)
+        // Private keys intentionally aren't Equatable (secret material shouldn't be compared in variable time)
+        #expect(key.rawRepresentation == sameKey.rawRepresentation)
+        #expect(key.rawRepresentation != otherKey.rawRepresentation)
         #expect(key.publicKey == sameKey.publicKey)
         #expect(key.publicKey != otherKey.publicKey)
     }
@@ -525,16 +523,16 @@ struct ECDSATests {
 struct GoLibP2PFixtureTests {
 
     @Test func ecdsaFixtures() throws {
-        let marshaledPrivateKey = Data(hex: ECDSAFixtures.goPrivateKey)
-        let marshaledPublicKey = Data(hex: ECDSAFixtures.goPublicKey)
-        let signature = Data(hex: ECDSAFixtures.goSignature)
+        let marshaledPrivateKey = try Data(hex: ECDSAFixtures.goPrivateKey)
+        let marshaledPublicKey = try Data(hex: ECDSAFixtures.goPublicKey)
+        let signature = try Data(hex: ECDSAFixtures.goSignature)
 
         let privateKeyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaledPrivateKey)
         let publicKeyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPublicKey)
 
         #expect(privateKeyPair.keyType == .ecdsa)
         #expect(publicKeyPair.keyType == .ecdsa)
-        #expect(curve(of: privateKeyPair.publicKey) == .P256)
+        #expect(curve(of: privateKeyPair.publicKey) == .p256)
 
         // Re-marshaling reproduces go's encodings exactly
         #expect(try privateKeyPair.marshalPrivateKey() == marshaledPrivateKey)
@@ -556,9 +554,9 @@ struct GoLibP2PFixtureTests {
     }
 
     @Test func secp256k1Fixtures() throws {
-        let marshaledPrivateKey = Data(hex: ECDSAFixtures.goSecp256k1PrivateKey)
-        let marshaledPublicKey = Data(hex: ECDSAFixtures.goSecp256k1PublicKey)
-        let signature = Data(hex: ECDSAFixtures.goSecp256k1Signature)
+        let marshaledPrivateKey = try Data(hex: ECDSAFixtures.goSecp256k1PrivateKey)
+        let marshaledPublicKey = try Data(hex: ECDSAFixtures.goSecp256k1PublicKey)
+        let signature = try Data(hex: ECDSAFixtures.goSecp256k1Signature)
 
         let privateKeyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: marshaledPrivateKey)
         let publicKeyPair = try LibP2PCrypto.Keys.KeyPair(marshaledPublicKey: marshaledPublicKey)
@@ -610,20 +608,20 @@ enum ECDSAFixtures {
     static let opensslMessage = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
 
     /// `openssl dgst -sha256 -sign ec_priv_<curve>.pem` signatures of `opensslMessage` using the `TestPEMKeys.EC_<curve>_PRIVATE` fixtures
-    static func opensslSignature(for curve: ECCurve) -> Data {
+    static func opensslSignature(for curve: ECCurve) throws -> Data {
         switch curve {
-        case .P256:
-            return Data(
+        case .p256:
+            return try Data(
                 hex:
                     "3045022100a430b4b2288d0d528d290e3c9ee480dc0a5c4fd11461a509ce8deb7ce22ff957022078e6efea71beb71afa8ecd1b3ae12a177551826b1590e3336d8c4ba2d955167e"
             )
-        case .P384:
-            return Data(
+        case .p384:
+            return try Data(
                 hex:
                     "3065023100850ccf2b633ca9f231ad967d480534f9ba2a57755f186ead8feee83379c8db87a2a2df72933ff6653580f581ec79abb0023057746a61511367f7d6ef47c6e7f8ff21b765a54e008460bdedf90f2d7ab82a8eba85b6b578003b1f0023f84e8147a490"
             )
-        case .P521:
-            return Data(
+        case .p521:
+            return try Data(
                 hex:
                     "30818802420085f8613754847ae3ab449fb8415629bfd85a931fc6e47cbecd139cb59dd5fe35ca6a6be133749026ea9d3d7c1a840b269cd1e4c2f309dcffce21c21a1bfed79d5d02420173eec3c20fe613dc0e7b70ca92bce14602bb1ba03beeaf27f1babf022ecfeec1a3583a04afa70ab32abea3bcb0dc745521d44a447789e58bab4334e8c658a41d81"
             )
@@ -632,31 +630,31 @@ enum ECDSAFixtures {
 
     static func privatePEM(for curve: ECCurve) -> String {
         switch curve {
-        case .P256: return TestPEMKeys.EC_256_PRIVATE
-        case .P384: return TestPEMKeys.EC_384_PRIVATE
-        case .P521: return TestPEMKeys.EC_521_PRIVATE
+        case .p256: return TestPEMKeys.EC_256_PRIVATE
+        case .p384: return TestPEMKeys.EC_384_PRIVATE
+        case .p521: return TestPEMKeys.EC_521_PRIVATE
         }
     }
 
     static func publicPEM(for curve: ECCurve) -> String {
         switch curve {
-        case .P256: return TestPEMKeys.EC_256_PUBLIC
-        case .P384: return TestPEMKeys.EC_384_PUBLIC
-        case .P521: return TestPEMKeys.EC_521_PUBLIC
+        case .p256: return TestPEMKeys.EC_256_PUBLIC
+        case .p384: return TestPEMKeys.EC_384_PUBLIC
+        case .p521: return TestPEMKeys.EC_521_PUBLIC
         }
     }
 
     /// `openssl ec -in ec_priv_<curve>.pem -pubout` (the public key belonging to the `privatePEM(for:)` fixture)
     static func derivedPublicPEM(for curve: ECCurve) -> String {
         switch curve {
-        case .P256:
+        case .p256:
             return """
                 -----BEGIN PUBLIC KEY-----
                 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE79HvsMQC9IyhZ7yCCYKmgz9zewM4
                 KziWoVMXKN+7Cd5Ds+jK8V5qhD6YVbbo/v1udmM5DfhHJiUW3Ww5++suRg==
                 -----END PUBLIC KEY-----
                 """
-        case .P384:
+        case .p384:
             return """
                 -----BEGIN PUBLIC KEY-----
                 MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEK0Yms7RqSJ2KNV6jJzaJFmOoNU3IDLs4
@@ -664,7 +662,7 @@ enum ECDSAFixtures {
                 irrBaxeD4tAfaSj5lQgJUs2sVRJkbG5s
                 -----END PUBLIC KEY-----
                 """
-        case .P521:
+        case .p521:
             return """
                 -----BEGIN PUBLIC KEY-----
                 MIGbMBAGByqGSM49AgEGBSuBBAAjA4GGAAQBkyGgNGcYB5F65ziwoSrd/Oc/Ws9n
@@ -686,41 +684,41 @@ private func curve(of key: CommonPublicKey) -> ECCurve? {
 
 private func publicKey(rawRepresentation raw: Data, curve: ECCurve) throws -> CommonPublicKey {
     switch curve {
-    case .P256: return try P256.Signing.PublicKey(rawRepresentation: raw)
-    case .P384: return try P384.Signing.PublicKey(rawRepresentation: raw)
-    case .P521: return try P521.Signing.PublicKey(rawRepresentation: raw)
+    case .p256: return try P256.Signing.PublicKey(rawRepresentation: raw)
+    case .p384: return try P384.Signing.PublicKey(rawRepresentation: raw)
+    case .p521: return try P521.Signing.PublicKey(rawRepresentation: raw)
     }
 }
 
 private func privateKey(rawRepresentation raw: Data, curve: ECCurve) throws -> CommonPrivateKey {
     switch curve {
-    case .P256: return try P256.Signing.PrivateKey(rawRepresentation: raw)
-    case .P384: return try P384.Signing.PrivateKey(rawRepresentation: raw)
-    case .P521: return try P521.Signing.PrivateKey(rawRepresentation: raw)
+    case .p256: return try P256.Signing.PrivateKey(rawRepresentation: raw)
+    case .p384: return try P384.Signing.PrivateKey(rawRepresentation: raw)
+    case .p521: return try P521.Signing.PrivateKey(rawRepresentation: raw)
     }
 }
 
 private func publicKey(pem: String, curve: ECCurve) throws -> CommonPublicKey {
     switch curve {
-    case .P256: return try P256.Signing.PublicKey(pem: pem, asType: P256.Signing.PublicKey.self)
-    case .P384: return try P384.Signing.PublicKey(pem: pem, asType: P384.Signing.PublicKey.self)
-    case .P521: return try P521.Signing.PublicKey(pem: pem, asType: P521.Signing.PublicKey.self)
+    case .p256: return try P256.Signing.PublicKey(pem: pem)
+    case .p384: return try P384.Signing.PublicKey(pem: pem)
+    case .p521: return try P521.Signing.PublicKey(pem: pem)
     }
 }
 
 private func privateKey(pem: String, curve: ECCurve) throws -> CommonPrivateKey {
     switch curve {
-    case .P256: return try P256.Signing.PrivateKey(pem: pem, asType: P256.Signing.PrivateKey.self)
-    case .P384: return try P384.Signing.PrivateKey(pem: pem, asType: P384.Signing.PrivateKey.self)
-    case .P521: return try P521.Signing.PrivateKey(pem: pem, asType: P521.Signing.PrivateKey.self)
+    case .p256: return try P256.Signing.PrivateKey(pem: pem)
+    case .p384: return try P384.Signing.PrivateKey(pem: pem)
+    case .p521: return try P521.Signing.PrivateKey(pem: pem)
     }
 }
 
 private func privateKey(privateDER der: [UInt8], curve: ECCurve) throws -> CommonPrivateKey {
     switch curve {
-    case .P256: return try P256.Signing.PrivateKey(privateDER: der)
-    case .P384: return try P384.Signing.PrivateKey(privateDER: der)
-    case .P521: return try P521.Signing.PrivateKey(privateDER: der)
+    case .p256: return try P256.Signing.PrivateKey(privateDER: der)
+    case .p384: return try P384.Signing.PrivateKey(privateDER: der)
+    case .p521: return try P521.Signing.PrivateKey(privateDER: der)
     }
 }
 
@@ -740,15 +738,15 @@ private func pem(_ der: [UInt8], type: String) -> String {
     return "-----BEGIN \(type)-----\n\(body)\n-----END \(type)-----"
 }
 
-private func marshaledPublicKey(type: KeyType, data: [UInt8]) throws -> Data {
-    var proto = PublicKey()
+private func marshaledPublicKey(type: ProtoKeyType, data: [UInt8]) throws -> Data {
+    var proto = ProtoPublicKey()
     proto.type = type
     proto.data = Data(data)
     return try proto.serializedData()
 }
 
-private func marshaledPrivateKey(type: KeyType, data: [UInt8]) throws -> Data {
-    var proto = PrivateKey()
+private func marshaledPrivateKey(type: ProtoKeyType, data: [UInt8]) throws -> Data {
+    var proto = ProtoPrivateKey()
     proto.type = type
     proto.data = Data(data)
     return try proto.serializedData()

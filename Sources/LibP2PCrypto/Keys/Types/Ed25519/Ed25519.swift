@@ -18,9 +18,9 @@ import SwiftASN1
 import SwiftProtobuf
 
 extension Curve25519.Signing.PublicKey: CommonPublicKey {
-    public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
+    public static var keyType: LibP2PCrypto.Keys.KeyType { .ed25519 }
 
-    init(marshaledData data: Data) throws {
+    public init(marshaledData data: Data) throws {
         try self.init(rawRepresentation: data)
     }
 
@@ -33,7 +33,7 @@ extension Curve25519.Signing.PublicKey: CommonPublicKey {
     }
 
     public func marshal() throws -> Data {
-        var publicKey = PublicKey()
+        var publicKey = ProtoPublicKey()
         publicKey.type = .ed25519
         publicKey.data = self.rawRepresentation
         return try publicKey.serializedData()
@@ -41,9 +41,9 @@ extension Curve25519.Signing.PublicKey: CommonPublicKey {
 }
 
 extension Curve25519.Signing.PrivateKey: CommonPrivateKey {
-    public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .ed25519 }
+    public static var keyType: LibP2PCrypto.Keys.KeyType { .ed25519 }
 
-    init(marshaledData data: Data) throws {
+    public init(marshaledData data: Data) throws {
         try self.init(rawRepresentation: data)
     }
 
@@ -60,21 +60,16 @@ extension Curve25519.Signing.PrivateKey: CommonPrivateKey {
     }
 
     public func marshal() throws -> Data {
-        var privateKey = PrivateKey()
+        var privateKey = ProtoPrivateKey()
         privateKey.type = .ed25519
         privateKey.data = self.rawRepresentation
         return try privateKey.serializedData()
     }
 }
 
+/// - Note: Private keys intentionally aren't `Equatable`, compare their derived public keys instead
 extension Curve25519.Signing.PublicKey: @retroactive Equatable {
     public static func == (lhs: Curve25519.Signing.PublicKey, rhs: Curve25519.Signing.PublicKey) -> Bool {
-        lhs.rawRepresentation == rhs.rawRepresentation
-    }
-}
-
-extension Curve25519.Signing.PrivateKey: @retroactive Equatable {
-    public static func == (lhs: Curve25519.Signing.PrivateKey, rhs: Curve25519.Signing.PrivateKey) -> Bool {
         lhs.rawRepresentation == rhs.rawRepresentation
     }
 }

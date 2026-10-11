@@ -25,8 +25,10 @@ extension LibP2PCrypto.PEM {
     /// parameter-driven (the iteration count is read from the PEM), so previously-encrypted
     /// PEMs with any iteration count still import.
     internal static let defaultPBKDF2Iterations = 310_000
+
     /// Default PBKDF2 salt length in bytes used when encrypting a new PEM (raised from 8).
     internal static let defaultPBKDF2SaltLength = 16
+
     /// Default IV length in bytes for the default AES-256-CBC cipher.
     internal static let defaultCipherIVLength = 16
 
@@ -97,7 +99,7 @@ extension LibP2PCrypto.PEM {
     ) throws -> Data {
 
         // Defaults match OpenSSL 3's `openssl pkcs8 -topk8` (PBES2, PBKDF2-HMAC-SHA256, AES-256-CBC)
-        let cipher = cipher ?? .aes_256_cbc(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
+        let cipher = cipher ?? .aes256CBC(iv: LibP2PCrypto.randomBytes(length: defaultCipherIVLength))
         let pbkdf =
             pbkdf
             ?? .pbkdf2(

@@ -68,7 +68,16 @@ let package = Package(
         ),
         .testTarget(
             name: "LibP2PCryptoTests",
-            dependencies: ["LibP2PCrypto"],
+            dependencies: [
+                "LibP2PCrypto",
+                .product(name: "Multibase", package: "swift-multibase"),
+                .product(name: "Multihash", package: "swift-multihash"),
+                .product(name: "Multicodec", package: "swift-multicodec"),
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "CryptoExtras", package: "swift-crypto"),
+                .product(name: "SwiftASN1", package: "swift-asn1"),
+            ],
             swiftSettings: [
                 .enableUpcomingFeature("MemberImportVisibility")
             ]

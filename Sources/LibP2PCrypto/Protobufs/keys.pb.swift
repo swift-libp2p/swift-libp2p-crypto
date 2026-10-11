@@ -45,7 +45,7 @@ fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAP
   typealias Version = _2
 }
 
-enum KeyType: Int, SwiftProtobuf.Enum, Swift.CaseIterable {
+enum ProtoKeyType: Int, SwiftProtobuf.Enum, Swift.CaseIterable {
   case rsa = 0
   case ed25519 = 1
   case secp256K1 = 2
@@ -57,12 +57,12 @@ enum KeyType: Int, SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
-struct PublicKey: Sendable {
+struct ProtoPublicKey: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var type: KeyType {
+  var type: ProtoKeyType {
     get {_type ?? .rsa}
     set {_type = newValue}
   }
@@ -84,16 +84,16 @@ struct PublicKey: Sendable {
 
   init() {}
 
-  fileprivate var _type: KeyType? = nil
+  fileprivate var _type: ProtoKeyType? = nil
   fileprivate var _data: Data? = nil
 }
 
-struct PrivateKey: Sendable {
+struct ProtoPrivateKey: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var type: KeyType {
+  var type: ProtoKeyType {
     get {_type ?? .rsa}
     set {_type = newValue}
   }
@@ -115,17 +115,17 @@ struct PrivateKey: Sendable {
 
   init() {}
 
-  fileprivate var _type: KeyType? = nil
+  fileprivate var _type: ProtoKeyType? = nil
   fileprivate var _data: Data? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-extension KeyType: SwiftProtobuf._ProtoNameProviding {
+extension ProtoKeyType: SwiftProtobuf._ProtoNameProviding {
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0RSA\0\u{1}Ed25519\0\u{1}Secp256k1\0\u{1}ECDSA\0")
 }
 
-extension PublicKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension ProtoPublicKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PublicKey"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}Type\0\u{1}Data\0")
 
@@ -162,7 +162,7 @@ extension PublicKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementation
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: PublicKey, rhs: PublicKey) -> Bool {
+  static func ==(lhs: ProtoPublicKey, rhs: ProtoPublicKey) -> Bool {
     if lhs._type != rhs._type {return false}
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -170,7 +170,7 @@ extension PublicKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementation
   }
 }
 
-extension PrivateKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+extension ProtoPrivateKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = "PrivateKey"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}Type\0\u{1}Data\0")
 
@@ -207,7 +207,7 @@ extension PrivateKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementatio
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: PrivateKey, rhs: PrivateKey) -> Bool {
+  static func ==(lhs: ProtoPrivateKey, rhs: ProtoPrivateKey) -> Bool {
     if lhs._type != rhs._type {return false}
     if lhs._data != rhs._data {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

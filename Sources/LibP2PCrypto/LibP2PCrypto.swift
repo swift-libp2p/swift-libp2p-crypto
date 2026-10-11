@@ -29,6 +29,17 @@ public enum LibP2PCrypto {
         return (0..<length).map { _ in rng.next() }
     }
 
+    /// Compares two byte sequences in constant time with respect to their contents (only their lengths may leak)
+    ///
+    /// Use this when comparing secret material, such as private keys.
+    static func constantTimeEquals<LHS: DataProtocol, RHS: DataProtocol>(_ lhs: LHS, _ rhs: RHS) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        var difference: UInt8 = 0
+        for (l, r) in zip(lhs, rhs) {
+            difference |= l ^ r
+        }
+        return difference == 0
+    }
 }
 
 extension String {
