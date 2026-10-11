@@ -22,19 +22,6 @@ import Testing
 
 @testable import LibP2PCrypto
 
-/// RSA key generation is prohibitively slow only in unoptimized (debug) builds that fall back to
-/// the CryptoSwift implementation (non-Apple platforms). On Apple platforms `SecKey` generation
-/// is fast even in debug, and release builds are fast everywhere, so RSA-generating tests only
-/// skip on debug + non-Apple.
-#if DEBUG && !canImport(Security)
-let runsRSAKeyGenTests = false
-#else
-let runsRSAKeyGenTests = true
-#endif
-
-let rsaTestsDisabledComment: Comment =
-    "RSA key generation is too slow in unoptimized CryptoSwift builds; run with `swift test -c release`."
-
 /// PBKDF2 key derivation at the production default (310k iterations) is slow in unoptimized
 /// builds, so the tests that actually derive a key use this smaller count in debug. The value has
 /// no effect on the encode/decode logic under test — only on how long derivation takes.
@@ -83,9 +70,7 @@ struct Libp2pCryptoTests {
         #expect(attributes?.isPrivate == true)
     }
 
-    /// These tests are skipped on Linux when using CryptoSwift due to very slow key generation times.
-    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
-    func testRSA3072() throws {
+    @Test func testRSA3072() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B3072))
         print(keyPair)
         #expect(keyPair.keyType == .rsa)
@@ -99,9 +84,7 @@ struct Libp2pCryptoTests {
         #expect(attributes?.isPrivate == true)
     }
 
-    /// These tests are skipped on Linux when using CryptoSwift due to very slow key generation times.
-    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
-    func testRSA4096() throws {
+    @Test func testRSA4096() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B4096))
         print(keyPair)
         #expect(keyPair.keyType == .rsa)
@@ -114,80 +97,6 @@ struct Libp2pCryptoTests {
         #expect(attributes?.size == 4096)
         #expect(attributes?.isPrivate == true)
     }
-
-    /// This test ensures that SecKey's CopyExternalRepresentation outputs the same data as our CryptoSwift RSA Implementation
-    #if canImport(Security)
-    @Test func testRSAExternalRepresentation() throws {
-        /// Generate a SecKey RSA Key
-        let parameters: [CFString: Any] = [
-            kSecAttrKeyType: kSecAttrKeyTypeRSA,
-            kSecAttrKeySizeInBits: 1024,
-        ]
-
-        var error: Unmanaged<CFError>? = nil
-
-        guard let privKey = SecKeyCreateRandomKey(parameters as CFDictionary, &error) else {
-            print(error.debugDescription)
-            Issue.record("Key Generation Error: \(error.debugDescription)")
-            return
-        }
-
-        let rsaSecKey = privKey
-
-        /// Lets grab the external representation
-        var externalRepError: Unmanaged<CFError>?
-        guard let cfdata = SecKeyCopyExternalRepresentation(rsaSecKey, &externalRepError) else {
-            Issue.record("Failed to copy external representation for RSA SecKey")
-            return
-        }
-
-        let rsaSecKeyRawRep = cfdata as Data
-
-        print(rsaSecKeyRawRep.asString(base: .base16))
-
-        /// Ensure we can import the RSA key as a CryptoSwift RSA Key
-        let privKeyNode = try DER.parse(rsaSecKeyRawRep.byteArray)
-        guard case .constructed(let privKeyParams) = privKeyNode.content else {
-            Issue.record("Invalid ASN1 Encoding -> No PrivKey Sequence")
-            return
-        }
-        // We check for 4 here because internally we can only marshal the first 4 integers at the moment...
-        let paramCount = Array(privKeyParams).count
-        guard paramCount == 4 || paramCount == 9 else {
-            Issue.record("Invalid ASN1 Encoding -> Invalid Private RSA param count. Expected 9 got \(paramCount)")
-            return
-        }
-        let (n, e, d) = try DER.sequence(privKeyNode, identifier: .sequence) { nodes in
-            _ = try Int(derEncoded: &nodes)  // version
-            let n = try ArraySlice<UInt8>(derEncoded: &nodes)
-            let e = try ArraySlice<UInt8>(derEncoded: &nodes)
-            let d = try ArraySlice<UInt8>(derEncoded: &nodes)
-            // Skip the remaining CRT params
-            while nodes.next() != nil {}
-            return (n, e, d)
-        }
-
-        let rsaCryptoSwift = RSA(n: Array(n), e: Array(e), d: Array(d))
-
-        // Raw Rep
-        guard let d = rsaCryptoSwift.d else {
-            Issue.record("Failed to import RSA SecKey as private CryptoSwift Key")
-            return
-        }
-        var serializer = DER.Serializer()
-        try serializer.appendConstructedNode(identifier: .sequence) { coder in
-            try coder.serialize(0)
-            try coder.serialize(rsaCryptoSwift.n.serialize().byteArray[...])
-            try coder.serialize(rsaCryptoSwift.e.serialize().byteArray[...])
-            try coder.serialize(d.serialize().byteArray[...])
-        }
-
-        let rsaCryptoSwiftRawRep = Data(serializer.serializedBytes)
-
-        print(rsaCryptoSwiftRawRep.asString(base: .base16))
-
-    }
-    #endif
 
     @Test func testED25519() throws {
         let keyPair = try LibP2PCrypto.Keys.generateKeyPair(.Ed25519)
@@ -221,29 +130,6 @@ struct Libp2pCryptoTests {
 
         #expect(try keyPair.rawID() == recoveredPublicKeyPair.rawID())
         #expect(try keyPair.rawID() == recoveredPrivateKeyPair.rawID())
-    }
-
-    /// RSA CryptoSwift
-    @Test func testCryptoSwiftRawRepresentationRoundTrip() throws {
-        let rsa = try CryptoSwift.RSA(keySize: 1024)
-
-        let extRep = try rsa.externalRepresentation()
-        print(extRep.toHexString())
-
-        let pubKeyExtRep = try rsa.publicKeyExternalRepresentation()
-        print(pubKeyExtRep.toHexString())
-
-        let recoveredPrivate = try CryptoSwift.RSA(rawRepresentation: rsa.externalRepresentation())
-
-        #expect(rsa.n == recoveredPrivate.n)
-        #expect(rsa.e == recoveredPrivate.e)
-        #expect(rsa.d == recoveredPrivate.d)
-
-        let recoveredPublic = try CryptoSwift.RSA(rawRepresentation: rsa.publicKeyExternalRepresentation())
-
-        #expect(rsa.n == recoveredPublic.n)
-        #expect(rsa.e == recoveredPublic.e)
-        #expect(recoveredPublic.d == nil)
     }
 
     @Test func testEd25519RawRepresentationRoundTrip() throws {
@@ -2272,9 +2158,8 @@ struct RegressionTests {
 
     // MARK: - RSA-specific coverage (skips only on debug + non-Apple, where keygen is slow)
 
-    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
-    func rsaSignVerifyAndMarshalPrivateKeyRoundTrip() throws {
-        let kp = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B1024))
+    @Test func rsaSignVerifyAndMarshalPrivateKeyRoundTrip() throws {
+        let kp = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
 
         let message = Data("sign me".utf8)
         let signature = try kp.sign(message: message)
@@ -2289,8 +2174,7 @@ struct RegressionTests {
     }
 
     /// `attributes()` derives the RSA size from the modulus bit-length rather than a byte-count table.
-    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
-    func rsaAttributesReportModulusBitLength() throws {
+    @Test func rsaAttributesReportModulusBitLength() throws {
         for (type, expected) in [
             (LibP2PCrypto.Keys.KeyPairType.RSA(bits: .B1024), 1024),
             (LibP2PCrypto.Keys.KeyPairType.RSA(bits: .B2048), 2048),
@@ -2303,8 +2187,7 @@ struct RegressionTests {
 
     /// Regression: the SecKey/CryptoSwift RSA `rawRepresentation` used to either crash (`try!`)
     /// or silently return empty `Data`. It must now be non-empty and round-trip.
-    @Test(.enabled(if: runsRSAKeyGenTests, rsaTestsDisabledComment))
-    func rsaRawRepresentationIsNonEmptyAndRoundTrips() throws {
+    @Test func rsaRawRepresentationIsNonEmptyAndRoundTrips() throws {
         let kp = try LibP2PCrypto.Keys.generateKeyPair(.RSA(bits: .B2048))
         #expect(kp.publicKey.rawRepresentation.isEmpty == false)
         let marshaled = try kp.marshalPrivateKey()
