@@ -18,18 +18,19 @@ import SwiftASN1
 // MARK: Encrypted PEM Cipher Algorithms
 
 extension LibP2PCrypto.PEM {
+
     // MARK: Add support for new Cipher Algorithms here...
-    public enum CipherAlgorithm {
-        case aes_128_cbc(iv: [UInt8])
-        case aes_256_cbc(iv: [UInt8])
+    public enum CipherAlgorithm: Sendable, Hashable, CustomStringConvertible {
+        case aes128CBC(iv: [UInt8])
+        case aes256CBC(iv: [UInt8])
 
         init(objID: ASN1ObjectIdentifier, iv: [UInt8]) throws {
             let algorithm: CipherAlgorithm
             switch objID {
             case ASN1ObjectIdentifier.LibP2P.aes128CBC:
-                algorithm = .aes_128_cbc(iv: iv)
+                algorithm = .aes128CBC(iv: iv)
             case ASN1ObjectIdentifier.LibP2P.aes256CBC:
-                algorithm = .aes_256_cbc(iv: iv)
+                algorithm = .aes256CBC(iv: iv)
             default:
                 throw Error.unsupportedCipherAlgorithm(objID)
             }
@@ -45,14 +46,14 @@ extension LibP2PCrypto.PEM {
 
         func decrypt(bytes: [UInt8], withKey key: [UInt8]) throws -> [UInt8] {
             switch self {
-            case .aes_128_cbc(let iv), .aes_256_cbc(let iv):
+            case .aes128CBC(let iv), .aes256CBC(let iv):
                 return try Array(LibP2PCrypto.AES.cbc(bytes, key: Data(key), iv: Data(iv), encrypt: false))
             }
         }
 
         func encrypt(bytes: [UInt8], withKey key: [UInt8]) throws -> [UInt8] {
             switch self {
-            case .aes_128_cbc(let iv), .aes_256_cbc(let iv):
+            case .aes128CBC(let iv), .aes256CBC(let iv):
                 return try Array(LibP2PCrypto.AES.cbc(bytes, key: Data(key), iv: Data(iv), encrypt: true))
             }
         }
@@ -61,8 +62,8 @@ extension LibP2PCrypto.PEM {
         /// - Note: we need this information when deriving the key using our PBKDF strategy
         var desiredKeyLength: Int {
             switch self {
-            case .aes_128_cbc: return 16
-            case .aes_256_cbc: return 32
+            case .aes128CBC: return 16
+            case .aes256CBC: return 32
             }
         }
 
@@ -70,28 +71,35 @@ extension LibP2PCrypto.PEM {
         /// - Note: AES-CBC uses a 16-byte IV (one AES block) for both the 128- and 256-bit key sizes.
         var expectedIVLength: Int {
             switch self {
-            case .aes_128_cbc, .aes_256_cbc: return 16
+            case .aes128CBC, .aes256CBC: return 16
             }
         }
 
         var objectIdentifier: ASN1ObjectIdentifier {
             switch self {
-            case .aes_128_cbc:
+            case .aes128CBC:
                 return ASN1ObjectIdentifier.LibP2P.aes128CBC
-            case .aes_256_cbc:
+            case .aes256CBC:
                 return ASN1ObjectIdentifier.LibP2P.aes256CBC
             }
         }
 
         var iv: [UInt8] {
             switch self {
-            case .aes_128_cbc(let iv), .aes_256_cbc(let iv):
+            case .aes128CBC(let iv), .aes256CBC(let iv):
                 return iv
             }
         }
 
         func encodeCipher() throws -> CipherAlgorithmIdentifier {
             CipherAlgorithmIdentifier(algorithm: self.objectIdentifier, iv: self.iv)
+        }
+
+        public var description: String {
+            switch self {
+            case .aes128CBC: return "AES-128-CBC"
+            case .aes256CBC: return "AES-256-CBC"
+            }
         }
     }
 
