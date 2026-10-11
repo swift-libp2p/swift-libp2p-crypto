@@ -153,18 +153,11 @@ public final class Secp256k1PrivateKey: Sendable {
 
 // MARK: - Equatable
 
+/// - Note: Private keys intentionally aren't `Hashable`, hashing secret material isn't constant time
 extension Secp256k1PrivateKey: Equatable {
 
+    /// Compares the private keys in constant time
     public static func == (_ lhs: Secp256k1PrivateKey, _ rhs: Secp256k1PrivateKey) -> Bool {
-        lhs.rawPrivateKey == rhs.rawPrivateKey
-    }
-}
-
-// MARK: - Hashable
-
-extension Secp256k1PrivateKey: Hashable {
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(rawPrivateKey)
+        LibP2PCrypto.constantTimeEquals(lhs.rawPrivateKey, rhs.rawPrivateKey)
     }
 }
