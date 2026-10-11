@@ -108,7 +108,7 @@ struct ECDSATests {
         let marshaled = try keyPair.marshalPublicKey()
 
         // The protobuf carries the ECDSA type and a DER encoded SubjectPublicKeyInfo
-        let proto = try PublicKey(serializedBytes: marshaled)
+        let proto = try ProtoPublicKey(serializedBytes: marshaled)
         #expect(proto.type == .ecdsa)
         let spki = try SubjectPublicKeyInfo(derEncoded: proto.data.byteArray)
         #expect(spki.algorithmIdentifier.algorithm == ASN1ObjectIdentifier.LibP2P.idEcPublicKey)
@@ -130,7 +130,7 @@ struct ECDSATests {
         let marshaled = try keyPair.marshalPrivateKey()
 
         // The protobuf carries the ECDSA type and a DER encoded SEC1 ECPrivateKey (with the named curve and public key)
-        let proto = try PrivateKey(serializedBytes: marshaled)
+        let proto = try ProtoPrivateKey(serializedBytes: marshaled)
         #expect(proto.type == .ecdsa)
         let ecPrivateKey = try ECPrivateKey(derEncoded: proto.data.byteArray)
         #expect(Data(ecPrivateKey.privateKey.bytes) == keyPair.privateKey?.rawRepresentation)
@@ -464,9 +464,9 @@ struct ECDSATests {
     }
 
     @Test func typedUnmarshalingRejectsOtherCurves() throws {
-        let p384 = try LibP2PCrypto.Keys.KeyPair(.ECDSA(curve: .P384))
-        let spki = try PublicKey(serializedBytes: p384.marshalPublicKey()).data
-        let sec1 = try PrivateKey(serializedBytes: p384.marshalPrivateKey()).data
+        let p384 = try LibP2PCrypto.Keys.KeyPair(.ecdsa(curve: .p384))
+        let spki = try ProtoPublicKey(serializedBytes: p384.marshalPublicKey()).data
+        let sec1 = try ProtoPrivateKey(serializedBytes: p384.marshalPrivateKey()).data
 
         #expect(throws: Error.self) { try P256.Signing.PublicKey(marshaledData: spki) }
         #expect(throws: Error.self) { try P521.Signing.PublicKey(marshaledData: spki) }
@@ -740,15 +740,15 @@ private func pem(_ der: [UInt8], type: String) -> String {
     return "-----BEGIN \(type)-----\n\(body)\n-----END \(type)-----"
 }
 
-private func marshaledPublicKey(type: KeyType, data: [UInt8]) throws -> Data {
-    var proto = PublicKey()
+private func marshaledPublicKey(type: ProtoKeyType, data: [UInt8]) throws -> Data {
+    var proto = ProtoPublicKey()
     proto.type = type
     proto.data = Data(data)
     return try proto.serializedData()
 }
 
-private func marshaledPrivateKey(type: KeyType, data: [UInt8]) throws -> Data {
-    var proto = PrivateKey()
+private func marshaledPrivateKey(type: ProtoKeyType, data: [UInt8]) throws -> Data {
+    var proto = ProtoPrivateKey()
     proto.type = type
     proto.data = Data(data)
     return try proto.serializedData()

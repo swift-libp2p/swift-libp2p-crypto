@@ -100,7 +100,7 @@ public struct RSAPublicKey: CommonPublicKey {
     }
 
     public func marshal() throws -> Data {
-        var publicKey = PublicKey()
+        var publicKey = ProtoPublicKey()
         publicKey.type = .rsa
         publicKey.data = self.rawRepresentation
         return try publicKey.serializedData()
@@ -193,7 +193,7 @@ public struct RSAPrivateKey: CommonPrivateKey {
     }
 
     public func marshal() throws -> Data {
-        var privateKey = PrivateKey()
+        var privateKey = ProtoPrivateKey()
         privateKey.type = .rsa
         privateKey.data = self.rawRepresentation
         return try privateKey.serializedData()

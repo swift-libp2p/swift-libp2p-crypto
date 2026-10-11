@@ -33,7 +33,7 @@ extension Curve25519.Signing.PublicKey: CommonPublicKey {
     }
 
     public func marshal() throws -> Data {
-        var publicKey = PublicKey()
+        var publicKey = ProtoPublicKey()
         publicKey.type = .ed25519
         publicKey.data = self.rawRepresentation
         return try publicKey.serializedData()
@@ -60,7 +60,7 @@ extension Curve25519.Signing.PrivateKey: CommonPrivateKey {
     }
 
     public func marshal() throws -> Data {
-        var privateKey = PrivateKey()
+        var privateKey = ProtoPrivateKey()
         privateKey.type = .ed25519
         privateKey.data = self.rawRepresentation
         return try privateKey.serializedData()

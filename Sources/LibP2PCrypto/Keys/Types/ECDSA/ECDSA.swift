@@ -248,7 +248,7 @@ enum ECDSAKeys {
 
     /// Protobuf marshals the public key as a DER encoded SubjectPublicKeyInfo
     static func marshal<Key: ECDSAPublicKeyBacking>(publicKey key: Key) throws -> Data {
-        var publicKey = PublicKey()
+        var publicKey = ProtoPublicKey()
         publicKey.type = .ecdsa
         publicKey.data = key.derRepresentation
         return try publicKey.serializedData()
@@ -256,7 +256,7 @@ enum ECDSAKeys {
 
     /// Protobuf marshals the private key as a DER encoded SEC1 ECPrivateKey
     static func marshal<Key: ECDSAPrivateKeyBacking>(privateKey key: Key) throws -> Data {
-        var privateKey = PrivateKey()
+        var privateKey = ProtoPrivateKey()
         privateKey.type = .ecdsa
         privateKey.data = try Data(self.sec1DER(for: key))
         return try privateKey.serializedData()

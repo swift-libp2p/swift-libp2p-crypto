@@ -43,7 +43,7 @@ extension Secp256k1PublicKey: CommonPublicKey {
     }
 
     public func marshal() throws -> Data {
-        var publicKey = PublicKey()
+        var publicKey = ProtoPublicKey()
         publicKey.type = .secp256K1
         publicKey.data = try Data(self.compressPublicKey())
         return try publicKey.serializedData()
@@ -81,7 +81,7 @@ extension Secp256k1PrivateKey: CommonPrivateKey {
     }
 
     public func marshal() throws -> Data {
-        var privateKey = PrivateKey()
+        var privateKey = ProtoPrivateKey()
         privateKey.type = .secp256K1
         privateKey.data = self.rawRepresentation
         return try privateKey.serializedData()
