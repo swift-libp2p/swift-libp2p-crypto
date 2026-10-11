@@ -150,7 +150,7 @@ extension Array where Element == UInt8 {
         guard let combined = aesGCM.combined else {
             throw LibP2PCrypto.Keys.KeyError.encryptionFailed("AES-GCM failed to produce a combined sealed box")
         }
-        return combined.byteArray  //nonce + ciphertext + tag
+        return Array(combined)  //nonce + ciphertext + tag
     }
 
     /// Expects `data` in the combined `[ { nonce } { ciphertext } { tag } ]` format

@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CryptoSwift
 import Foundation
 import SwiftASN1
 import SwiftProtobuf
@@ -21,7 +20,7 @@ extension Secp256k1PublicKey: CommonPublicKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
 
     public convenience init(rawRepresentation raw: Data) throws {
-        try self.init(raw.byteArray)
+        try self.init(Array(raw))
     }
 
     public convenience init(marshaledData data: Data) throws {
@@ -55,7 +54,7 @@ extension Secp256k1PrivateKey: CommonPrivateKey {
     public static var keyType: LibP2PCrypto.Keys.GenericKeyType { .secp256k1 }
 
     public convenience init(rawRepresentation raw: Data) throws {
-        try self.init(raw.byteArray)
+        try self.init(Array(raw))
     }
 
     public convenience init(marshaledData data: Data) throws {
@@ -175,7 +174,7 @@ extension Secp256k1PrivateKey: DERCodable {
     }
 
     public func privateKeyDER() throws -> [UInt8] {
-        self.rawRepresentation.byteArray
+        Array(self.rawRepresentation)
     }
 
     /// The DER encoded PKCS #8 PrivateKeyInfo (wrapping a SEC1 ECPrivateKey), as required when encrypting the key
@@ -186,7 +185,7 @@ extension Secp256k1PrivateKey: DERCodable {
                 parameters: .objectIdentifier(ASN1ObjectIdentifier.LibP2P.secp256k1)
             ),
             privateKey: ECPrivateKey(
-                privateKey: self.rawRepresentation.byteArray,
+                privateKey: Array(self.rawRepresentation),
                 namedCurve: nil,
                 publicKey: self.publicKeyDER()
             ).serializedDERBytes()
@@ -196,7 +195,7 @@ extension Secp256k1PrivateKey: DERCodable {
     /// The DER encoded SEC1 ECPrivateKey (including the named curve and public key)
     func sec1DER() throws -> [UInt8] {
         try ECPrivateKey(
-            privateKey: self.rawRepresentation.byteArray,
+            privateKey: Array(self.rawRepresentation),
             namedCurve: ASN1ObjectIdentifier.LibP2P.secp256k1,
             publicKey: self.publicKeyDER()
         ).serializedDERBytes()

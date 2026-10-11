@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-import CryptoSwift
 import Foundation
 import SwiftASN1
 
@@ -112,17 +111,17 @@ extension LibP2PCrypto {
             var headerBytes: [UInt8] {
                 switch self {
                 case .publicRSAKeyDER:
-                    return "-----BEGIN RSA PUBLIC KEY-----".bytes
+                    return Array("-----BEGIN RSA PUBLIC KEY-----".utf8)
                 case .privateRSAKeyDER:
-                    return "-----BEGIN RSA PRIVATE KEY-----".bytes
+                    return Array("-----BEGIN RSA PRIVATE KEY-----".utf8)
                 case .publicKey:
-                    return "-----BEGIN PUBLIC KEY-----".bytes
+                    return Array("-----BEGIN PUBLIC KEY-----".utf8)
                 case .privateKey:
-                    return "-----BEGIN PRIVATE KEY-----".bytes
+                    return Array("-----BEGIN PRIVATE KEY-----".utf8)
                 case .encryptedPrivateKey:
-                    return "-----BEGIN ENCRYPTED PRIVATE KEY-----".bytes
+                    return Array("-----BEGIN ENCRYPTED PRIVATE KEY-----".utf8)
                 case .ecPrivateKey:
-                    return "-----BEGIN EC PRIVATE KEY-----".bytes
+                    return Array("-----BEGIN EC PRIVATE KEY-----".utf8)
                 }
             }
 
@@ -130,17 +129,17 @@ extension LibP2PCrypto {
             var footerBytes: [UInt8] {
                 switch self {
                 case .publicRSAKeyDER:
-                    return "-----END RSA PUBLIC KEY-----".bytes
+                    return Array("-----END RSA PUBLIC KEY-----".utf8)
                 case .privateRSAKeyDER:
-                    return "-----END RSA PRIVATE KEY-----".bytes
+                    return Array("-----END RSA PRIVATE KEY-----".utf8)
                 case .publicKey:
-                    return "-----END PUBLIC KEY-----".bytes
+                    return Array("-----END PUBLIC KEY-----".utf8)
                 case .privateKey:
-                    return "-----END PRIVATE KEY-----".bytes
+                    return Array("-----END PRIVATE KEY-----".utf8)
                 case .encryptedPrivateKey:
-                    return "-----END ENCRYPTED PRIVATE KEY-----".bytes
+                    return Array("-----END ENCRYPTED PRIVATE KEY-----".utf8)
                 case .ecPrivateKey:
-                    return "-----END EC PRIVATE KEY-----".bytes
+                    return Array("-----END EC PRIVATE KEY-----".utf8)
                 }
             }
         }
@@ -219,11 +218,11 @@ extension LibP2PCrypto {
                 throw Error.invalidPEMFormat("Body of PEM isn't valid base64 encoded")
             }
 
-            let asn1 = try DER.parse(pemData.byteArray)
+            let asn1 = try DER.parse(Array(pemData))
 
             // return the PEMType and PEM Data (without header & footer)
             return (
-                type: pemType, bytes: pemData.byteArray, objectIdentifiers: asn1.containedObjectIdentifiers
+                type: pemType, bytes: Array(pemData), objectIdentifiers: asn1.containedObjectIdentifiers
             )
         }
 
@@ -251,7 +250,7 @@ extension LibP2PCrypto {
             expectedPrimaryObjectIdentifier: ASN1ObjectIdentifier,
             expectedSecondaryObjectIdentifier: ASN1ObjectIdentifier?
         ) throws -> [UInt8] {
-            let spki = try SubjectPublicKeyInfo(derEncoded: pem.byteArray)
+            let spki = try SubjectPublicKeyInfo(derEncoded: Array(pem))
 
             try validate(
                 spki.algorithmIdentifier,
@@ -292,7 +291,7 @@ extension LibP2PCrypto {
             expectedPrimaryObjectIdentifier: ASN1ObjectIdentifier,
             expectedSecondaryObjectIdentifier: ASN1ObjectIdentifier?
         ) throws -> [UInt8] {
-            let node = try DER.parse(pem.byteArray)
+            let node = try DER.parse(Array(pem))
 
             // Peek at the version integer to determine which private key structure we're dealing with
             guard node.identifier == .sequence, case .constructed(let children) = node.content else {

@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import CryptoSwift
 import Foundation
 import SwiftASN1
 import SwiftProtobuf
@@ -98,7 +97,7 @@ extension Curve25519.Signing.PublicKey: DERCodable {
     }
 
     public func publicKeyDER() throws -> [UInt8] {
-        self.rawRepresentation.byteArray
+        Array(self.rawRepresentation)
     }
 
     public func privateKeyDER() throws -> [UInt8] {
@@ -131,6 +130,6 @@ extension Curve25519.Signing.PrivateKey: DERCodable {
 
     public func privateKeyDER() throws -> [UInt8] {
         // CurvePrivateKey ::= OCTET STRING (RFC 8410 §7)
-        try ASN1OctetString(contentBytes: self.rawRepresentation.byteArray[...]).serializedDERBytes()
+        try ASN1OctetString(contentBytes: Array(self.rawRepresentation)[...]).serializedDERBytes()
     }
 }
