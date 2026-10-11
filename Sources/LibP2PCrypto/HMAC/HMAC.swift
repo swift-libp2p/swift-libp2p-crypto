@@ -18,55 +18,81 @@ import Multibase
 
 extension LibP2PCrypto {
     public enum HMAC {
-        public enum CryptoAlgorithm: Sendable {
-            case MD5, SHA1, SHA256, SHA384, SHA512
+        public enum CryptoAlgorithm: Sendable, Hashable {
 
-            internal func encrypt(_ message: Data, key: String) -> Data {
+            @available(*, deprecated, message: "MD5 is cryptographically broken, use sha256 or stronger")
+            case md5
+
+            @available(
+                *,
+                deprecated,
+                message: "SHA1 is considered to be cryptographically insecure, use sha256 or stronger"
+            )
+            case sha1
+
+            case sha256
+            case sha384
+            case sha512
+
+            public var description: String {
                 switch self {
-                case .MD5:
-                    var hmac = Crypto.HMAC<Insecure.MD5>(key: SymmetricKey(data: Data(key.utf8)))
+                case .md5: return "HMAC-MD5"
+                case .sha1: return "HMAC-SHA1"
+                case .sha256: return "HMAC-SHA256"
+                case .sha384: return "HMAC-SHA384"
+                case .sha512: return "HMAC-SHA512"
+                }
+            }
+
+            internal func authenticationCode<D: DataProtocol>(for message: D, using key: SymmetricKey) -> Data {
+                switch self {
+                case .md5:
+                    var hmac = Crypto.HMAC<Insecure.MD5>(key: key)
                     hmac.update(data: message)
                     return Data(hmac.finalize())
-                case .SHA1:
-                    var hmac = Crypto.HMAC<Insecure.SHA1>(key: SymmetricKey(data: Data(key.utf8)))
+                case .sha1:
+                    var hmac = Crypto.HMAC<Insecure.SHA1>(key: key)
                     hmac.update(data: message)
                     return Data(hmac.finalize())
-                case .SHA256:
-                    var hmac = Crypto.HMAC<SHA256>(key: SymmetricKey(data: Data(key.utf8)))
+                case .sha256:
+                    var hmac = Crypto.HMAC<SHA256>(key: key)
                     hmac.update(data: message)
                     return Data(hmac.finalize())
-                case .SHA384:
-                    var hmac = Crypto.HMAC<SHA384>(key: SymmetricKey(data: Data(key.utf8)))
+                case .sha384:
+                    var hmac = Crypto.HMAC<SHA384>(key: key)
                     hmac.update(data: message)
                     return Data(hmac.finalize())
-                case .SHA512:
-                    var hmac = Crypto.HMAC<SHA512>(key: SymmetricKey(data: Data(key.utf8)))
+                case .sha512:
+                    var hmac = Crypto.HMAC<SHA512>(key: key)
                     hmac.update(data: message)
                     return Data(hmac.finalize())
                 }
             }
 
             /// Verifies the authentication code
-            internal func isValid(_ code: Data, for message: Data, key: String) -> Bool {
-                let key = SymmetricKey(data: Data(key.utf8))
+            internal func isValid<C: ContiguousBytes, D: DataProtocol>(
+                _ code: C,
+                for message: D,
+                using key: SymmetricKey
+            ) -> Bool {
                 switch self {
-                case .MD5:
+                case .md5:
                     return Crypto.HMAC<Insecure.MD5>.isValidAuthenticationCode(
                         code,
                         authenticating: message,
                         using: key
                     )
-                case .SHA1:
+                case .sha1:
                     return Crypto.HMAC<Insecure.SHA1>.isValidAuthenticationCode(
                         code,
                         authenticating: message,
                         using: key
                     )
-                case .SHA256:
+                case .sha256:
                     return Crypto.HMAC<SHA256>.isValidAuthenticationCode(code, authenticating: message, using: key)
-                case .SHA384:
+                case .sha384:
                     return Crypto.HMAC<SHA384>.isValidAuthenticationCode(code, authenticating: message, using: key)
-                case .SHA512:
+                case .sha512:
                     return Crypto.HMAC<SHA512>.isValidAuthenticationCode(code, authenticating: message, using: key)
                 }
             }
@@ -74,63 +100,109 @@ extension LibP2PCrypto {
 
         public struct HMACKey: Encryptable, Sendable {
             private let algorithm: CryptoAlgorithm
-            private let secret: String
+            private let key: SymmetricKey
 
             /// Initializes a reusable HMAC Key by specifying the Hashing Algorithm and secret key to use
             /// - Parameters:
             ///   - algorithm: The Hashing Algorithm to use
-            ///   - secret: The shared secret key
-            public init(algorithm: CryptoAlgorithm, secret: String) {
+            ///   - key: The shared secret key
+            public init(algorithm: CryptoAlgorithm, key: SymmetricKey) {
                 self.algorithm = algorithm
-                self.secret = secret
+                self.key = key
             }
 
+            /// Initializes a reusable HMAC Key by specifying the Hashing Algorithm and secret key to use
+            /// - Parameters:
+            ///   - algorithm: The Hashing Algorithm to use
+            ///   - key: The shared secret key as contiguous bytes
+            public init(algorithm: CryptoAlgorithm, secret: ContiguousBytes) {
+                self.init(algorithm: algorithm, key: SymmetricKey(data: secret))
+            }
+
+            /// Initializes a reusable HMAC Key by specifying the Hashing Algorithm and secret key to use
+            /// - Parameters:
+            ///   - algorithm: The Hashing Algorithm to use
+            ///   - key: The shared secret key as a UTF8 String
+            public init(algorithm: CryptoAlgorithm, secret: String) {
+                self.init(algorithm: algorithm, secret: Data(secret.utf8))
+            }
+
+            /// Computes the authentication code for `message`
+            public func authenticationCode<D: DataProtocol>(for message: D) -> Data {
+                self.algorithm.authenticationCode(for: message, using: self.key)
+            }
+
+            /// Computes the authentication code for the UTF-8 encoded `message`
+            public func authenticationCode(for message: String) -> Data {
+                self.authenticationCode(for: Data(message.utf8))
+            }
+
+            @available(*, deprecated, renamed: "authenticationCode(for:)")
             public func encrypt(_ message: Data) -> Data {
-                LibP2PCrypto.HMAC.encrypt(message, algorithm: self.algorithm, key: self.secret)
+                self.authenticationCode(for: message)
             }
 
+            @available(*, deprecated, renamed: "authenticationCode(for:)")
             public func encrypt(_ message: String) -> Data {
-                LibP2PCrypto.HMAC.encrypt(message: message, algorithm: self.algorithm, key: self.secret)
-            }
-
-            /// Verifies that `hash` is the authentication code for `str`
-            public func verify(_ str: String, hash: Data) -> Bool {
-                self.verify(Data(str.utf8), hash: hash)
+                self.authenticationCode(for: message)
             }
 
             /// Verifies that `hash` is the authentication code for `data`
-            public func verify(_ data: Data, hash: Data) -> Bool {
-                self.algorithm.isValid(hash, for: data, key: self.secret)
+            public func verify<C: ContiguousBytes, D: DataProtocol>(_ data: D, hash: C) -> Bool {
+                self.algorithm.isValid(hash, for: data, using: self.key)
+            }
+
+            /// Verifies that `hash` is the authentication code for `str` (a UTF8 string)
+            public func verify(_ str: String, hash: Data) -> Bool {
+                self.verify(Data(str.utf8), hash: hash)
             }
         }
 
         /// Creates an HMACKey that can be used to encrypt / hash multiple data sets...
         /// - Parameters:
         ///   - algorithm: The hashing algorithm to use
-        ///   - secret: The shared secret key to hash the data against
+        ///   - key: The shared secret key to hash the data against
         /// - Returns: HMACKey
         public static func create(algorithm: CryptoAlgorithm, secret: String) -> LibP2PCrypto.HMAC.HMACKey {
             HMACKey(algorithm: algorithm, secret: secret)
         }
 
-        /// A one offf, stateless, HMAC hashing / encryption method
+        /// A one off, stateless, HMAC computation
         /// - Parameters:
-        ///   - message: The String message to encrypt / hash
+        ///   - message: The data to authenticate
         ///   - algorithm: The hashing algorithm to use
-        ///   - key: The shared secret key to hash the data against
-        /// - Returns: The encrypted / hashed HMAC data
-        public static func encrypt(message: String, algorithm: CryptoAlgorithm, key: String) -> Data {
-            self.encrypt(Data(message.utf8), algorithm: algorithm, key: key)
+        ///   - secret: The shared secret key to authenticate the data with
+        /// - Returns: The authentication code
+        public static func authenticationCode<D: DataProtocol>(
+            for message: D,
+            algorithm: CryptoAlgorithm,
+            secret: String
+        ) -> Data {
+            HMACKey(algorithm: algorithm, secret: secret).authenticationCode(for: message)
         }
 
-        /// A one offf, stateless, HMAC hashing / encryption method
+        /// A one off, stateless, HMAC computation
         /// - Parameters:
-        ///   - message: The data to encrypt / hash
+        ///   - message: The UTF-8 encoded string to authenticate
         ///   - algorithm: The hashing algorithm to use
-        ///   - key: The shared secret key to hash the data against
-        /// - Returns: The encrypted / hashed HMAC data
+        ///   - secret: The shared secret key to authenticate the string with
+        /// - Returns: The authentication code
+        public static func authenticationCode(
+            for message: String,
+            algorithm: CryptoAlgorithm,
+            secret: String
+        ) -> Data {
+            HMACKey(algorithm: algorithm, secret: secret).authenticationCode(for: message)
+        }
+
+        @available(*, deprecated, renamed: "authenticationCode(for:algorithm:secret:)")
+        public static func encrypt(message: String, algorithm: CryptoAlgorithm, key: String) -> Data {
+            self.authenticationCode(for: message, algorithm: algorithm, secret: key)
+        }
+
+        @available(*, deprecated, renamed: "authenticationCode(for:algorithm:secret:)")
         public static func encrypt(_ message: Data, algorithm: CryptoAlgorithm, key: String) -> Data {
-            algorithm.encrypt(message, key: key)
+            self.authenticationCode(for: message, algorithm: algorithm, secret: key)
         }
     }
 }
