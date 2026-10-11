@@ -16,7 +16,7 @@ import Foundation
 import Multibase
 
 public protocol CommonPrivateKey: DERCodable, Sendable {
-    static var keyType: LibP2PCrypto.Keys.GenericKeyType { get }
+    static var keyType: LibP2PCrypto.Keys.KeyType { get }
 
     /// Init from raw representation
     init(rawRepresentation: Data) throws
@@ -35,10 +35,14 @@ public protocol CommonPrivateKey: DERCodable, Sendable {
 
     /// The protobuf-marshaled representation of the private key
     func marshal() throws -> Data
+    
+    /// Init from the `data` field of a protobuf-marshaled private key
+    init(marshaledData: Data) throws
 }
 
 extension CommonPrivateKey {
-    var keyType: LibP2PCrypto.Keys.GenericKeyType { Self.keyType }
+    /// The type of this key
+    public var keyType: LibP2PCrypto.Keys.KeyType { Self.keyType }
 }
 
 extension CommonPrivateKey {

@@ -18,7 +18,7 @@ import Multicodec
 import Multihash
 
 public protocol CommonPublicKey: DERCodable, Sendable {
-    static var keyType: LibP2PCrypto.Keys.GenericKeyType { get }
+    static var keyType: LibP2PCrypto.Keys.KeyType { get }
 
     /// Init from raw representation
     init(rawRepresentation: Data) throws
@@ -34,14 +34,14 @@ public protocol CommonPublicKey: DERCodable, Sendable {
 
     /// The protobuf-marshaled representation of the public key
     func marshal() throws -> Data
-
-    /// Misc
-    func asString(base: BaseEncoding, withMultibasePrefix: Bool) -> String
-    var data: Data { get }
+    
+    /// Init from the `data` field of a protobuf-marshaled public key
+    init(marshaledData: Data) throws
 }
 
 extension CommonPublicKey {
-    var keyType: LibP2PCrypto.Keys.GenericKeyType { Self.keyType }
+    /// The type of this key
+    public var keyType: LibP2PCrypto.Keys.KeyType { Self.keyType }
 
     /// The multihash of the marshaled public key, per the libp2p peer-id spec.
     ///
