@@ -39,6 +39,51 @@ let testPBKDF2Iterations = 310_000
 @Suite("LibP2P Crypto Tests")
 struct Libp2pCryptoTests {
 
+    @Test func keyPairTypeExposesItsKeyType() {
+        #expect(LibP2PCrypto.Keys.KeyPairType.rsa(bits: .b4096).keyType == .rsa)
+        #expect(LibP2PCrypto.Keys.KeyPairType.ed25519.keyType == .ed25519)
+        #expect(LibP2PCrypto.Keys.KeyPairType.secp256k1.keyType == .secp256k1)
+        #expect(LibP2PCrypto.Keys.KeyPairType.ecdsa(curve: .p521).keyType == .ecdsa)
+        #expect(LibP2PCrypto.Keys.RSABitLength.b3072.bits == 3072)
+    }
+
+    @Test func keyPairTypeDescriptions() throws {
+        #expect(LibP2PCrypto.Keys.KeyType.secp256k1.description == "Secp256k1")
+        #expect(LibP2PCrypto.Keys.EllipticCurve.p384.description == "P-384")
+        #expect(LibP2PCrypto.Keys.KeyPairType.rsa(bits: .b2048).description == "RSA (2048 bit)")
+        #expect(LibP2PCrypto.Keys.KeyPairType.ecdsa(curve: .p256).description == "ECDSA (P-256)")
+
+        let attributes = try #require(LibP2PCrypto.Keys.KeyPair(.ed25519).attributes())
+        #expect(attributes.description == "Ed25519 private key (256 bits)")
+
+        #expect(LibP2PCrypto.PEM.CipherAlgorithm.aes256CBC(iv: []).description == "AES-256-CBC")
+        #expect(
+            LibP2PCrypto.PEM.PBKDFAlgorithm.pbkdf2(salt: [], iterations: 2048, prf: .hmacWithSHA256).description
+                == "PBKDF2 (HMAC-SHA256, 2048 iterations)"
+        )
+        #expect(LibP2PCrypto.PEM.Error.invalidPEMFormat("bad").description == "Invalid PEM format: bad")
+    }
+
+    @Test func keyPairEquality() throws {
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(.ed25519)
+        let publicOnly = try LibP2PCrypto.Keys.KeyPair(publicKey: keyPair.publicKey)
+        let restored = try LibP2PCrypto.Keys.KeyPair(marshaledPrivateKey: keyPair.marshalPrivateKey())
+
+        #expect(keyPair == restored)
+        #expect(keyPair != publicOnly)
+        #expect(try publicOnly == LibP2PCrypto.Keys.KeyPair(publicKey: restored.publicKey))
+        #expect(try keyPair != LibP2PCrypto.Keys.KeyPair(.ed25519))
+    }
+
+    @Test func privateKeyEqualityForOurOwnTypes() throws {
+        let secp = try Secp256k1PrivateKey()
+        #expect(try secp == Secp256k1PrivateKey(rawRepresentation: secp.rawRepresentation))
+        #expect(try secp != Secp256k1PrivateKey())
+
+        let rsa = try RSAPrivateKey(keySize: .b2048)
+        #expect(try rsa == RSAPrivateKey(rawRepresentation: rsa.rawRepresentation))
+    }
+
     /// RSA keys smaller than 2048 bits can be neither generated nor imported
     @Test func testRSAUnder2048BitsIsRejected() throws {
         #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
@@ -615,9 +660,16 @@ struct SignAndVerifyTests {
         #expect(try ed.publicKey.verify(signature: signedData, for: Data(message.dropLast())) == false)
     }
 
-    // TODO EC Keys
-
     // Secp256k1 Keys
+
+    @Test func secp256k1ErrorsAreKeyErrors() {
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) { try Secp256k1PrivateKey(privateKey: [0x01]) }
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) { try Secp256k1PublicKey(publicKey: [0x04, 0x01]) }
+        #expect(throws: LibP2PCrypto.Keys.KeyError.self) {
+            try Secp256k1PrivateKey().publicKey.verify(signature: Data([0x01]), for: Data())
+        }
+    }
+
     @Test func testSecp256k1MessageSignVerify() throws {
         let message = "Hello, swift-libp2p-crypto!".data(using: .utf8)!
 
@@ -937,10 +989,43 @@ struct HMACTests {
             LibP2PCrypto.HMAC.HMACKey(algorithm: algorithm, secret: "Secret").verify("Hello World", hash: code) == false
         )
     }
+
+    @Test func hmacSecretsAreInterchangeable() {
+        let message = "Hello World"
+        let fromString = LibP2PCrypto.HMAC.HMACKey(algorithm: .sha256, secret: "secret")
+        let fromData = LibP2PCrypto.HMAC.HMACKey(algorithm: .sha256, secret: Data("secret".utf8))
+        let fromKey = LibP2PCrypto.HMAC.HMACKey(algorithm: .sha256, key: SymmetricKey(data: Data("secret".utf8)))
+
+        let code = fromString.authenticationCode(for: message)
+        #expect(fromData.authenticationCode(for: message) == code)
+        #expect(fromKey.authenticationCode(for: message) == code)
+        #expect(LibP2PCrypto.HMAC.authenticationCode(for: message, algorithm: .sha256, secret: "secret") == code)
+        #expect(
+            Data(
+                Crypto.HMAC<SHA256>.authenticationCode(
+                    for: Data(message.utf8),
+                    using: SymmetricKey(data: Data("secret".utf8))
+                )
+            ) == code
+        )
+    }
 }
 
 @Suite("DER and PEM Tests")
 struct DERAndPEMTests {
+
+    /// Every key type's `publicKeyDER()` is the SubjectPublicKeyInfo's BIT STRING contents
+    @Test(arguments: [
+        LibP2PCrypto.Keys.KeyPairType.rsa(), .ed25519, .secp256k1, .ecdsa(curve: .p256),
+    ])
+    func publicKeyDERIsTheSPKIBitStringContents(type: LibP2PCrypto.Keys.KeyPairType) throws {
+        let keyPair = try LibP2PCrypto.Keys.KeyPair(type)
+        let (_, spkiDER, _) = try LibP2PCrypto.PEM.pemToData(keyPair.exportPublicPEM())
+        let spki = try SubjectPublicKeyInfo(derEncoded: spkiDER)
+
+        #expect(try Array(spki.key.bytes) == keyPair.publicKey.publicKeyDER())
+        #expect(try Array(spki.key.bytes) == keyPair.privateKey?.publicKeyDER())
+    }
 
     @Test func testPemParsing_RSA_2048_Public_Export() throws {
         let pem = TestPEMKeys.RSA_2048_PUBLIC
