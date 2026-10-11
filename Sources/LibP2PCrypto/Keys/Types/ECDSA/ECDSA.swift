@@ -194,13 +194,13 @@ extension ECDSAPrivateKeyBacking {
 
 // MARK: - Curves
 
-extension LibP2PCrypto.Keys.ElipticCurveType {
+extension LibP2PCrypto.Keys.EllipticCurve {
     /// The curve's named curve object identifier
     var objectIdentifier: ASN1ObjectIdentifier {
         switch self {
-        case .P256: return ASN1ObjectIdentifier.LibP2P.prime256v1
-        case .P384: return ASN1ObjectIdentifier.LibP2P.secp384r1
-        case .P521: return ASN1ObjectIdentifier.LibP2P.secp521r1
+        case .p256: return ASN1ObjectIdentifier.LibP2P.prime256v1
+        case .p384: return ASN1ObjectIdentifier.LibP2P.secp384r1
+        case .p521: return ASN1ObjectIdentifier.LibP2P.secp521r1
         }
     }
 
@@ -224,13 +224,17 @@ enum ECDSAKeys {
     // MARK: Signatures
 
     /// Signs the SHA-256 hash of `message` and returns the DER encoded signature
-    static func sign<Key: ECDSAPrivateKeyBacking>(_ message: Data, with key: Key) throws -> Data {
+    static func sign<Key: ECDSAPrivateKeyBacking, D: DataProtocol>(_ message: D, with key: Key) throws -> Data {
         try key.signature(for: Crypto.SHA256.hash(data: message)).derRepresentation
     }
 
     /// Verifies a DER encoded signature against the SHA-256 hash of `message`
     /// - Throws: if the signature isn't valid DER
-    static func verify<Key: ECDSAPublicKeyBacking>(_ signature: Data, for message: Data, with key: Key) throws -> Bool {
+    static func verify<Key: ECDSAPublicKeyBacking, SD: DataProtocol, MD: DataProtocol>(
+        _ signature: SD,
+        for message: MD,
+        with key: Key
+    ) throws -> Bool {
         let sig: Key.ECDSASignature
         do {
             sig = try Key.ECDSASignature(derRepresentation: signature)
@@ -299,9 +303,9 @@ enum ECDSAKeys {
     /// Instantiates the appropriate P256 / P384 / P521 public key from a DER encoded SubjectPublicKeyInfo
     static func anyPublicKey(fromSPKI spki: Data) throws -> CommonPublicKey {
         switch try self.curve(ofSPKI: spki) {
-        case .P256: return try self.publicKey(fromSPKI: spki, as: P256.Signing.PublicKey.self)
-        case .P384: return try self.publicKey(fromSPKI: spki, as: P384.Signing.PublicKey.self)
-        case .P521: return try self.publicKey(fromSPKI: spki, as: P521.Signing.PublicKey.self)
+        case .p256: return try self.publicKey(fromSPKI: spki, as: P256.Signing.PublicKey.self)
+        case .p384: return try self.publicKey(fromSPKI: spki, as: P384.Signing.PublicKey.self)
+        case .p521: return try self.publicKey(fromSPKI: spki, as: P521.Signing.PublicKey.self)
         }
     }
 
@@ -311,13 +315,13 @@ enum ECDSAKeys {
         guard let namedCurve = ecPrivateKey.namedCurve else {
             throw LibP2PCrypto.Keys.KeyError.invalidPrivateKeyEncoding("ECDSA: missing named curve parameter")
         }
-        guard let curve = LibP2PCrypto.Keys.ElipticCurveType(objectIdentifier: namedCurve) else {
+        guard let curve = LibP2PCrypto.Keys.EllipticCurve(objectIdentifier: namedCurve) else {
             throw LibP2PCrypto.Keys.KeyError.unsupportedKeyType("ECDSA: unsupported named curve \(namedCurve)")
         }
         switch curve {
-        case .P256: return try self.privateKey(from: ecPrivateKey, namedCurve: namedCurve) as P256.Signing.PrivateKey
-        case .P384: return try self.privateKey(from: ecPrivateKey, namedCurve: namedCurve) as P384.Signing.PrivateKey
-        case .P521: return try self.privateKey(from: ecPrivateKey, namedCurve: namedCurve) as P521.Signing.PrivateKey
+        case .p256: return try self.privateKey(from: ecPrivateKey, namedCurve: namedCurve) as P256.Signing.PrivateKey
+        case .p384: return try self.privateKey(from: ecPrivateKey, namedCurve: namedCurve) as P384.Signing.PrivateKey
+        case .p521: return try self.privateKey(from: ecPrivateKey, namedCurve: namedCurve) as P521.Signing.PrivateKey
         }
     }
 
@@ -357,7 +361,7 @@ enum ECDSAKeys {
     // MARK: Helpers
 
     /// Extracts and validates the named curve of a DER encoded EC SubjectPublicKeyInfo
-    private static func curve(ofSPKI spki: Data) throws -> LibP2PCrypto.Keys.ElipticCurveType {
+    private static func curve(ofSPKI spki: Data) throws -> LibP2PCrypto.Keys.EllipticCurve {
         let info: SubjectPublicKeyInfo
         do {
             info = try SubjectPublicKeyInfo(derEncoded: Array(spki))
@@ -375,7 +379,7 @@ enum ECDSAKeys {
         guard case .objectIdentifier(let namedCurve) = info.algorithmIdentifier.parameters else {
             throw LibP2PCrypto.Keys.KeyError.invalidMarshaledData("ECDSA: missing named curve parameter")
         }
-        guard let curve = LibP2PCrypto.Keys.ElipticCurveType(objectIdentifier: namedCurve) else {
+        guard let curve = LibP2PCrypto.Keys.EllipticCurve(objectIdentifier: namedCurve) else {
             throw LibP2PCrypto.Keys.KeyError.unsupportedKeyType("ECDSA: unsupported named curve \(namedCurve)")
         }
         return curve
