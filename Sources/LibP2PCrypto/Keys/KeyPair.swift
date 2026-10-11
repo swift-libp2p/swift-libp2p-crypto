@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Crypto
-import CryptoSwift
 import Foundation
 import Multibase
 import Multihash
@@ -49,7 +48,7 @@ extension LibP2PCrypto.Keys {
             case .Secp256k1:
                 try self.init(privateKey: Secp256k1PrivateKey())
             case .RSA(let keySize):
-                try self.init(privateKey: RSAPrivateKey(keySize: keySize.bits))
+                try self.init(privateKey: RSAPrivateKey(keySize: keySize))
             case .ECDSA(let curve):
                 switch curve {
                 case .P256: try self.init(privateKey: P256.Signing.PrivateKey())
@@ -105,13 +104,13 @@ extension LibP2PCrypto.Keys {
             let isPrivate = self.privateKey != nil
             switch self.keyType {
             case .rsa:
-                guard let bits = rsaModulusBitCount() else { return nil }
+                guard let bits = (self.publicKey as? RSAPublicKey)?.keySizeInBits else { return nil }
                 let type: LibP2PCrypto.Keys.KeyPairType
                 switch bits {
-                case 1024: type = .RSA(bits: .B1024)
                 case 2048: type = .RSA(bits: .B2048)
                 case 3072: type = .RSA(bits: .B3072)
                 case 4096: type = .RSA(bits: .B4096)
+                case 8192: type = .RSA(bits: .B8192)
                 default: type = .RSA(bits: .custom(bits: bits))
                 }
                 return Attributes(type: type, size: bits, isPrivate: isPrivate)
@@ -127,27 +126,6 @@ extension LibP2PCrypto.Keys {
                 let curve = type(of: ecdsaKey).curve
                 return Attributes(type: .ECDSA(curve: curve), size: curve.bits, isPrivate: isPrivate)
             }
-        }
-
-        /// Extracts the RSA modulus size (in bits, rounded up to a whole byte) from the
-        /// public key's SubjectPublicKeyInfo DER.
-        ///
-        /// Returns `nil` if the key isn't RSA or the DER can't be parsed as expected.
-        private func rsaModulusBitCount() -> Int? {
-            guard case .rsa = self.keyType else { return nil }
-            guard
-                let spki = try? SubjectPublicKeyInfo(derEncoded: self.publicKey.rawRepresentation.byteArray),
-                let pkcs1 = try? RSAPublicKeyPKCS1(derEncoded: spki.key.bytes)
-            else { return nil }
-            // The DER sign byte has already been stripped by the decoder. Report the modulus size
-            // rounded up to a whole byte. Some backends (notably CryptoSwift on Linux)
-            // occasionally emit a modulus whose top bit is clear, making the exact bit-count
-            // one short (e.g. 2047 for a 2048-bit key); byte-aligning classifies these the
-            // same as a fully-populated modulus of the same key size.
-            var bytes = pkcs1.modulus
-            while bytes.first == 0 { bytes.removeFirst() }
-            guard bytes.isEmpty == false else { return nil }
-            return bytes.count * 8
         }
 
         // - MARK: Encryption & Decryption
@@ -330,11 +308,11 @@ extension LibP2PCrypto.Keys {
 
 extension LibP2PCrypto.Keys.KeyPair {
     public init(pem: String, password: String? = nil) throws {
-        try self.init(pem: pem.bytes, password: password)
+        try self.init(pem: Array(pem.utf8), password: password)
     }
 
     public init(pem: Data, password: String? = nil) throws {
-        try self.init(pem: pem.byteArray, password: password)
+        try self.init(pem: Array(pem), password: password)
     }
 
     public init(pem pemBytes: [UInt8], password: String? = nil) throws {
@@ -516,12 +494,14 @@ extension LibP2PCrypto.Keys.KeyPair {
             throw LibP2PCrypto.Keys.KeyError.noPrivateKey
         }
 
-        return try LibP2PCrypto.PEM.encryptPEM(
-            Data(privateKey.exportPrivateKeyPEMRaw()),
-            withPassword: password,
-            usingPBKDF: pbkdf,
-            andCipher: cipher
-        ).byteArray
+        return try Array(
+            LibP2PCrypto.PEM.encryptPEM(
+                Data(privateKey.exportPrivateKeyPEMRaw()),
+                withPassword: password,
+                usingPBKDF: pbkdf,
+                andCipher: cipher
+            )
+        )
     }
 
     public func exportEncryptedPrivatePEMString(
