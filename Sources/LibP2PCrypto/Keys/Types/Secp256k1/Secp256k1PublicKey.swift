@@ -53,7 +53,7 @@ public final class Secp256k1PublicKey: Sendable {
     /// - Parameters:
     ///   - rawPublicKeyData: The public key, either compressed (33 bytes) or uncompressed (65 bytes), with the proper key type header prefix (0x04 in the case of standard uncompressed key). A 64 byte uncompressed key without the header prefix is also accepted.
     /// - Throws:
-    ///    Secp256k1PublicKey.Error.keyMalformed if the given `publicKey` does not fulfill the requirements from above.
+    ///   - `KeyError.invalidRawRepresentation` if the given `publicKey` does not fulfill the requirements from above.
     public init(publicKey rawPublicKeyData: [UInt8]) throws {
         var rawPublicKeyData = rawPublicKeyData
 
@@ -67,13 +67,15 @@ public final class Secp256k1PublicKey: Sendable {
         do {
             parsed = try P256K.Signing.PublicKey(x963Representation: rawPublicKeyData)
         } catch {
-            throw Error.keyMalformed
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("Secp256k::PublicKey: \(error)")
         }
 
         // `uncompressedRepresentation` is re-serialized by libsecp256k1, so it's always the canonical 0x04 form
         let uncompressed = [UInt8](parsed.uncompressedRepresentation)
         guard uncompressed.count == Self.uncompressedLengthWithPrefix else {
-            throw Error.keyMalformed
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation(
+                "Secp256k1 public key: unexpected uncompressed length \(uncompressed.count)"
+            )
         }
 
         // Normalize the stored key to its compressed format (0x02 / 0x03 prefix based on the parity of Y)
@@ -82,7 +84,7 @@ public final class Secp256k1PublicKey: Sendable {
         do {
             self.key = try P256K.Signing.PublicKey(dataRepresentation: compressed, format: .compressed)
         } catch {
-            throw Error.keyMalformed
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("Secp256k::PublicKey: \(error)")
         }
 
         // Store the uncompressed public key in our rawPublicKey field
@@ -98,14 +100,17 @@ public final class Secp256k1PublicKey: Sendable {
     public func compressPublicKey() throws -> [UInt8] {
         let compressed = [UInt8](self.key.dataRepresentation)
         guard compressed.count == Self.compressedLengthWithPrefix else {
-            throw Error.internalError
+            throw LibP2PCrypto.Keys.KeyError.internalError(
+                "Secp256k1: unexpected compressed public key length \(compressed.count)"
+            )
         }
         return compressed
     }
 
     /// Initializes a new instance of `SecP256k1PublicKey` with the given a hex string.
     /// - Parameter hexPublicKey: The uncompressed (or compressed) hex public key either with the hex prefix `0x` or without.
-    /// - throws: SecP256k1PublicKey.Error.keyMalformed if the given `hexPublicKey` does not fulfill the requirements from above. Or a SecP256k1PublicKey.Error.internalError if a secp256k1 library fails to parse / validate the provided key.
+    /// - throws:
+    ///   - `KeyError.invalidRawRepresentation` if the given `hexPublicKey` does not fulfill the requirements from above or fails to parse / validate.
     public convenience init(hexPublicKey: String) throws {
         var hexPublicKey = Substring(hexPublicKey)
         if hexPublicKey.hasPrefix("0x") || hexPublicKey.hasPrefix("0X") {
@@ -114,14 +119,14 @@ public final class Secp256k1PublicKey: Sendable {
 
         let byteCount = hexPublicKey.count
         guard byteCount == 128 || byteCount == 130 || byteCount == 64 || byteCount == 66 else {
-            throw Error.keyMalformed
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("Secp256k::PublicKey: invalid hex length")
         }
 
         let bytes: [UInt8]
         do {
             bytes = try BaseEncoding.decode(String(hexPublicKey), as: .base16)
         } catch {
-            throw Error.keyMalformed
+            throw LibP2PCrypto.Keys.KeyError.invalidRawRepresentation("Secp256k::PublicKey: invalid hex")
         }
         try self.init(publicKey: bytes)
     }
@@ -130,13 +135,15 @@ public final class Secp256k1PublicKey: Sendable {
 
     /// Verifies a DER encoded ECDSA signature against the SHA-256 hash of `message` (as specified by libp2p).
     /// - Note: Non-canonical (high-S) signatures are rejected.
-    /// - Throws: Secp256k1PublicKey.Error.signatureMalformed if the signature isn't valid DER.
+    /// - Throws: `KeyError.invalidParameters` if the signature isn't valid DER.
     func isValidSignature(der signature: Data, for message: Data) throws -> Bool {
         let sig: P256K.Signing.ECDSASignature
         do {
             sig = try P256K.Signing.ECDSASignature(derRepresentation: signature)
         } catch {
-            throw Error.signatureMalformed
+            throw LibP2PCrypto.Keys.KeyError.invalidParameters(
+                "Secp256k1: signature is not a valid DER encoded signature"
+            )
         }
         return self.key.isValidSignature(sig, for: message)
     }
@@ -145,15 +152,6 @@ public final class Secp256k1PublicKey: Sendable {
     /// - Uncompressed 64 byte public key without the header prefix (0x04)
     public func hex() -> String {
         rawPublicKey.asString(base: .base16)
-    }
-
-    // MARK: - Errors
-
-    public enum Error: Swift.Error {
-
-        case internalError
-        case keyMalformed
-        case signatureMalformed
     }
 }
 
