@@ -38,7 +38,7 @@ let package = Package(
         // Protobuf Marshaling
         .package(url: "https://github.com/apple/swift-protobuf.git", .upToNextMajor(from: "1.33.3")),
         // Secp256k1 Support
-        .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", .upToNextMinor(from: "0.23.2")),
+        .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", .upToNextMinor(from: "0.24.0")),
         // Hashing, encryption, public/private keys and key derivation
         .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMajor(from: "4.3.0")),
         // ASN.1 / DER Parsing and Serialization
